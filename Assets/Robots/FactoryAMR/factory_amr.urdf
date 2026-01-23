@@ -1,0 +1,354 @@
+<?xml version="1.0"?>
+<robot name="factory_amr">
+
+  <!-- ==================== -->
+  <!-- MATERIAL DEFINITIONS -->
+  <!-- ==================== -->
+  <material name="dark_gray">
+    <color rgba="0.3 0.3 0.3 1.0"/>
+  </material>
+  
+  <material name="orange">
+    <color rgba="1.0 0.5 0.0 1.0"/>
+  </material>
+  
+  <material name="black">
+    <color rgba="0.1 0.1 0.1 1.0"/>
+  </material>
+  
+  <material name="light_gray">
+    <color rgba="0.7 0.7 0.7 1.0"/>
+  </material>
+
+  <!-- ==================== -->
+  <!-- BASE LINK (차체)     -->
+  <!-- ==================== -->
+  <link name="base_footprint">
+    <!-- 바닥 기준점 (Nav2 호환용) -->
+  </link>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.8 0.6 0.25"/>
+      </geometry>
+      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <material name="orange"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.8 0.6 0.25"/>
+      </geometry>
+      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <mass value="50.0"/>
+      <!-- 박스 관성 모멘트: I = (1/12) * m * (h^2 + d^2) -->
+      <inertia ixx="2.604" ixy="0" ixz="0" 
+               iyy="3.385" iyz="0" 
+               izz="4.167"/>
+    </inertial>
+  </link>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- TOP PLATE (상판)     -->
+  <!-- ==================== -->
+  <link name="top_plate">
+    <visual>
+      <geometry>
+        <box size="0.75 0.55 0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="dark_gray"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.75 0.55 0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="5.0"/>
+      <inertia ixx="0.127" ixy="0" ixz="0" 
+               iyy="0.235" iyz="0" 
+               izz="0.359"/>
+    </inertial>
+  </link>
+
+  <joint name="top_plate_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="top_plate"/>
+    <origin xyz="0 0 0.26" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- FRONT LEFT WHEEL     -->
+  <!-- ==================== -->
+  <link name="front_left_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <!-- 실린더 관성: Ixx=Iyy=(1/12)*m*(3r^2+h^2), Izz=(1/2)*m*r^2 -->
+      <inertia ixx="0.00542" ixy="0" ixz="0" 
+               iyy="0.00542" iyz="0" 
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="front_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="front_left_wheel"/>
+    <origin xyz="0.3 0.325 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+    <limit effort="10" velocity="20"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- FRONT RIGHT WHEEL    -->
+  <!-- ==================== -->
+  <link name="front_right_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.00542" ixy="0" ixz="0" 
+               iyy="0.00542" iyz="0" 
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="front_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="front_right_wheel"/>
+    <origin xyz="0.3 -0.325 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+    <limit effort="10" velocity="20"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- REAR LEFT WHEEL      -->
+  <!-- ==================== -->
+  <link name="rear_left_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.00542" ixy="0" ixz="0" 
+               iyy="0.00542" iyz="0" 
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="-0.3 0.325 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+    <limit effort="10" velocity="20"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- REAR RIGHT WHEEL     -->
+  <!-- ==================== -->
+  <link name="rear_right_wheel">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.1" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.00542" ixy="0" ixz="0" 
+               iyy="0.00542" iyz="0" 
+               izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_right_wheel"/>
+    <origin xyz="-0.3 -0.325 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.1"/>
+    <limit effort="10" velocity="20"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- LIDAR MOUNT          -->
+  <!-- ==================== -->
+  <link name="lidar_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.05" length="0.07"/>
+      </geometry>
+      <origin xyz="0 0 0.035" rpy="0 0 0"/>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.05" length="0.07"/>
+      </geometry>
+      <origin xyz="0 0 0.035" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.0003" ixy="0" ixz="0" 
+               iyy="0.0003" iyz="0" 
+               izz="0.0006"/>
+    </inertial>
+  </link>
+
+  <joint name="lidar_joint" type="fixed">
+    <parent link="top_plate"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.3 0 0.01" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- IMU SENSOR           -->
+  <!-- ==================== -->
+  <link name="imu_link">
+    <visual>
+      <geometry>
+        <box size="0.03 0.03 0.01"/>
+      </geometry>
+      <material name="dark_gray"/>
+    </visual>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" 
+               iyy="0.00001" iyz="0" 
+               izz="0.00001"/>
+    </inertial>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0.25" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- CAMERA MOUNT         -->
+  <!-- ==================== -->
+  <link name="camera_mount">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.2"/>
+      </geometry>
+      <origin xyz="0 0 0.1" rpy="0 0 0"/>
+      <material name="dark_gray"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.2"/>
+      </geometry>
+      <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.0007" ixy="0" ixz="0"
+               iyy="0.0007" iyz="0"
+               izz="0.00002"/>
+    </inertial>
+  </link>
+
+  <joint name="camera_mount_joint" type="fixed">
+    <parent link="top_plate"/>
+    <child link="camera_mount"/>
+    <origin xyz="-0.2 0 0.01" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- CAMERA               -->
+  <!-- ==================== -->
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.04 0.08 0.04"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.04 0.08 0.04"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00006" ixy="0" ixz="0"
+               iyy="0.00003" iyz="0"
+               izz="0.00006"/>
+    </inertial>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="camera_mount"/>
+    <child link="camera_link"/>
+    <origin xyz="0.02 0 0.2" rpy="0 0.2 0"/>
+  </joint>
+
+  <!-- Camera optical frame (ROS convention: Z forward, X right, Y down) -->
+  <link name="camera_optical_frame"/>
+
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical_frame"/>
+    <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+  </joint>
+
+</robot>
