@@ -30,14 +30,14 @@
   <link name="base_link">
     <visual>
       <geometry>
-        <box size="0.8 0.6 0.25"/>
+        <box size="0.8 0.5 0.25"/>
       </geometry>
       <origin xyz="0 0 0.125" rpy="0 0 0"/>
       <material name="orange"/>
     </visual>
     <collision>
       <geometry>
-        <box size="0.8 0.6 0.25"/>
+        <box size="0.8 0.5 0.25"/>
       </geometry>
       <origin xyz="0 0 0.125" rpy="0 0 0"/>
     </collision>
@@ -88,6 +88,27 @@
     <origin xyz="0 0 0.26" rpy="0 0 0"/>
   </joint>
 
+  <!-- ========================== -->
+  <!-- FRONT LEFT STEERING LINK   -->
+  <!-- ========================== -->
+  <link name="front_left_steering">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0"
+               iyy="0.001" iyz="0"
+               izz="0.001"/>
+    </inertial>
+  </link>
+
+  <joint name="front_left_steering_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_left_steering"/>
+    <origin xyz="0.3 0.325 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6" upper="0.6" effort="100" velocity="2"/>
+    <dynamics damping="10" friction="0.1"/>
+  </joint>
+
   <!-- ==================== -->
   <!-- FRONT LEFT WHEEL     -->
   <!-- ==================== -->
@@ -108,19 +129,40 @@
     <inertial>
       <mass value="2.0"/>
       <!-- 실린더 관성: Ixx=Iyy=(1/12)*m*(3r^2+h^2), Izz=(1/2)*m*r^2 -->
-      <inertia ixx="0.00542" ixy="0" ixz="0" 
-               iyy="0.00542" iyz="0" 
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
                izz="0.01"/>
     </inertial>
   </link>
 
   <joint name="front_left_wheel_joint" type="continuous">
-    <parent link="base_link"/>
+    <parent link="front_left_steering"/>
     <child link="front_left_wheel"/>
-    <origin xyz="0.3 0.325 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
     <dynamics damping="0.1" friction="0.1"/>
     <limit effort="10" velocity="20"/>
+  </joint>
+
+  <!-- =========================== -->
+  <!-- FRONT RIGHT STEERING LINK   -->
+  <!-- =========================== -->
+  <link name="front_right_steering">
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0"
+               iyy="0.001" iyz="0"
+               izz="0.001"/>
+    </inertial>
+  </link>
+
+  <joint name="front_right_steering_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="front_right_steering"/>
+    <origin xyz="0.3 -0.325 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6" upper="0.6" effort="100" velocity="2"/>
+    <dynamics damping="10" friction="0.1"/>
   </joint>
 
   <!-- ==================== -->
@@ -142,16 +184,16 @@
     </collision>
     <inertial>
       <mass value="2.0"/>
-      <inertia ixx="0.00542" ixy="0" ixz="0" 
-               iyy="0.00542" iyz="0" 
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
                izz="0.01"/>
     </inertial>
   </link>
 
   <joint name="front_right_wheel_joint" type="continuous">
-    <parent link="base_link"/>
+    <parent link="front_right_steering"/>
     <child link="front_right_wheel"/>
-    <origin xyz="0.3 -0.325 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
     <dynamics damping="0.1" friction="0.1"/>
     <limit effort="10" velocity="20"/>

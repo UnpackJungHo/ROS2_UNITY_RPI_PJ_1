@@ -1,54 +1,108 @@
 using UnityEngine;
 
-//test
 public class WheelTest : MonoBehaviour
 {
+    [Header("Steering Links")]
+    public ArticulationBody frontLeftSteering;
+    public ArticulationBody frontRightSteering;
+
+    [Header("Wheels")]
     public ArticulationBody frontLeftWheel;
     public ArticulationBody frontRightWheel;
     public ArticulationBody rearLeftWheel;
     public ArticulationBody rearRightWheel;
 
-    public float targetVelocity = 300f; 
+    [Header("Settings")]
+    public float maxSteeringAngle = 30f;
+    public float steeringSpeed = 100f;
+    public float targetVelocity = 300f;
+
+    [Header("Ackermann Geometry")]
+    public float wheelBase = 0.6f;
+    public float trackWidth = 0.65f;
+
+    private float currentSteeringAngle = 0f;
 
     void Update()
     {
-        // 입력값 받기
         float vertical = Input.GetAxis("Vertical");
         float horizontal = Input.GetAxis("Horizontal");
 
-        // 차동 구동(Differential Drive) 계산
-        float leftSpeed = (vertical + horizontal) * targetVelocity; // 방향키에 따라 +/- 조정 필요
-        float rightSpeed = (vertical - horizontal) * targetVelocity;
+        UpdateSteering(horizontal);
+        UpdateWheelDrive(vertical);
+    }
 
-        SetWheelVelocity(frontLeftWheel, leftSpeed);
-        SetWheelVelocity(rearLeftWheel, leftSpeed);
-        SetWheelVelocity(frontRightWheel, rightSpeed);
-        SetWheelVelocity(rearRightWheel, rightSpeed);
+    void UpdateSteering(float input)
+    {
+        float targetAngle = -input * maxSteeringAngle;
+        currentSteeringAngle = Mathf.MoveTowards(currentSteeringAngle, targetAngle, steeringSpeed * Time.deltaTime);
+
+        float leftAngle, rightAngle;
+        CalculateAckermannAngles(currentSteeringAngle, out leftAngle, out rightAngle);
+
+        SetSteeringAngle(frontLeftSteering, leftAngle);
+        SetSteeringAngle(frontRightSteering, rightAngle);
+    }
+
+    void CalculateAckermannAngles(float steerAngle, out float leftAngle, out float rightAngle)
+    {
+        if (Mathf.Abs(steerAngle) < 0.01f)
+        {
+            leftAngle = 0f;
+            rightAngle = 0f;
+            return;
+        }
+
+        float steerRad = steerAngle * Mathf.Deg2Rad;
+        float turnRadius = wheelBase / Mathf.Tan(Mathf.Abs(steerRad));
+
+        if (steerAngle > 0)
+        {
+            float innerRadius = turnRadius - (trackWidth / 2f);
+            float outerRadius = turnRadius + (trackWidth / 2f);
+            leftAngle = Mathf.Atan(wheelBase / outerRadius) * Mathf.Rad2Deg;
+            rightAngle = Mathf.Atan(wheelBase / innerRadius) * Mathf.Rad2Deg;
+        }
+        else
+        {
+            float innerRadius = turnRadius - (trackWidth / 2f);
+            float outerRadius = turnRadius + (trackWidth / 2f);
+            leftAngle = -Mathf.Atan(wheelBase / innerRadius) * Mathf.Rad2Deg;
+            rightAngle = -Mathf.Atan(wheelBase / outerRadius) * Mathf.Rad2Deg;
+        }
+    }
+
+    void SetSteeringAngle(ArticulationBody steering, float angle)
+    {
+        if (steering == null) return;
+
+        ArticulationDrive drive = steering.xDrive;
+        drive.stiffness = 10000f;
+        drive.damping = 1000f;
+        drive.forceLimit = 10000f;
+        drive.target = angle;
+        steering.xDrive = drive;
+    }
+
+    void UpdateWheelDrive(float input)
+    {
+        float speed = input * targetVelocity;
+
+        SetWheelVelocity(rearLeftWheel, speed);
+        SetWheelVelocity(rearRightWheel, speed);
+        SetWheelVelocity(frontLeftWheel, speed);
+        SetWheelVelocity(frontRightWheel, speed);
     }
 
     void SetWheelVelocity(ArticulationBody wheel, float velocity)
     {
-        if (wheel == null)
-        {
-            Debug.LogError("Wheel is not assigned!");
-            return;
-        }
+        if (wheel == null) return;
 
         ArticulationDrive drive = wheel.xDrive;
-        
-        // [중요] Velocity 구동을 위해서는 Stiffness(위치 복원력)가 0이어야 합니다.
-        drive.stiffness = 0f; 
-        
-        // Damping은 목표 속도에 도달하기 위한 저항/힘의 역할을 합니다. 
-        // 너무 낮으면 헛돌고, 너무 높으면 반응이 느려집니다. (URDF 마찰력 고려하여 조절)
-        drive.damping = 1000f; 
-
-        //drive.driveType = ArticulationDriveType.Velocity;
+        drive.stiffness = 0f;
+        drive.damping = 1000f;
         drive.targetVelocity = velocity;
-        
-        // 최대 힘 제한 (URDF의 limit effort="10"은 좀 작을 수 있으니 필요시 넉넉하게)
-        drive.forceLimit = 10000f; 
-
+        drive.forceLimit = 10000f;
         wheel.xDrive = drive;
     }
 }
