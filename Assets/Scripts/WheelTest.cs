@@ -52,7 +52,7 @@ public class WheelTest : MonoBehaviour
             ArticulationBody ab = found.GetComponent<ArticulationBody>();
             if (ab != null)
             {
-                Debug.Log($"[WheelTest] Found: {name}");
+                //Debug.Log($"[WheelTest] Found: {name}");
                 return ab;
             }
         }

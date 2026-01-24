@@ -7,17 +7,25 @@
   <material name="dark_gray">
     <color rgba="0.3 0.3 0.3 1.0"/>
   </material>
-  
+
   <material name="orange">
     <color rgba="1.0 0.5 0.0 1.0"/>
   </material>
-  
+
   <material name="black">
     <color rgba="0.1 0.1 0.1 1.0"/>
   </material>
-  
+
   <material name="light_gray">
     <color rgba="0.7 0.7 0.7 1.0"/>
+  </material>
+
+  <material name="blue">
+    <color rgba="0.2 0.4 0.8 1.0"/>
+  </material>
+
+  <material name="red">
+    <color rgba="0.8 0.2 0.2 1.0"/>
   </material>
 
   <!-- ==================== -->
@@ -44,9 +52,8 @@
     <inertial>
       <origin xyz="0 0 0.125" rpy="0 0 0"/>
       <mass value="50.0"/>
-      <!-- 박스 관성 모멘트: I = (1/12) * m * (h^2 + d^2) -->
-      <inertia ixx="2.604" ixy="0" ixz="0" 
-               iyy="3.385" iyz="0" 
+      <inertia ixx="2.604" ixy="0" ixz="0"
+               iyy="3.385" iyz="0"
                izz="4.167"/>
     </inertial>
   </link>
@@ -76,8 +83,8 @@
     </collision>
     <inertial>
       <mass value="5.0"/>
-      <inertia ixx="0.085" ixy="0" ixz="0" 
-               iyy="0.235" iyz="0" 
+      <inertia ixx="0.085" ixy="0" ixz="0"
+               iyy="0.235" iyz="0"
                izz="0.319"/>
     </inertial>
   </link>
@@ -128,7 +135,6 @@
     </collision>
     <inertial>
       <mass value="2.0"/>
-      <!-- 실린더 관성: Ixx=Iyy=(1/12)*m*(3r^2+h^2), Izz=(1/2)*m*r^2 -->
       <inertia ixx="0.00542" ixy="0" ixz="0"
                iyy="0.00542" iyz="0"
                izz="0.01"/>
@@ -218,8 +224,8 @@
     </collision>
     <inertial>
       <mass value="2.0"/>
-      <inertia ixx="0.00542" ixy="0" ixz="0" 
-               iyy="0.00542" iyz="0" 
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
                izz="0.01"/>
     </inertial>
   </link>
@@ -252,8 +258,8 @@
     </collision>
     <inertial>
       <mass value="2.0"/>
-      <inertia ixx="0.00542" ixy="0" ixz="0" 
-               iyy="0.00542" iyz="0" 
+      <inertia ixx="0.00542" ixy="0" ixz="0"
+               iyy="0.00542" iyz="0"
                izz="0.01"/>
     </inertial>
   </link>
@@ -267,95 +273,105 @@
     <limit effort="10" velocity="20"/>
   </joint>
 
-  <!-- ==================== -->
-  <!-- LIDAR MOUNT          -->
-  <!-- ==================== -->
+  <!-- ======================================== -->
+  <!-- LIDAR MOUNT (상판 중앙 기둥)              -->
+  <!-- ======================================== -->
+  <link name="lidar_mount">
+    <visual>
+      <geometry>
+        <cylinder radius="0.02" length="0.15"/>
+      </geometry>
+      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+      <material name="dark_gray"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.02" length="0.15"/>
+      </geometry>
+      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.3"/>
+      <inertia ixx="0.0006" ixy="0" ixz="0"
+               iyy="0.0006" iyz="0"
+               izz="0.00006"/>
+    </inertial>
+  </link>
+
+  <joint name="lidar_mount_joint" type="fixed">
+    <parent link="top_plate"/>
+    <child link="lidar_mount"/>
+    <!-- 상판 중앙 -->
+    <origin xyz="0 0 0.01" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- LIDAR (360도 스캔, 기둥 위)               -->
+  <!-- ======================================== -->
   <link name="lidar_link">
     <visual>
       <geometry>
-        <cylinder radius="0.05" length="0.07"/>
+        <cylinder radius="0.04" length="0.05"/>
       </geometry>
-      <origin xyz="0 0 0.035" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
       <material name="light_gray"/>
     </visual>
     <collision>
       <geometry>
-        <cylinder radius="0.05" length="0.07"/>
+        <cylinder radius="0.04" length="0.05"/>
       </geometry>
-      <origin xyz="0 0 0.035" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
     </collision>
     <inertial>
-      <mass value="0.5"/>
-      <inertia ixx="0.0003" ixy="0" ixz="0" 
-               iyy="0.0003" iyz="0" 
-               izz="0.0006"/>
+      <mass value="0.3"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0"
+               iyy="0.0001" iyz="0"
+               izz="0.0002"/>
     </inertial>
   </link>
 
   <joint name="lidar_joint" type="fixed">
-    <parent link="top_plate"/>
+    <parent link="lidar_mount"/>
     <child link="lidar_link"/>
-    <origin xyz="0.3 0 0.01" rpy="0 0 0"/>
+    <!-- 기둥 위 -->
+    <origin xyz="0 0 0.175" rpy="0 0 0"/>
   </joint>
 
-  <!-- ==================== -->
-  <!-- IMU SENSOR           -->
-  <!-- ==================== -->
-  <link name="imu_link">
-    <visual>
-      <geometry>
-        <box size="0.03 0.03 0.01"/>
-      </geometry>
-      <material name="dark_gray"/>
-    </visual>
-    <inertial>
-      <mass value="0.1"/>
-      <inertia ixx="0.00001" ixy="0" ixz="0" 
-               iyy="0.00001" iyz="0" 
-               izz="0.00001"/>
-    </inertial>
-  </link>
-
-  <joint name="imu_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="imu_link"/>
-    <origin xyz="0 0 0.25" rpy="0 0 0"/>
-  </joint>
-
-  <!-- ==================== -->
-  <!-- CAMERA MOUNT         -->
-  <!-- ==================== -->
+  <!-- ======================================== -->
+  <!-- CAMERA MOUNT (전방 기둥)                   -->
+  <!-- ======================================== -->
   <link name="camera_mount">
     <visual>
       <geometry>
-        <cylinder radius="0.015" length="0.2"/>
+        <cylinder radius="0.012" length="0.07"/>
       </geometry>
-      <origin xyz="0 0 0.1" rpy="0 0 0"/>
+      <origin xyz="0 0 0.035" rpy="0 0 0"/>
       <material name="dark_gray"/>
     </visual>
     <collision>
       <geometry>
-        <cylinder radius="0.015" length="0.2"/>
+        <cylinder radius="0.012" length="0.07"/>
       </geometry>
-      <origin xyz="0 0 0.1" rpy="0 0 0"/>
+      <origin xyz="0 0 0.035" rpy="0 0 0"/>
     </collision>
     <inertial>
-      <mass value="0.2"/>
-      <inertia ixx="0.0007" ixy="0" ixz="0"
-               iyy="0.0007" iyz="0"
-               izz="0.00002"/>
+      <mass value="0.1"/>
+      <inertia ixx="0.00005" ixy="0" ixz="0"
+               iyy="0.00005" iyz="0"
+               izz="0.00001"/>
     </inertial>
   </link>
 
   <joint name="camera_mount_joint" type="fixed">
-    <parent link="top_plate"/>
+    <parent link="base_link"/>
     <child link="camera_mount"/>
-    <origin xyz="-0.2 0 0.01" rpy="0 0 0"/>
+    <!-- 전방 상판 위 (상판 z=0.26, 기둥 시작) -->
+    <origin xyz="0.35 0 0.25" rpy="0 0 0"/>
   </joint>
 
-  <!-- ==================== -->
-  <!-- CAMERA               -->
-  <!-- ==================== -->
+  <!-- ======================================== -->
+  <!-- CAMERA (기둥 위)                          -->
+  <!-- ======================================== -->
   <link name="camera_link">
     <visual>
       <geometry>
@@ -381,16 +397,233 @@
   <joint name="camera_joint" type="fixed">
     <parent link="camera_mount"/>
     <child link="camera_link"/>
-    <origin xyz="0.02 0 0.2" rpy="0 0 0"/>
+    <!-- 기둥 위 -->
+    <origin xyz="0 0 0.09" rpy="0 0 0"/>
   </joint>
 
-  <!-- Camera optical frame (ROS convention: Z forward, X right, Y down) -->
+  <!-- Camera optical frame -->
   <link name="camera_optical_frame"/>
 
   <joint name="camera_optical_joint" type="fixed">
     <parent link="camera_link"/>
     <child link="camera_optical_frame"/>
     <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- RADAR FRONT (전방 레이더 - 장거리 감지)    -->
+  <!-- ======================================== -->
+  <link name="radar_front_link">
+    <visual>
+      <geometry>
+        <box size="0.03 0.1 0.03"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="red"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.03 0.1 0.03"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.00002" ixy="0" ixz="0"
+               iyy="0.00002" iyz="0"
+               izz="0.00002"/>
+    </inertial>
+  </link>
+
+  <joint name="radar_front_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="radar_front_link"/>
+    <!-- 전방 범퍼 중앙 -->
+    <origin xyz="0.41 0 0.1" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- RADAR REAR (후방 레이더 - 장거리 감지)     -->
+  <!-- ======================================== -->
+  <link name="radar_rear_link">
+    <visual>
+      <geometry>
+        <box size="0.03 0.1 0.03"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="red"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.03 0.1 0.03"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.2"/>
+      <inertia ixx="0.00002" ixy="0" ixz="0"
+               iyy="0.00002" iyz="0"
+               izz="0.00002"/>
+    </inertial>
+  </link>
+
+  <joint name="radar_rear_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="radar_rear_link"/>
+    <!-- 후방 범퍼 중앙 -->
+    <origin xyz="-0.41 0 0.1" rpy="0 0 3.1416"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- ULTRASONIC FRONT LEFT (전방 좌측 초음파)  -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_fl_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_fl_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_fl_link"/>
+    <!-- 전방 좌측 코너 (45도 방향) -->
+    <origin xyz="0.38 0.23 0.1" rpy="0 0 0.7854"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- ULTRASONIC FRONT RIGHT (전방 우측 초음파) -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_fr_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_fr_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_fr_link"/>
+    <!-- 전방 우측 코너 (-45도 방향) -->
+    <origin xyz="0.38 -0.23 0.1" rpy="0 0 -0.7854"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- ULTRASONIC REAR LEFT (후방 좌측 초음파)   -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_rl_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_rl_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_rl_link"/>
+    <!-- 후방 좌측 코너 (135도 방향) -->
+    <origin xyz="-0.38 0.23 0.1" rpy="0 0 2.3562"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- ULTRASONIC REAR RIGHT (후방 우측 초음파)  -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_rr_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_rr_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_rr_link"/>
+    <!-- 후방 우측 코너 (-135도 방향) -->
+    <origin xyz="-0.38 -0.23 0.1" rpy="0 0 -2.3562"/>
+  </joint>
+
+  <!-- ==================== -->
+  <!-- IMU SENSOR           -->
+  <!-- ==================== -->
+  <link name="imu_link">
+    <visual>
+      <geometry>
+        <box size="0.03 0.03 0.01"/>
+      </geometry>
+      <material name="dark_gray"/>
+    </visual>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0"
+               iyy="0.00001" iyz="0"
+               izz="0.00001"/>
+    </inertial>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0.26" rpy="0 0 0"/>
   </joint>
 
 </robot>

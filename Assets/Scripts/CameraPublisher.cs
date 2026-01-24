@@ -15,9 +15,9 @@ public class CameraPublisher : MonoBehaviour
     public int imageWidth = 640;
     public int imageHeight = 480;
 
-    [Header("Auto-Find Settings")]
-    public bool autoFindCameraLink = true;
-    public string cameraLinkName = "camera_link";
+    [Header("Camera Reference")]
+    [Tooltip("카메라가 부착된 Transform을 직접 할당하세요 (camera_link)")]
+    public Transform cameraTransform;
 
     private ROSConnection ros;
     private Camera cam;
@@ -25,16 +25,16 @@ public class CameraPublisher : MonoBehaviour
     private Texture2D texture2D;
     private float publishInterval;
     private float lastPublishTime;
-    private Transform cameraTransform;
 
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
         ros.RegisterPublisher<ImageMsg>(topicName);
 
-        if (autoFindCameraLink)
+        if (cameraTransform == null)
         {
-            FindCameraLink();
+            Debug.LogError("[CameraPublisher] cameraTransform이 할당되지 않았습니다! Inspector에서 camera_link를 할당하세요.");
+            cameraTransform = transform;
         }
 
         SetupCamera();
@@ -43,45 +43,9 @@ public class CameraPublisher : MonoBehaviour
         lastPublishTime = Time.time;
     }
 
-    void FindCameraLink()
-    {
-        cameraTransform = FindChildRecursive(transform, cameraLinkName);
-        if (cameraTransform != null)
-        {
-            Debug.Log($"[CameraPublisher] Found camera link: {cameraLinkName}");
-        }
-        else
-        {
-            Debug.LogWarning($"[CameraPublisher] Camera link not found: {cameraLinkName}, using this object");
-            cameraTransform = transform;
-        }
-    }
-
-    Transform FindChildRecursive(Transform parent, string name)
-    {
-        foreach (Transform child in parent)
-        {
-            if (child.name == name)
-                return child;
-
-            Transform found = FindChildRecursive(child, name);
-            if (found != null)
-                return found;
-        }
-        return null;
-    }
-
     void SetupCamera()
     {
-        GameObject camObj;
-        if (cameraTransform != null && cameraTransform != transform)
-        {
-            camObj = cameraTransform.gameObject;
-        }
-        else
-        {
-            camObj = gameObject;
-        }
+        GameObject camObj = cameraTransform.gameObject;
 
         cam = camObj.GetComponent<Camera>();
         if (cam == null)
