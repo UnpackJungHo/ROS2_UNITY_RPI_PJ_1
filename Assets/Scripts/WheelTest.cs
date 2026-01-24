@@ -2,11 +2,11 @@ using UnityEngine;
 
 public class WheelTest : MonoBehaviour
 {
-    [Header("Steering Links")]
+    [Header("Steering Links (Auto-assigned)")]
     public ArticulationBody frontLeftSteering;
     public ArticulationBody frontRightSteering;
 
-    [Header("Wheels")]
+    [Header("Wheels (Auto-assigned)")]
     public ArticulationBody frontLeftWheel;
     public ArticulationBody frontRightWheel;
     public ArticulationBody rearLeftWheel;
@@ -21,7 +21,58 @@ public class WheelTest : MonoBehaviour
     public float wheelBase = 0.6f;
     public float trackWidth = 0.65f;
 
+    [Header("Auto-Find Settings")]
+    public bool autoFindReferences = true;
+
     private float currentSteeringAngle = 0f;
+
+    void Start()
+    {
+        if (autoFindReferences)
+        {
+            FindReferences();
+        }
+    }
+
+    void FindReferences()
+    {
+        frontLeftSteering = FindArticulationBody("front_left_steering");
+        frontRightSteering = FindArticulationBody("front_right_steering");
+        frontLeftWheel = FindArticulationBody("front_left_wheel");
+        frontRightWheel = FindArticulationBody("front_right_wheel");
+        rearLeftWheel = FindArticulationBody("rear_left_wheel");
+        rearRightWheel = FindArticulationBody("rear_right_wheel");
+    }
+
+    ArticulationBody FindArticulationBody(string name)
+    {
+        Transform found = FindChildRecursive(transform, name);
+        if (found != null)
+        {
+            ArticulationBody ab = found.GetComponent<ArticulationBody>();
+            if (ab != null)
+            {
+                Debug.Log($"[WheelTest] Found: {name}");
+                return ab;
+            }
+        }
+        Debug.LogWarning($"[WheelTest] Not found: {name}");
+        return null;
+    }
+
+    Transform FindChildRecursive(Transform parent, string name)
+    {
+        foreach (Transform child in parent)
+        {
+            if (child.name == name)
+                return child;
+
+            Transform found = FindChildRecursive(child, name);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
 
     void Update()
     {
@@ -63,13 +114,11 @@ public class WheelTest : MonoBehaviour
 
         if (steerAngle > 0)
         {
-            // 왼쪽 회전: 왼쪽=내륜(큰 각도), 오른쪽=외륜(작은 각도)
             leftAngle = innerAngle;
             rightAngle = outerAngle;
         }
         else
         {
-            // 오른쪽 회전: 오른쪽=내륜(큰 각도), 왼쪽=외륜(작은 각도)
             leftAngle = -outerAngle;
             rightAngle = -innerAngle;
         }
