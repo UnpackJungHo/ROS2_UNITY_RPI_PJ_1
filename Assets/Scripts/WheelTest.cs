@@ -56,19 +56,22 @@ public class WheelTest : MonoBehaviour
         float steerRad = steerAngle * Mathf.Deg2Rad;
         float turnRadius = wheelBase / Mathf.Tan(Mathf.Abs(steerRad));
 
+        float innerRadius = turnRadius - (trackWidth / 2f);
+        float outerRadius = turnRadius + (trackWidth / 2f);
+        float innerAngle = Mathf.Atan(wheelBase / innerRadius) * Mathf.Rad2Deg;
+        float outerAngle = Mathf.Atan(wheelBase / outerRadius) * Mathf.Rad2Deg;
+
         if (steerAngle > 0)
         {
-            float innerRadius = turnRadius - (trackWidth / 2f);
-            float outerRadius = turnRadius + (trackWidth / 2f);
-            leftAngle = Mathf.Atan(wheelBase / outerRadius) * Mathf.Rad2Deg;
-            rightAngle = Mathf.Atan(wheelBase / innerRadius) * Mathf.Rad2Deg;
+            // 왼쪽 회전: 왼쪽=내륜(큰 각도), 오른쪽=외륜(작은 각도)
+            leftAngle = innerAngle;
+            rightAngle = outerAngle;
         }
         else
         {
-            float innerRadius = turnRadius - (trackWidth / 2f);
-            float outerRadius = turnRadius + (trackWidth / 2f);
-            leftAngle = -Mathf.Atan(wheelBase / innerRadius) * Mathf.Rad2Deg;
-            rightAngle = -Mathf.Atan(wheelBase / outerRadius) * Mathf.Rad2Deg;
+            // 오른쪽 회전: 오른쪽=내륜(큰 각도), 왼쪽=외륜(작은 각도)
+            leftAngle = -outerAngle;
+            rightAngle = -innerAngle;
         }
     }
 
