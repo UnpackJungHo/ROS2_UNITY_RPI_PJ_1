@@ -1,0 +1,225 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+public class AMRViewController : MonoBehaviour
+{
+    [Header("Camera References")]
+    [Tooltip("CameraPublisher가 사용하는 카메라")]
+    public CameraPublisher cameraPublisher;
+
+    [Header("TopView Settings")]
+    [Tooltip("TopView에서 바라볼 대상 오브젝트")]
+    public GameObject topViewTarget;
+
+    [Tooltip("대상 오브젝트로부터 Y축 높이")]
+    public float topViewHeight = 5f;
+
+    [Header("BackView Settings")]
+    [Tooltip("BackView에서 대상 오브젝트로부터 뒤쪽 거리")]
+    public float backViewDistance = 3f;
+
+    [Tooltip("BackView에서 대상 오브젝트로부터 Y축 높이")]
+    public float backViewHeight = 1.5f;
+
+    [Header("UI Settings")]
+    public Button front_view_button;
+    public Button top_view_button;
+    public Button back_view_button;
+
+    private Camera topViewCamera;
+    private Camera backViewCamera;
+    private Camera publisherCamera;
+    private ViewMode currentViewMode = ViewMode.TopView;
+
+    private enum ViewMode
+    {
+        TopView,
+        BackView,
+        PublisherCamera
+    }
+
+    void Start()
+    {
+        // TopView용 카메라 동적 생성
+        CreateTopViewCamera();
+
+        // BackView용 카메라 동적 생성
+        CreateBackViewCamera();
+
+        // 기본 뷰로 시작
+        SetViewMode(ViewMode.TopView);
+
+        top_view_button.onClick.AddListener(() => SetViewMode(ViewMode.TopView));
+        front_view_button.onClick.AddListener(() => SetViewMode(ViewMode.PublisherCamera));
+        back_view_button.onClick.AddListener(() => SetViewMode(ViewMode.BackView));
+    }
+
+    void CreateTopViewCamera()
+    {
+        GameObject topViewCamObj = new GameObject("TopView_Camera");
+        topViewCamera = topViewCamObj.AddComponent<Camera>();
+        topViewCamera.nearClipPlane = 0.1f;
+        topViewCamera.farClipPlane = 100f;
+        topViewCamera.fieldOfView = 60f;
+        topViewCamera.enabled = false;
+    }
+
+    void CreateBackViewCamera()
+    {
+        GameObject backViewCamObj = new GameObject("BackView_Camera");
+        backViewCamera = backViewCamObj.AddComponent<Camera>();
+        backViewCamera.nearClipPlane = 0.1f;
+        backViewCamera.farClipPlane = 100f;
+        backViewCamera.fieldOfView = 60f;
+        backViewCamera.enabled = false;
+    }
+
+    void Update()
+    {
+        // TopView 모드일 때 카메라 위치 업데이트
+        if (currentViewMode == ViewMode.TopView && topViewTarget != null && topViewCamera != null)
+        {
+            UpdateTopViewCamera();
+        }
+
+        // BackView 모드일 때 카메라 위치 업데이트
+        if (currentViewMode == ViewMode.BackView && topViewTarget != null && backViewCamera != null)
+        {
+            UpdateBackViewCamera();
+        }
+    }
+
+    void UpdateTopViewCamera()
+    {
+        Vector3 targetPosition = topViewTarget.transform.position;
+        topViewCamera.transform.position = targetPosition + Vector3.up * topViewHeight;
+        topViewCamera.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // 아래를 바라봄
+    }
+
+    void UpdateBackViewCamera()
+    {
+        Vector3 targetPosition = topViewTarget.transform.position;
+        Vector3 targetForward = topViewTarget.transform.forward;
+
+        // 대상 오브젝트의 뒤쪽에 카메라 배치
+        backViewCamera.transform.position = targetPosition - targetForward * backViewDistance + Vector3.up * backViewHeight;
+        backViewCamera.transform.LookAt(targetPosition + Vector3.up * backViewHeight * 0.5f);
+    }
+
+    void SetViewMode(ViewMode mode)
+    {
+        currentViewMode = mode;
+
+        // 모든 카메라 비활성화
+        if (topViewCamera != null)
+        {
+            topViewCamera.enabled = false;
+        }
+
+        if (backViewCamera != null)
+        {
+            backViewCamera.enabled = false;
+        }
+
+        if (publisherCamera != null)
+        {
+            publisherCamera.targetTexture = cameraPublisher?.GetComponent<Camera>()?.targetTexture;
+        }
+
+        // 선택된 모드의 카메라 활성화
+        switch (mode)
+        {
+            case ViewMode.TopView:
+                if (topViewCamera != null && topViewTarget != null)
+                {
+                    UpdateTopViewCamera();
+                    topViewCamera.enabled = true;
+                }
+                else if (topViewTarget == null)
+                {
+                    Debug.LogWarning("[AMRViewController] TopView 대상 오브젝트가 설정되지 않았습니다!");
+                    return;
+                }
+                // CameraPublisher 카메라는 RenderTexture로 유지
+                RestorePublisherCameraRenderTexture();
+                break;
+
+            case ViewMode.BackView:
+                if (backViewCamera != null && topViewTarget != null)
+                {
+                    UpdateBackViewCamera();
+                    backViewCamera.enabled = true;
+                }
+                else if (topViewTarget == null)
+                {
+                    Debug.LogWarning("[AMRViewController] BackView 대상 오브젝트가 설정되지 않았습니다!");
+                    return;
+                }
+                // CameraPublisher 카메라는 RenderTexture로 유지
+                RestorePublisherCameraRenderTexture();
+                break;
+
+            case ViewMode.PublisherCamera:
+                if (cameraPublisher != null)
+                {
+                    publisherCamera = GetPublisherCamera();
+                    if (publisherCamera != null)
+                    {
+                        // RenderTexture 해제하여 화면에 직접 렌더링
+                        publisherCamera.targetTexture = null;
+                        publisherCamera.enabled = true;
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("[AMRViewController] CameraPublisher가 설정되지 않았습니다!");
+                    return;
+                }
+                break;
+        }
+    }
+
+    Camera GetPublisherCamera()
+    {
+        if (cameraPublisher != null && cameraPublisher.cameraTransform != null)
+        {
+            return cameraPublisher.cameraTransform.GetComponent<Camera>();
+        }
+        return null;
+    }
+
+    void RestorePublisherCameraRenderTexture()
+    {
+        // CameraPublisher의 카메라를 원래 RenderTexture 모드로 복원
+        if (cameraPublisher != null)
+        {
+            Camera pubCam = GetPublisherCamera();
+            if (pubCam != null)
+            {
+                // CameraPublisher가 Start에서 설정한 RenderTexture를 다시 할당
+                // CameraPublisher의 private renderTexture에 접근할 수 없으므로
+                // CameraPublisher 자체에서 관리하도록 함
+                // 여기서는 단순히 enabled를 false로 설정
+                pubCam.enabled = true; // ROS 퍼블리싱을 위해 활성화 유지
+            }
+        }
+    }
+
+    void OnDestroy()
+    {
+        // 동적으로 생성한 TopView 카메라 정리
+        if (topViewCamera != null)
+        {
+            Destroy(topViewCamera.gameObject);
+        }
+
+        // 동적으로 생성한 BackView 카메라 정리
+        if (backViewCamera != null)
+        {
+            Destroy(backViewCamera.gameObject);
+        }
+
+        // Publisher Camera를 원래 상태로 복원
+        RestorePublisherCameraRenderTexture();
+    }
+}
