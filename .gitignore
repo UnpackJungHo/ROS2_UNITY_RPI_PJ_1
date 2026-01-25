@@ -8,6 +8,7 @@
 /[Uu]ser[Ss]ettings/
 /[Mm]emoryCaptures/
 /[Rr]ecordings/
+/[Tt]rainingData/
 
 # [Asset Store Tools]
 /[Aa]ssets/AssetStoreTools*
@@ -30,6 +31,7 @@
 *.opendb
 *.VC.db
 
+
 # [VS Code]
 .vscode/
 
@@ -48,4 +50,4 @@ Thumbs.db
 *.unitypackage
 *.app
 sysinfo.txt
-crashlytics-build.properties
+crashlytics-build.propertiespython/checkpoints/driving_dual_bc.pth

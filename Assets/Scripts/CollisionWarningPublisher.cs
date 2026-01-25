@@ -571,7 +571,7 @@ public class CollisionWarningPublisher : MonoBehaviour
         // Awareness 이상일 때 로그 출력 (Safe는 제외)
         if (currentWarningLevel != WarningLevel.Safe)
         {
-            Debug.Log($"[Collision] {levelStr}({(int)currentWarningLevel}) | Dist: {distStr} | TTC: {ttcStr} | ClosingSpd: {closingSpeedStr} | Source: {detectionSource}-{detectionSensor} | EgoSpd: {currentSpeed:F2}m/s");
+            //Debug.Log($"[Collision] {levelStr}({(int)currentWarningLevel}) | Dist: {distStr} | TTC: {ttcStr} | ClosingSpd: {closingSpeedStr} | Source: {detectionSource}-{detectionSensor} | EgoSpd: {currentSpeed:F2}m/s");
         }
     }
 

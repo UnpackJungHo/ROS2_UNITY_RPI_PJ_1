@@ -19,12 +19,31 @@ public class CameraPublisher : MonoBehaviour
     [Tooltip("카메라가 부착된 Transform을 직접 할당하세요 (camera_link)")]
     public Transform cameraTransform;
 
+    [Header("Camera Stabilization (흔들림 방지)")]
+    [Tooltip("카메라 안정화 활성화 - 물리 시뮬레이션 흔들림 방지")]
+    public bool enableStabilization = true;
+
+    [Tooltip("위치 안정화 강도 (낮을수록 부드러움)")]
+    [Range(0.01f, 0.5f)]
+    public float positionSmoothTime = 0.08f;
+
+    [Tooltip("회전 안정화 강도 (낮을수록 부드러움)")]
+    [Range(0.01f, 0.5f)]
+    public float rotationSmoothTime = 0.06f;
+
+    [Tooltip("수직 흔들림 추가 안정화")]
+    public bool stabilizeVertical = true;
+
+    [Tooltip("롤(좌우 기울기) 안정화")]
+    public bool stabilizeRoll = true;
+
     private ROSConnection ros;
     private Camera cam;
     private RenderTexture renderTexture;
     private Texture2D texture2D;
     private float publishInterval;
     private float lastPublishTime;
+    private CameraStabilizer stabilizer;
 
     void Start()
     {
@@ -44,6 +63,55 @@ public class CameraPublisher : MonoBehaviour
     }
 
     void SetupCamera()
+    {
+        if (enableStabilization)
+        {
+            // 안정화 모드: 물리와 분리된 새 카메라 오브젝트 생성
+            SetupStabilizedCamera();
+        }
+        else
+        {
+            // 기존 방식: cameraTransform에 직접 카메라 추가
+            SetupDirectCamera();
+        }
+    }
+
+    /// <summary>
+    /// 안정화된 카메라 설정 - 물리 오브젝트와 분리하여 흔들림 방지
+    /// </summary>
+    void SetupStabilizedCamera()
+    {
+        // 1. 새로운 독립 카메라 오브젝트 생성 (물리 계층과 분리)
+        GameObject stabilizedCamObj = new GameObject("StabilizedCamera_Publisher");
+        
+        // 2. 카메라 컴포넌트 추가
+        cam = stabilizedCamObj.AddComponent<Camera>();
+        cam.nearClipPlane = 0.1f;
+        cam.farClipPlane = 100f;
+        cam.fieldOfView = 60f;
+
+        // 3. 안정화 스크립트 추가 및 설정
+        stabilizer = stabilizedCamObj.AddComponent<CameraStabilizer>();
+        stabilizer.targetTransform = cameraTransform;
+        stabilizer.positionSmoothTime = positionSmoothTime;
+        stabilizer.rotationSmoothTime = rotationSmoothTime;
+        stabilizer.stabilizeVertical = stabilizeVertical;
+        stabilizer.stabilizeRoll = stabilizeRoll;
+        stabilizer.stabilizePitch = false; // 피치는 전방 시야 확보를 위해 기본 off
+
+        // 4. 렌더 텍스처 설정
+        renderTexture = new RenderTexture(imageWidth, imageHeight, 24, RenderTextureFormat.ARGB32);
+        renderTexture.Create();
+        texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
+        cam.targetTexture = renderTexture;
+
+        Debug.Log("[CameraPublisher] Stabilized camera created - physics shake will be filtered");
+    }
+
+    /// <summary>
+    /// 기존 방식의 카메라 설정 - cameraTransform에 직접 부착
+    /// </summary>
+    void SetupDirectCamera()
     {
         GameObject camObj = cameraTransform.gameObject;
 
@@ -127,6 +195,46 @@ public class CameraPublisher : MonoBehaviour
         return flippedData;
     }
 
+    // ========== 외부 접근용 메서드들 (AMRViewController 등에서 사용) ==========
+
+    /// <summary>
+    /// 실제 사용 중인 카메라 반환 (안정화 모드/일반 모드 모두 지원)
+    /// </summary>
+    public Camera GetCamera()
+    {
+        return cam;
+    }
+
+    /// <summary>
+    /// 현재 사용 중인 RenderTexture 반환
+    /// </summary>
+    public RenderTexture GetRenderTexture()
+    {
+        return renderTexture;
+    }
+
+    /// <summary>
+    /// RenderTexture를 카메라에 다시 할당 (FrontView에서 복귀 시 사용)
+    /// </summary>
+    public void RestoreRenderTexture()
+    {
+        if (cam != null && renderTexture != null)
+        {
+            cam.targetTexture = renderTexture;
+        }
+    }
+
+    /// <summary>
+    /// RenderTexture 해제하여 화면에 직접 렌더링 (FrontView 모드)
+    /// </summary>
+    public void RenderToScreen()
+    {
+        if (cam != null)
+        {
+            cam.targetTexture = null;
+        }
+    }
+
     void OnDestroy()
     {
         if (renderTexture != null)
@@ -137,6 +245,11 @@ public class CameraPublisher : MonoBehaviour
         if (texture2D != null)
         {
             Destroy(texture2D);
+        }
+        // 안정화 모드로 생성된 카메라 오브젝트 정리
+        if (stabilizer != null && stabilizer.gameObject != null)
+        {
+            Destroy(stabilizer.gameObject);
         }
     }
 }

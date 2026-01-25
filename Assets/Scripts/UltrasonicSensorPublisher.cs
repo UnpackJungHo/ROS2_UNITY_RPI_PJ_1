@@ -71,12 +71,34 @@ public class UltrasonicSensorPublisher : MonoBehaviour
     /// </summary>
     void ValidateSensors()
     {
+        // 자동 할당 로직 추가
+        if (sensorFL == null)
+        {
+            var obj = GameObject.Find("ultrasonic_fl_link");
+            if (obj != null) sensorFL = obj.GetComponent<SingleUltrasonicSensor>();
+        }
+        if (sensorFR == null)
+        {
+            var obj = GameObject.Find("ultrasonic_fr_link");
+            if (obj != null) sensorFR = obj.GetComponent<SingleUltrasonicSensor>();
+        }
+        if (sensorRL == null)
+        {
+            var obj = GameObject.Find("ultrasonic_rl_link");
+            if (obj != null) sensorRL = obj.GetComponent<SingleUltrasonicSensor>();
+        }
+        if (sensorRR == null)
+        {
+            var obj = GameObject.Find("ultrasonic_rr_link");
+            if (obj != null) sensorRR = obj.GetComponent<SingleUltrasonicSensor>();
+        }
+
         allSensors = new SingleUltrasonicSensor[] { sensorFL, sensorFR, sensorRL, sensorRR };
 
-        if (sensorFL == null) Debug.LogWarning("[UltrasonicManager] sensorFL이 할당되지 않았습니다.");
-        if (sensorFR == null) Debug.LogWarning("[UltrasonicManager] sensorFR이 할당되지 않았습니다.");
-        if (sensorRL == null) Debug.LogWarning("[UltrasonicManager] sensorRL이 할당되지 않았습니다.");
-        if (sensorRR == null) Debug.LogWarning("[UltrasonicManager] sensorRR이 할당되지 않았습니다.");
+        if (sensorFL == null) Debug.LogWarning("[UltrasonicManager] sensorFL이 할당되지 않았습니다. ('ultrasonic_fl_link' 오브젝트를 찾을 수 없음)");
+        if (sensorFR == null) Debug.LogWarning("[UltrasonicManager] sensorFR이 할당되지 않았습니다. ('ultrasonic_fr_link' 오브젝트를 찾을 수 없음)");
+        if (sensorRL == null) Debug.LogWarning("[UltrasonicManager] sensorRL이 할당되지 않았습니다. ('ultrasonic_rl_link' 오브젝트를 찾을 수 없음)");
+        if (sensorRR == null) Debug.LogWarning("[UltrasonicManager] sensorRR이 할당되지 않았습니다. ('ultrasonic_rr_link' 오브젝트를 찾을 수 없음)");
     }
 
     /// <summary>

@@ -121,9 +121,10 @@ public class AMRViewController : MonoBehaviour
             backViewCamera.enabled = false;
         }
 
-        if (publisherCamera != null)
+        if (publisherCamera != null && cameraPublisher != null)
         {
-            publisherCamera.targetTexture = cameraPublisher?.GetComponent<Camera>()?.targetTexture;
+            // CameraPublisher의 API를 통해 RenderTexture 복원
+            cameraPublisher.RestoreRenderTexture();
         }
 
         // 선택된 모드의 카메라 활성화
@@ -165,8 +166,8 @@ public class AMRViewController : MonoBehaviour
                     publisherCamera = GetPublisherCamera();
                     if (publisherCamera != null)
                     {
-                        // RenderTexture 해제하여 화면에 직접 렌더링
-                        publisherCamera.targetTexture = null;
+                        // CameraPublisher의 API를 통해 화면에 직접 렌더링
+                        cameraPublisher.RenderToScreen();
                         publisherCamera.enabled = true;
                     }
                 }
@@ -181,25 +182,23 @@ public class AMRViewController : MonoBehaviour
 
     Camera GetPublisherCamera()
     {
-        if (cameraPublisher != null && cameraPublisher.cameraTransform != null)
+        // CameraPublisher의 GetCamera() 메서드 사용 (안정화 모드 지원)
+        if (cameraPublisher != null)
         {
-            return cameraPublisher.cameraTransform.GetComponent<Camera>();
+            return cameraPublisher.GetCamera();
         }
         return null;
     }
 
     void RestorePublisherCameraRenderTexture()
     {
-        // CameraPublisher의 카메라를 원래 RenderTexture 모드로 복원
+        // CameraPublisher의 API를 통해 RenderTexture 모드로 복원
         if (cameraPublisher != null)
         {
+            cameraPublisher.RestoreRenderTexture();
             Camera pubCam = GetPublisherCamera();
             if (pubCam != null)
             {
-                // CameraPublisher가 Start에서 설정한 RenderTexture를 다시 할당
-                // CameraPublisher의 private renderTexture에 접근할 수 없으므로
-                // CameraPublisher 자체에서 관리하도록 함
-                // 여기서는 단순히 enabled를 false로 설정
                 pubCam.enabled = true; // ROS 퍼블리싱을 위해 활성화 유지
             }
         }

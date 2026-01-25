@@ -98,6 +98,10 @@ public class WheelTest : MonoBehaviour
     [Header("Auto-Find Settings")]
     public bool autoFindReferences = true;
 
+    [Header("External Control (AI)")]
+    [Tooltip("외부 제어 활성화 시 키보드 입력 무시")]
+    public bool externalControlEnabled = false;
+
     [Header("Debug Info (Read Only)")]
     [SerializeField] private float currentSpeed_ms;      // 현재 속도 (m/s)
     [SerializeField] private float currentSpeed_kmh;     // 현재 속도 (km/h)
@@ -184,51 +188,55 @@ public class WheelTest : MonoBehaviour
 
     void Update()
     {
-        // 입력 처리 (Update에서 수행)
-        steeringInput = Input.GetAxis("Horizontal");
-        float vertical = Input.GetAxis("Vertical");
+        // 외부 제어 모드일 때는 키보드 입력 무시
+        if (!externalControlEnabled)
+        {
+            // 입력 처리 (Update에서 수행)
+            steeringInput = Input.GetAxis("Horizontal");
+            float vertical = Input.GetAxis("Vertical");
 
-        // 전진/후진과 브레이크 입력 분리
-        if (vertical > 0)
-        {
-            throttleInput = vertical;
-            brakeInput = 0f;
-        }
-        else if (vertical < 0)
-        {
-            // 전진 중 후진 입력 = 브레이크
-            if (currentSpeed_ms > 0.5f)
+            // 전진/후진과 브레이크 입력 분리
+            if (vertical > 0)
             {
-                throttleInput = 0f;
-                brakeInput = -vertical;
-            }
-            // 정지 또는 저속 = 후진
-            else
-            {
-                throttleInput = vertical;  // 음수값으로 후진
+                throttleInput = vertical;
                 brakeInput = 0f;
             }
-        }
-        else
-        {
-            throttleInput = 0f;
-            brakeInput = 0f;
-        }
+            else if (vertical < 0)
+            {
+                // 전진 중 후진 입력 = 브레이크
+                if (currentSpeed_ms > 0.5f)
+                {
+                    throttleInput = 0f;
+                    brakeInput = -vertical;
+                }
+                // 정지 또는 저속 = 후진
+                else
+                {
+                    throttleInput = vertical;  // 음수값으로 후진
+                    brakeInput = 0f;
+                }
+            }
+            else
+            {
+                throttleInput = 0f;
+                brakeInput = 0f;
+            }
 
-        // 스페이스바 = 브레이크
-        if (Input.GetKey(KeyCode.Space))
-        {
-            brakeInput = 1f;
-            throttleInput = 0f;  // 브레이크 시 가속 해제
-        }
+            // 스페이스바 = 브레이크
+            if (Input.GetKey(KeyCode.Space))
+            {
+                brakeInput = 1f;
+                throttleInput = 0f;  // 브레이크 시 가속 해제
+            }
 
-        // 수동 변속 (Q/E 키)
-        if (!autoTransmission)
-        {
-            if (Input.GetKeyDown(KeyCode.E) && currentGear < gearRatios.Length - 1)
-                currentGear++;
-            if (Input.GetKeyDown(KeyCode.Q) && currentGear > 0)
-                currentGear--;
+            // 수동 변속 (Q/E 키)
+            if (!autoTransmission)
+            {
+                if (Input.GetKeyDown(KeyCode.E) && currentGear < gearRatios.Length - 1)
+                    currentGear++;
+                if (Input.GetKeyDown(KeyCode.Q) && currentGear > 0)
+                    currentGear--;
+            }
         }
 
         // 조향 업데이트 (Update에서 수행 - 시각적 반응성)

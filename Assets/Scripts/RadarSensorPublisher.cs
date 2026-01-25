@@ -80,8 +80,20 @@ public class RadarSensorPublisher : MonoBehaviour
     // 센서 참조가 올바르게 할당되었는지 검증하는 함수
     void ValidateSensors()
     {
-        if (sensorFront == null) Debug.LogWarning("[RadarManager] sensorFront가 할당되지 않았습니다.");
-        if (sensorRear == null) Debug.LogWarning("[RadarManager] sensorRear가 할당되지 않았습니다.");
+        // 자동 할당 로직 추가
+        if (sensorFront == null)
+        {
+            var obj = GameObject.Find("radar_front_link");
+            if (obj != null) sensorFront = obj.GetComponent<SingleRadarSensor>();
+        }
+        if (sensorRear == null)
+        {
+            var obj = GameObject.Find("radar_rear_link");
+            if (obj != null) sensorRear = obj.GetComponent<SingleRadarSensor>();
+        }
+
+        if (sensorFront == null) Debug.LogWarning("[RadarManager] sensorFront가 할당되지 않았습니다. ('radar_front_link' 오브젝트를 찾을 수 없음)");
+        if (sensorRear == null) Debug.LogWarning("[RadarManager] sensorRear가 할당되지 않았습니다. ('radar_rear_link' 오브젝트를 찾을 수 없음)");
     }
 
     // 모든 센서의 스캔 간격을 발행 주기와 동기화하는 함수
