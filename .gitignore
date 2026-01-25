@@ -50,4 +50,5 @@ Thumbs.db
 *.unitypackage
 *.app
 sysinfo.txt
-crashlytics-build.propertiespython/checkpoints/driving_dual_bc.pth
+crashlytics-build.properties
+python/checkpoints/driving_dual_bc.pth
