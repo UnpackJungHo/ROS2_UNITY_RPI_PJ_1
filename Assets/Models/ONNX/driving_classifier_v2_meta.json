@@ -1,0 +1,22 @@
+{
+  "model_version": "speed_aware_v2",
+  "backbone": "resnet18",
+  "speed_normalize": 5.0,
+  "class_names": [
+    "FORWARD",
+    "FORWARD_LEFT",
+    "FORWARD_RIGHT",
+    "LEFT",
+    "RIGHT",
+    "BACKWARD",
+    "NONE"
+  ],
+  "front_size": [
+    66,
+    200
+  ],
+  "top_size": [
+    128,
+    128
+  ]
+}

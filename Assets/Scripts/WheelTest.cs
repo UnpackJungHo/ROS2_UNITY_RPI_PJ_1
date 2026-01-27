@@ -68,6 +68,19 @@ public class WheelTest : MonoBehaviour
     [Tooltip("조향 제한 없는 최대 속도 (m/s) - 이 속도까지는 풀 조향 가능")]
     public float fullSteeringSpeed = 1.0f;
 
+    [Header("Acceleration & Deceleration Tuning")]
+    [Tooltip("가속 응답 배율 - 값이 클수록 0에서 빠르게 가속됨 (기본: 1.0, 권장: 1.0~3.0)")]
+    [Range(0.5f, 5.0f)]
+    public float accelerationMultiplier = 1.0f;
+    [Tooltip("감속 응답 배율 - 값이 클수록 입력 해제 시 빠르게 정지함 (기본: 1.0, 권장: 1.0~5.0)")]
+    [Range(0.5f, 10.0f)]
+    public float decelerationMultiplier = 1.0f;
+    [Tooltip("저속 부스트 임계값 (m/s) - 이 속도 이하에서 추가 가속 부스트 적용")]
+    public float lowSpeedBoostThreshold = 1.0f;
+    [Tooltip("저속 부스트 배율 - 저속에서의 추가 가속력 배율 (기본: 2.0)")]
+    [Range(1.0f, 5.0f)]
+    public float lowSpeedBoostMultiplier = 2.0f;
+
     [Header("Resistance Coefficients")]
     [Tooltip("공기저항 계수 (Cd)")]
     public float dragCoefficient = 0.5f;
@@ -279,11 +292,11 @@ public class WheelTest : MonoBehaviour
         // 6. 브레이크력 계산
         float brakeForce = CalculateBrakeForce();
 
-        // 7. 엔진 브레이크 (스로틀 해제 시)
+        // 7. 엔진 브레이크 (스로틀 해제 시) - 감속 배율 적용
         float engineBrake = 0f;
         if (Mathf.Abs(throttleInput) < 0.1f && Mathf.Abs(currentSpeed_ms) > 0.1f)
         {
-            engineBrake = engineBrakeForce * Mathf.Sign(currentSpeed_ms);
+            engineBrake = engineBrakeForce * decelerationMultiplier * Mathf.Sign(currentSpeed_ms);
         }
 
         // 8. 타이어 그립 한계 계산
@@ -305,7 +318,9 @@ public class WheelTest : MonoBehaviour
         else
         {
             // 구동력에서 모든 저항력을 뺌 (전진/후진 동일)
-            netForce = effectiveDriveForce - dragForce - rollingForce - brakeForce - engineBrake;
+            // 스로틀 해제 상태에서는 저항력에 감속 배율 적용
+            float resistanceMultiplier = (Mathf.Abs(throttleInput) < 0.1f) ? decelerationMultiplier : 1.0f;
+            netForce = effectiveDriveForce - (dragForce + rollingForce) * resistanceMultiplier - brakeForce - engineBrake;
 
             // 브레이크 중 속도가 거의 0이면 완전 정지
             if (brakeInput > 0.5f && Mathf.Abs(currentSpeed_ms) < 0.3f)
@@ -423,6 +438,18 @@ public class WheelTest : MonoBehaviour
 
         // 구동력 = 바퀴 토크 / 바퀴 반지름
         float driveForce = wheelTorque / wheelRadius;
+
+        // 가속 배율 적용
+        driveForce *= accelerationMultiplier;
+
+        // 저속 부스트 적용 (정지~저속 구간에서 추가 가속력)
+        float currentAbsSpeed = Mathf.Abs(currentSpeed_ms);
+        if (currentAbsSpeed < lowSpeedBoostThreshold)
+        {
+            // 속도가 낮을수록 부스트 효과 큼 (선형 감소)
+            float boostRatio = 1.0f - (currentAbsSpeed / lowSpeedBoostThreshold);
+            driveForce *= (1.0f + boostRatio * (lowSpeedBoostMultiplier - 1.0f));
+        }
 
         // 후진 시 음수
         if (throttleInput < 0)

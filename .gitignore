@@ -9,6 +9,7 @@
 /[Mm]emoryCaptures/
 /[Rr]ecordings/
 /[Tt]rainingData/
+/[Tt]rainingDataV2/
 
 # [Asset Store Tools]
 /[Aa]ssets/AssetStoreTools*
@@ -51,4 +52,4 @@ Thumbs.db
 *.app
 sysinfo.txt
 crashlytics-build.properties
-python/checkpoints/driving_dual_bc.pth
+python/checkpoints/*

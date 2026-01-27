@@ -43,7 +43,7 @@ public class DrivingDataCollector : MonoBehaviour
     [Header("Collection Settings")]
     public KeyCode recordKey = KeyCode.R;
     public KeyCode saveKey = KeyCode.T;
-    public float captureInterval = 0.1f;  // 10 FPS
+    public float captureInterval = 0.05f;  // 20 FPS
 
     [Header("Status (Read Only)")]
     public bool isRecording = false;
@@ -365,22 +365,201 @@ public class DrivingDataCollector : MonoBehaviour
             }
         }
 
-        // 메타데이터 JSON 저장
+        // ============================================================
+        // 데이터 품질 분석 (steering 분포)
+        // ============================================================
+        // 이 트랙은 D자 모양으로 완만한 커브가 대부분입니다.
+        // 완만한 커브도 "커브"로 인식하도록 기준을 세분화했습니다.
+        //
+        // 분류 기준:
+        //   직진:       |steering| < 0.03  (거의 핸들 안 돌림)
+        //   완만한 커브: 0.03 <= |steering| < 0.15
+        //   중간 커브:   0.15 <= |steering| < 0.35
+        //   급커브:      |steering| >= 0.35
+        // ============================================================
+
+        int strongLeft = 0;     // steering < -0.35  (급 좌회전)
+        int mediumLeft = 0;     // -0.35 <= steering < -0.15 (중간 좌회전)
+        int gentleLeft = 0;     // -0.15 <= steering < -0.03 (완만한 좌회전)
+        int straight = 0;       // -0.03 <= steering <= 0.03 (직진)
+        int gentleRight = 0;    // 0.03 < steering <= 0.15 (완만한 우회전)
+        int mediumRight = 0;    // 0.15 < steering <= 0.35 (중간 우회전)
+        int strongRight = 0;    // steering > 0.35 (급 우회전)
+
+        float minSteering = float.MaxValue;
+        float maxSteering = float.MinValue;
+        float sumSteering = 0f;
+
+        float minThrottle = float.MaxValue;
+        float maxThrottle = float.MinValue;
+        float sumThrottle = 0f;
+
+        float minSpeed = float.MaxValue;
+        float maxSpeed = float.MinValue;
+        float sumSpeed = 0f;
+
+        foreach (var frame in frameBuffer)
+        {
+            float s = frame.steering;
+            float t = frame.throttle;
+            float spd = frame.speed;
+
+            // Steering 분포 계산 (세분화된 기준)
+            if (s < -0.35f) strongLeft++;
+            else if (s < -0.15f) mediumLeft++;
+            else if (s < -0.03f) gentleLeft++;
+            else if (s <= 0.03f) straight++;
+            else if (s <= 0.15f) gentleRight++;
+            else if (s <= 0.35f) mediumRight++;
+            else strongRight++;
+
+            // 통계
+            minSteering = Mathf.Min(minSteering, s);
+            maxSteering = Mathf.Max(maxSteering, s);
+            sumSteering += s;
+
+            minThrottle = Mathf.Min(minThrottle, t);
+            maxThrottle = Mathf.Max(maxThrottle, t);
+            sumThrottle += t;
+
+            minSpeed = Mathf.Min(minSpeed, spd);
+            maxSpeed = Mathf.Max(maxSpeed, spd);
+            sumSpeed += spd;
+        }
+
+        int total = frameBuffer.Count;
+        float avgSteering = sumSteering / total;
+        float avgThrottle = sumThrottle / total;
+        float avgSpeed = sumSpeed / total;
+
+        // 커브 데이터 합계
+        int totalLeft = strongLeft + mediumLeft + gentleLeft;
+        int totalRight = strongRight + mediumRight + gentleRight;
+        int totalCurve = totalLeft + totalRight;
+
+        // 품질 평가 (이 트랙에 맞게 조정)
+        // D자 트랙: 완만한 커브가 대부분이므로 직진 기준을 엄격하게
+        float straightRatio = (float)straight / total * 100f;
+        float curveRatio = (float)totalCurve / total * 100f;
+        float leftRatio = (float)totalLeft / total * 100f;
+        float rightRatio = (float)totalRight / total * 100f;
+
+        string qualityGrade;
+        string qualityNote;
+
+        // 품질 기준 (D자 트랙 기준)
+        // - 직진이 20% 이하: EXCELLENT
+        // - 직진이 35% 이하: GOOD
+        // - 직진이 50% 이하: FAIR
+        // - 직진이 50% 초과: POOR
+        if (straightRatio <= 20f)
+        {
+            qualityGrade = "EXCELLENT";
+            qualityNote = "커브 데이터가 매우 충분합니다!";
+        }
+        else if (straightRatio <= 35f)
+        {
+            qualityGrade = "GOOD";
+            qualityNote = "양호한 데이터입니다.";
+        }
+        else if (straightRatio <= 50f)
+        {
+            qualityGrade = "FAIR";
+            qualityNote = "직진 구간에서 속도를 더 높이거나, 커브에서 더 천천히 주행하세요.";
+        }
+        else
+        {
+            qualityGrade = "POOR";
+            qualityNote = "직진 데이터가 너무 많습니다! 커브에서 아주 천천히 주행하세요.";
+        }
+
+        // 좌우 균형 체크
+        string balanceNote = "";
+        if (totalCurve > 0)
+        {
+            float leftOfCurve = (float)totalLeft / totalCurve * 100f;
+            if (leftOfCurve < 20f)
+            {
+                balanceNote = " [주의] 좌회전 데이터 부족 - 반시계 방향 주행 추가 권장";
+            }
+            else if (leftOfCurve > 80f)
+            {
+                balanceNote = " [주의] 우회전 데이터 부족 - 시계 방향 주행 추가 권장";
+            }
+        }
+
+        // 메타데이터 JSON 저장 (품질 정보 포함)
         string metaPath = Path.Combine(sessionFolder, "metadata.json");
         string metaJson = $@"{{
-    ""total_frames"": {frameBuffer.Count},
+    ""total_frames"": {total},
     ""front_image_size"": {{ ""width"": {frontImageWidth}, ""height"": {frontImageHeight} }},
     ""top_image_size"": {{ ""width"": {topViewImageSize}, ""height"": {topViewImageSize} }},
     ""top_view_enabled"": {captureTopView.ToString().ToLower()},
     ""top_view_height"": {topViewHeight},
     ""capture_fps"": {1f / captureInterval:F1},
-    ""created"": ""{DateTime.Now:yyyy-MM-dd HH:mm:ss}""
+    ""created"": ""{DateTime.Now:yyyy-MM-dd HH:mm:ss}"",
+    ""data_quality"": {{
+        ""grade"": ""{qualityGrade}"",
+        ""note"": ""{qualityNote}{balanceNote}""
+    }},
+    ""steering_summary"": {{
+        ""straight_ratio"": {straightRatio:F1},
+        ""curve_ratio"": {curveRatio:F1},
+        ""left_ratio"": {leftRatio:F1},
+        ""right_ratio"": {rightRatio:F1}
+    }},
+    ""steering_distribution"": {{
+        ""strong_left"": {{ ""count"": {strongLeft}, ""ratio"": {(float)strongLeft / total * 100f:F1}, ""range"": ""< -0.35"" }},
+        ""medium_left"": {{ ""count"": {mediumLeft}, ""ratio"": {(float)mediumLeft / total * 100f:F1}, ""range"": ""-0.35 ~ -0.15"" }},
+        ""gentle_left"": {{ ""count"": {gentleLeft}, ""ratio"": {(float)gentleLeft / total * 100f:F1}, ""range"": ""-0.15 ~ -0.03"" }},
+        ""straight"": {{ ""count"": {straight}, ""ratio"": {straightRatio:F1}, ""range"": ""-0.03 ~ 0.03"" }},
+        ""gentle_right"": {{ ""count"": {gentleRight}, ""ratio"": {(float)gentleRight / total * 100f:F1}, ""range"": ""0.03 ~ 0.15"" }},
+        ""medium_right"": {{ ""count"": {mediumRight}, ""ratio"": {(float)mediumRight / total * 100f:F1}, ""range"": ""0.15 ~ 0.35"" }},
+        ""strong_right"": {{ ""count"": {strongRight}, ""ratio"": {(float)strongRight / total * 100f:F1}, ""range"": ""> 0.35"" }}
+    }},
+    ""steering_stats"": {{
+        ""min"": {minSteering:F4},
+        ""max"": {maxSteering:F4},
+        ""avg"": {avgSteering:F4}
+    }},
+    ""throttle_stats"": {{
+        ""min"": {minThrottle:F4},
+        ""max"": {maxThrottle:F4},
+        ""avg"": {avgThrottle:F4}
+    }},
+    ""speed_stats"": {{
+        ""min"": {minSpeed:F4},
+        ""max"": {maxSpeed:F4},
+        ""avg"": {avgSpeed:F4}
+    }}
 }}";
         File.WriteAllText(metaPath, metaJson);
 
+        // 콘솔 출력 (품질 정보 포함)
         Debug.Log($"[DataCollector] ✓ 저장 완료!");
         Debug.Log($"  경로: {csvPath}");
-        Debug.Log($"  프레임: {frameBuffer.Count}");
+        Debug.Log($"  프레임: {total}");
+        Debug.Log($"  ═══════════════════════════════════════");
+        Debug.Log($"  [데이터 품질: {qualityGrade}]");
+        Debug.Log($"  {qualityNote}");
+        if (!string.IsNullOrEmpty(balanceNote))
+        {
+            Debug.Log($"  {balanceNote}");
+        }
+        Debug.Log($"  ═══════════════════════════════════════");
+        Debug.Log($"  [요약] 직진: {straightRatio:F1}% | 커브: {curveRatio:F1}%");
+        Debug.Log($"         좌회전: {leftRatio:F1}% | 우회전: {rightRatio:F1}%");
+        Debug.Log($"  ───────────────────────────────────────");
+        Debug.Log($"  [상세 Steering 분포]");
+        Debug.Log($"    급좌회전   (< -0.35): {strongLeft,5} ({(float)strongLeft / total * 100f:F1}%)");
+        Debug.Log($"    중간좌회전 (-0.35~-0.15): {mediumLeft,5} ({(float)mediumLeft / total * 100f:F1}%)");
+        Debug.Log($"    완만좌회전 (-0.15~-0.03): {gentleLeft,5} ({(float)gentleLeft / total * 100f:F1}%)");
+        Debug.Log($"    직진       (-0.03~0.03): {straight,5} ({straightRatio:F1}%)");
+        Debug.Log($"    완만우회전 (0.03~0.15): {gentleRight,5} ({(float)gentleRight / total * 100f:F1}%)");
+        Debug.Log($"    중간우회전 (0.15~0.35): {mediumRight,5} ({(float)mediumRight / total * 100f:F1}%)");
+        Debug.Log($"    급우회전   (> 0.35): {strongRight,5} ({(float)strongRight / total * 100f:F1}%)");
+        Debug.Log($"  ───────────────────────────────────────");
+        Debug.Log($"  평균 속도: {avgSpeed:F2} m/s");
     }
 
     void OnDestroy()

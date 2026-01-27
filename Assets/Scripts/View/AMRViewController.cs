@@ -21,6 +21,11 @@ public class AMRViewController : MonoBehaviour
     [Tooltip("BackView에서 대상 오브젝트로부터 Y축 높이")]
     public float backViewHeight = 1.5f;
 
+    [Tooltip("카메라 이동 제동 시간 (낮을수록 빠름, 높을수록 부드러움)")]
+    public float smoothTime = 0.1f;
+
+    private Vector3 currentVelocity = Vector3.zero;
+
     [Header("UI Settings")]
     public Button front_view_button;
     public Button top_view_button;
@@ -74,7 +79,7 @@ public class AMRViewController : MonoBehaviour
         backViewCamera.enabled = false;
     }
 
-    void Update()
+    void LateUpdate()
     {
         // TopView 모드일 때 카메라 위치 업데이트
         if (currentViewMode == ViewMode.TopView && topViewTarget != null && topViewCamera != null)
@@ -101,8 +106,13 @@ public class AMRViewController : MonoBehaviour
         Vector3 targetPosition = topViewTarget.transform.position;
         Vector3 targetForward = topViewTarget.transform.forward;
 
-        // 대상 오브젝트의 뒤쪽에 카메라 배치
-        backViewCamera.transform.position = targetPosition - targetForward * backViewDistance + Vector3.up * backViewHeight;
+        // 대상 오브젝트의 뒤쪽에 카메라 배치 목표 지점 계산
+        Vector3 desiredPosition = targetPosition - targetForward * backViewDistance + Vector3.up * backViewHeight;
+        
+        // SmoothDamp를 사용하여 부드럽게 이동
+        backViewCamera.transform.position = Vector3.SmoothDamp(backViewCamera.transform.position, desiredPosition, ref currentVelocity, smoothTime);
+        
+        // 대상의 약간 위쪽을 바라보게 함
         backViewCamera.transform.LookAt(targetPosition + Vector3.up * backViewHeight * 0.5f);
     }
 
