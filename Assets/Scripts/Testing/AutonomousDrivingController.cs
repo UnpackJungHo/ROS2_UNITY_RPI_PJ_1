@@ -334,7 +334,7 @@ public class AutonomousDrivingController : MonoBehaviour
 
         // 디버그: 정규화된 텐서 첫 3개 값 출력
         var frontData = frontInputTensor.DownloadToArray();
-        Debug.Log($"[DEBUG] Normalized front tensor sample: R={frontData[0]:F3}, G={frontData[66*200]:F3}, B={frontData[2*66*200]:F3}");
+        //Debug.Log($"[DEBUG] Normalized front tensor sample: R={frontData[0]:F3}, G={frontData[66*200]:F3}, B={frontData[2*66*200]:F3}");
 
         worker.Schedule();
 
@@ -349,7 +349,7 @@ public class AutonomousDrivingController : MonoBehaviour
                     string logitsStr = "";
                     for (int i = 0; i < 7; i++)
                         logitsStr += $"{cpuTensor[i]:F2}, ";
-                    Debug.Log($"[AI] Logits: [{logitsStr}] Speed: {normalizedSpeed:F2}");
+                    //Debug.Log($"[AI] Logits: [{logitsStr}] Speed: {normalizedSpeed:F2}");
 
                     // Softmax 적용하여 확률로 변환 + argmax
                     float maxVal = float.MinValue;
@@ -446,10 +446,10 @@ public class AutonomousDrivingController : MonoBehaviour
         float[] tensorData = new float[3 * height * width];
 
         // 디버그: 첫 번째 픽셀 값 확인
-        if (pixels.Length > 0)
-        {
-            Debug.Log($"[DEBUG] First pixel RGB: ({pixels[0].r:F3}, {pixels[0].g:F3}, {pixels[0].b:F3})");
-        }
+        // if (pixels.Length > 0)
+        // {
+        //     Debug.Log($"[DEBUG] First pixel RGB: ({pixels[0].r:F3}, {pixels[0].g:F3}, {pixels[0].b:F3})");
+        // }
 
         for (int y = 0; y < height; y++)
         {

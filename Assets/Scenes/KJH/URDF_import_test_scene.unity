@@ -12936,7 +12936,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 477da7ed7a13b49128a0ca86beae8cc6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  modelAsset: {fileID: 5022602860645237092, guid: 25ef238546fb7721abf1d0c3b34c8206, type: 3}
+  modelAsset: {fileID: 5022602860645237092, guid: 1ec7cf82e9f2f7368ab20cac51ee7eb4, type: 3}
   wheelController: {fileID: 1698663458}
   cameraPublisher: {fileID: 1833787378}
   topViewTarget: {fileID: 1698663454}
@@ -12950,7 +12950,7 @@ MonoBehaviour:
   forwardThrottle: 0.8
   steeringStrength: 1
   toggleKey: 112
-  autoResumeDelay: 3
+  autoResumeDelay: 0.5
   isAutonomousMode: 0
   maxSpeedLimit: 3
   predictedClass: -1

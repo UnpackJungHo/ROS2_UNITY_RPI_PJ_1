@@ -1,6 +1,11 @@
 # train_classification.py
 """
-분류 기반 자율주행 학습 스크립트
+Speed-Aware DAgger 분류 기반 자율주행 학습 스크립트
+
+개선점:
+- 속도 정보를 모델 입력에 추가
+- 같은 이미지라도 속도에 따라 다른 액션 예측 가능
+- DAgger 워크플로우 지원
 
 키 입력 분류:
   0: FORWARD (W)
@@ -37,10 +42,13 @@ CLASS_NAMES = ['FORWARD', 'FORWARD_LEFT', 'FORWARD_RIGHT', 'LEFT', 'RIGHT', 'BAC
 NUM_CLASSES = 7
 
 
-class DualViewClassificationNet(nn.Module):
+class SpeedAwareDualViewNet(nn.Module):
     """
-    듀얼 뷰 분류 모델
-    Front View + Top View → 7개 클래스 분류
+    Speed-Aware 듀얼 뷰 분류 모델
+    Front View + Top View + Speed → 7개 클래스 분류
+
+    속도 정보를 함께 학습하여 같은 이미지라도
+    속도에 따라 다른 액션을 예측할 수 있습니다.
     """
 
     def __init__(self, backbone="resnet18", pretrained=True, dropout=0.5):
@@ -55,16 +63,41 @@ class DualViewClassificationNet(nn.Module):
                 weights=models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
             )
             feature_dim = 512
+        elif backbone == "mobilenet_v3_small":
+            # 경량 모델 (라즈베리파이용)
+            self.front_encoder = models.mobilenet_v3_small(
+                weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None
+            )
+            self.top_encoder = models.mobilenet_v3_small(
+                weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None
+            )
+            feature_dim = 576  # mobilenet_v3_small의 마지막 레이어 출력
+            self.front_encoder.classifier = nn.Identity()
+            self.top_encoder.classifier = nn.Identity()
         else:
             raise ValueError(f"Unknown backbone: {backbone}")
 
-        # 원래 FC 레이어 제거
-        self.front_encoder.fc = nn.Identity()
-        self.top_encoder.fc = nn.Identity()
+        # ResNet의 FC 레이어 제거
+        if backbone == "resnet18":
+            self.front_encoder.fc = nn.Identity()
+            self.top_encoder.fc = nn.Identity()
 
-        # 분류 헤드
+        self.backbone = backbone
+        self.feature_dim = feature_dim
+
+        # 속도 임베딩 (1차원 → 64차원)
+        # 속도를 고차원 특징으로 변환하여 이미지 특징과 결합
+        self.speed_embedding = nn.Sequential(
+            nn.Linear(1, 32),
+            nn.ReLU(),
+            nn.Linear(32, 64),
+            nn.ReLU()
+        )
+
+        # 분류 헤드 (front_features + top_features + speed_embedding)
+        combined_dim = feature_dim * 2 + 64
         self.classifier = nn.Sequential(
-            nn.Linear(feature_dim * 2, 512),
+            nn.Linear(combined_dim, 512),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(512, 128),
@@ -73,23 +106,51 @@ class DualViewClassificationNet(nn.Module):
             nn.Linear(128, NUM_CLASSES)
         )
 
-    def forward(self, front_img, top_img):
+    def forward(self, front_img, top_img, speed):
+        """
+        Args:
+            front_img: (B, 3, H, W) 전방 카메라 이미지
+            top_img: (B, 3, H, W) 탑뷰 이미지
+            speed: (B, 1) 현재 속도 (정규화됨)
+        Returns:
+            logits: (B, 7) 클래스별 로짓
+        """
         front_features = self.front_encoder(front_img)
         top_features = self.top_encoder(top_img)
 
-        combined = torch.cat([front_features, top_features], dim=1)
+        # MobileNet의 경우 pooling 적용
+        if self.backbone == "mobilenet_v3_small":
+            if len(front_features.shape) == 4:
+                front_features = front_features.mean([2, 3])
+                top_features = top_features.mean([2, 3])
+
+        speed_features = self.speed_embedding(speed)
+
+        combined = torch.cat([front_features, top_features, speed_features], dim=1)
         logits = self.classifier(combined)
 
         return logits
 
 
-class DrivingClassificationDataset(Dataset):
+class SpeedAwareClassificationDataset(Dataset):
     """
-    분류 기반 주행 데이터셋
+    Speed-Aware 분류 기반 주행 데이터셋
+
+    특징:
+    - 속도 정보를 정규화하여 모델 입력에 포함
+    - 좌우 반전 augmentation 시 레이블도 교환
+    - 클래스 불균형 해결을 위한 가중치 계산
     """
 
-    def __init__(self, data_dirs: list, augment: bool = True):
+    def __init__(self, data_dirs: list, augment: bool = True, speed_normalize: float = 5.0):
+        """
+        Args:
+            data_dirs: 데이터 디렉토리 리스트
+            augment: 데이터 증강 여부
+            speed_normalize: 속도 정규화 기준값 (m/s), 이 값으로 나누어 0~1 범위로 정규화
+        """
         self.augment = augment
+        self.speed_normalize = speed_normalize
         self.data = []
 
         for data_dir in data_dirs:
@@ -102,9 +163,9 @@ class DrivingClassificationDataset(Dataset):
 
             df = pd.read_csv(csv_path)
 
-            # V2 형식 확인
+            # V2 형식 확인 (key_action 컬럼 필수)
             if 'key_action' not in df.columns:
-                print(f"[Warning] {csv_path} is not V2 format, skipping...")
+                print(f"[Warning] {csv_path} is not V2 format (no key_action), skipping...")
                 continue
 
             for idx, row in df.iterrows():
@@ -116,9 +177,9 @@ class DrivingClassificationDataset(Dataset):
                 })
 
         if len(self.data) == 0:
-            raise ValueError("No valid V2 data found!")
+            raise ValueError("No valid V2 data found! Make sure CSV has 'key_action' column.")
 
-        # 정규화
+        # 정규화 transform
         self.normalize = A.Compose([
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ToTensorV2()
@@ -136,6 +197,11 @@ class DrivingClassificationDataset(Dataset):
 
         # 클래스 가중치 계산
         self._compute_class_weights()
+
+        # 속도 통계 출력
+        speeds = [d['speed'] for d in self.data]
+        print(f"[Dataset] 속도 통계: min={min(speeds):.2f}, max={max(speeds):.2f}, avg={np.mean(speeds):.2f} m/s")
+        print(f"[Dataset] 속도 정규화 기준: {speed_normalize} m/s")
 
     def _compute_class_weights(self):
         """클래스 불균형 해결을 위한 가중치 계산"""
@@ -171,8 +237,9 @@ class DrivingClassificationDataset(Dataset):
         top_image = np.array(Image.open(item['top_path']).convert('RGB'))
 
         label = item['key_action']
+        speed = item['speed'] / self.speed_normalize  # 정규화된 속도
 
-        # 좌우 반전 augmentation (좌/우 레이블도 교환)
+        # 좌우 반전 augmentation (50% 확률)
         if self.augment and np.random.random() < 0.5:
             front_image = np.fliplr(front_image).copy()
             top_image = np.fliplr(top_image).copy()
@@ -196,10 +263,16 @@ class DrivingClassificationDataset(Dataset):
         front_image = self.normalize(image=front_image)['image']
         top_image = self.normalize(image=top_image)['image']
 
-        return front_image, top_image, torch.tensor(label, dtype=torch.long)
+        return (
+            front_image,
+            top_image,
+            torch.tensor([speed], dtype=torch.float32),
+            torch.tensor(label, dtype=torch.long)
+        )
 
 
 class EarlyStopping:
+    """Early Stopping 클래스"""
     def __init__(self, patience=10, min_delta=0.001):
         self.patience = patience
         self.min_delta = min_delta
@@ -255,7 +328,7 @@ def save_training_graph(train_losses, val_losses, train_accs, val_accs, save_pat
     print(f"[Graph] Saved to: {save_path}")
 
 
-def train_classification(
+def train_speed_aware(
     data_dirs: list,
     val_ratio: float = 0.2,
     model_save_path: str = "checkpoints/driving_classifier.pth",
@@ -264,17 +337,25 @@ def train_classification(
     learning_rate: float = 1e-4,
     weight_decay: float = 1e-4,
     dropout: float = 0.5,
+    backbone: str = "resnet18",
     use_weighted_sampling: bool = True,
     use_class_weights: bool = True,
     early_stopping_patience: int = 10,
+    speed_normalize: float = 5.0,
     device: str = "cuda",
     graph_save_dir: str = None
 ):
     """
-    분류 기반 자율주행 학습
+    Speed-Aware DAgger 분류 학습
+
+    Args:
+        data_dirs: 학습 데이터 디렉토리 리스트
+        val_ratio: 검증 세션 비율
+        speed_normalize: 속도 정규화 기준값 (m/s)
+        backbone: 백본 모델 ("resnet18" 또는 "mobilenet_v3_small")
     """
     print("=" * 60)
-    print("Classification-Based Autonomous Driving Training")
+    print("Speed-Aware DAgger Classification Training")
     print("=" * 60)
 
     # 세션 단위 Train/Val 분할
@@ -294,8 +375,8 @@ def train_classification(
     print(f"  Val: {len(val_dirs)} sessions")
 
     # 데이터셋 생성
-    train_dataset = DrivingClassificationDataset(train_dirs, augment=True)
-    val_dataset = DrivingClassificationDataset(val_dirs, augment=False)
+    train_dataset = SpeedAwareClassificationDataset(train_dirs, augment=True, speed_normalize=speed_normalize)
+    val_dataset = SpeedAwareClassificationDataset(val_dirs, augment=False, speed_normalize=speed_normalize)
 
     print(f"\n[Dataset] Train: {len(train_dataset)}, Val: {len(val_dataset)}")
 
@@ -313,10 +394,12 @@ def train_classification(
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     # 모델
-    model = DualViewClassificationNet(backbone="resnet18", pretrained=True, dropout=dropout).to(device)
+    model = SpeedAwareDualViewNet(backbone=backbone, pretrained=True, dropout=dropout).to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"\n[Model] Total params: {total_params:,}")
+    print(f"\n[Model] Backbone: {backbone}")
+    print(f"[Model] Total params: {total_params:,}")
+    print(f"[Model] Speed normalization: {speed_normalize} m/s")
 
     # 손실 함수 (클래스 가중치 적용)
     if use_class_weights:
@@ -336,7 +419,7 @@ def train_classification(
     # 학습 기록
     train_losses, val_losses = [], []
     train_accs, val_accs = [], []
-    best_val_acc = 0.0
+    best_val_loss = float('inf')
     best_epoch = 0
 
     print(f"\n[Training] Starting...")
@@ -350,13 +433,14 @@ def train_classification(
         train_total = 0
 
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
-        for front_imgs, top_imgs, labels in pbar:
+        for front_imgs, top_imgs, speeds, labels in pbar:
             front_imgs = front_imgs.to(device)
             top_imgs = top_imgs.to(device)
+            speeds = speeds.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
-            logits = model(front_imgs, top_imgs)
+            logits = model(front_imgs, top_imgs, speeds)
             loss = criterion(logits, labels)
             loss.backward()
 
@@ -380,12 +464,13 @@ def train_classification(
         val_total = 0
 
         with torch.no_grad():
-            for front_imgs, top_imgs, labels in val_loader:
+            for front_imgs, top_imgs, speeds, labels in val_loader:
                 front_imgs = front_imgs.to(device)
                 top_imgs = top_imgs.to(device)
+                speeds = speeds.to(device)
                 labels = labels.to(device)
 
-                logits = model(front_imgs, top_imgs)
+                logits = model(front_imgs, top_imgs, speeds)
                 loss = criterion(logits, labels)
 
                 val_loss += loss.item()
@@ -409,9 +494,9 @@ def train_classification(
         print(f"Epoch {epoch+1:3d}: Train Loss={train_loss:.4f}, Acc={train_acc:.1f}% | "
               f"Val Loss={val_loss:.4f}, Acc={val_acc:.1f}% | LR={current_lr:.2e}")
 
-        # Best 모델 저장
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        # Best 모델 저장 (val_loss 기준)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
             best_epoch = epoch + 1
 
             torch.save({
@@ -422,8 +507,11 @@ def train_classification(
                 'val_acc': val_acc,
                 'class_names': CLASS_NAMES,
                 'num_classes': NUM_CLASSES,
+                'backbone': backbone,
+                'speed_normalize': speed_normalize,
+                'model_version': 'speed_aware_v2',
             }, model_save_path)
-            print(f"  → Best model saved! (val_acc: {val_acc:.1f}%)")
+            print(f"  → Best model saved! (val_loss: {val_loss:.4f})")
 
         # Early Stopping
         if early_stopping(val_loss):
@@ -433,7 +521,7 @@ def train_classification(
     print("=" * 60)
     print(f"Training Complete!")
     print(f"  Best epoch: {best_epoch}")
-    print(f"  Best val_acc: {best_val_acc:.1f}%")
+    print(f"  Best val_loss: {best_val_loss:.4f}")
     print(f"  Model saved: {model_save_path}")
     print("=" * 60)
 
@@ -441,21 +529,22 @@ def train_classification(
     if graph_save_dir:
         os.makedirs(graph_save_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        graph_path = os.path.join(graph_save_dir, f"classification_graph_{timestamp}.png")
+        graph_path = os.path.join(graph_save_dir, f"speed_aware_graph_{timestamp}.png")
         save_training_graph(
             train_losses, val_losses, train_accs, val_accs, graph_path,
-            title=f"Classification Training (Best: Epoch {best_epoch}, Acc: {best_val_acc:.1f}%)"
+            title=f"Speed-Aware DAgger (Best: Epoch {best_epoch}, Val Loss: {best_val_loss:.4f})"
         )
 
         # 결과 JSON 저장
-        result_path = os.path.join(graph_save_dir, f"classification_result_{timestamp}.json")
+        result_path = os.path.join(graph_save_dir, f"speed_aware_result_{timestamp}.json")
         with open(result_path, 'w') as f:
             json.dump({
                 'best_epoch': best_epoch,
-                'best_val_acc': float(best_val_acc),
-                'best_val_loss': float(val_losses[best_epoch-1]) if best_epoch <= len(val_losses) else float(val_losses[-1]),
+                'best_val_loss': float(best_val_loss),
                 'total_epochs': len(train_losses),
                 'class_names': CLASS_NAMES,
+                'backbone': backbone,
+                'speed_normalize': speed_normalize,
                 'train_losses': [float(l) for l in train_losses],
                 'val_losses': [float(l) for l in val_losses],
                 'train_accs': [float(a) for a in train_accs],
@@ -469,7 +558,7 @@ if __name__ == "__main__":
     import glob
     import argparse
 
-    parser = argparse.ArgumentParser(description="Classification-based autonomous driving training")
+    parser = argparse.ArgumentParser(description="Speed-Aware DAgger Classification Training")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -477,32 +566,35 @@ if __name__ == "__main__":
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument("--val_ratio", type=float, default=0.2)
     parser.add_argument("--early_stopping", type=int, default=10)
-    parser.add_argument("--test", action="store_true", help="10세션 테스트 모드 (epochs=20, batch=16, val_ratio=0.3, early_stopping=5)")
+    parser.add_argument("--backbone", type=str, default="resnet18",
+                        choices=["resnet18", "mobilenet_v3_small"])
+    parser.add_argument("--speed_norm", type=float, default=5.0,
+                        help="속도 정규화 기준값 (m/s)")
+    parser.add_argument("--test", action="store_true", help="테스트 모드")
     args = parser.parse_args()
 
-    # 테스트 모드: 소규모 데이터용 파라미터 자동 설정
     if args.test:
         args.epochs = 20
         args.batch_size = 16
         args.val_ratio = 0.3
-        args.early_stopping = 5
+        args.early_stopping = 15
         print("[TEST MODE] 소규모 데이터 테스트용 파라미터 적용")
 
     # V2 데이터 경로
-    base_path = Path(__file__).parent.parent / "TrainingDataV2"
+    base_path = Path(__file__).parent.parent / "TrainingData"
 
     if not base_path.exists():
         print(f"Error: {base_path} does not exist!")
-        print("먼저 Unity에서 DrivingDataCollectorV2로 데이터를 수집하세요.")
+        print("먼저 Unity에서 DrivingDataCollector로 데이터를 수집하세요.")
         exit(1)
 
     data_dirs = sorted(glob.glob(str(base_path / "session_*")))
 
     if len(data_dirs) == 0:
-        print("Error: No V2 sessions found!")
+        print("Error: No sessions found!")
         exit(1)
 
-    print(f"Found {len(data_dirs)} V2 sessions")
+    print(f"Found {len(data_dirs)} sessions")
 
     # 디렉토리 생성
     checkpoint_dir = Path(__file__).parent / "checkpoints"
@@ -512,7 +604,7 @@ if __name__ == "__main__":
     graph_dir.mkdir(exist_ok=True)
 
     # 학습
-    model = train_classification(
+    model = train_speed_aware(
         data_dirs=data_dirs,
         val_ratio=args.val_ratio,
         model_save_path=str(checkpoint_dir / "driving_classifier.pth"),
@@ -521,9 +613,11 @@ if __name__ == "__main__":
         learning_rate=args.lr,
         weight_decay=args.weight_decay,
         dropout=args.dropout,
-        use_weighted_sampling=True,
-        use_class_weights=True,
+        backbone=args.backbone,
+        use_weighted_sampling=False,
+        use_class_weights=False,
         early_stopping_patience=args.early_stopping,
+        speed_normalize=args.speed_norm,
         device="cuda" if torch.cuda.is_available() else "cpu",
         graph_save_dir=str(graph_dir)
     )

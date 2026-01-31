@@ -250,7 +250,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
     void StartRecording()
     {
-        string basePath = Path.Combine(Application.dataPath, "..", "TrainingDataV2");
+        string basePath = Path.Combine(Application.dataPath, "..", "TrainingData");
         sessionFolder = Path.Combine(basePath, $"session_{DateTime.Now:yyyyMMdd_HHmmss}");
 
         Directory.CreateDirectory(sessionFolder);

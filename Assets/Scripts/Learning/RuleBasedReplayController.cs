@@ -148,10 +148,10 @@ public class RuleBasedReplayController : MonoBehaviour
     {
         sessionPaths.Clear();
 
-        string basePath = Path.Combine(Application.dataPath, "..", "TrainingDataV2");
+        string basePath = Path.Combine(Application.dataPath, "..", "TrainingData");
         if (!Directory.Exists(basePath))
         {
-            Debug.LogWarning("[ReplayController] TrainingDataV2 폴더가 없습니다.");
+            Debug.LogWarning("[ReplayController] TrainingData 폴더가 없습니다.");
             totalSessions = 0;
             return;
         }
