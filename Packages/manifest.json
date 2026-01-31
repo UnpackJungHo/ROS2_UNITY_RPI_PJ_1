@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.unity.cloud.gltfast": "6.14.1",
     "com.unity.collab-proxy": "2.11.3",
     "com.unity.feature.development": "1.0.1",
     "com.unity.robotics.ros-tcp-connector": "https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector",

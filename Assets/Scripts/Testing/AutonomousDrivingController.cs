@@ -1,5 +1,7 @@
 using UnityEngine;
 using Unity.Sentis;
+using TMPro;
+using UnityEngine.UI; // 필수: 이게 있어야 LayoutRebuilder 사용 가능
 
 /// <summary>
 /// Speed-Aware DAgger 자율주행 컨트롤러
@@ -34,6 +36,13 @@ public class AutonomousDrivingController : MonoBehaviour
     [Header("AI Model")]
     [Tooltip("ONNX 분류 모델 파일 (Speed-Aware)")]
     public ModelAsset modelAsset;
+
+    [Header("UI References")]
+    public TextMeshProUGUI uiModeText;      // Header
+    public TextMeshProUGUI uiActionText;    // Main Info
+    public TextMeshProUGUI uiControlText;   // Control Info
+    public TextMeshProUGUI uiStatsText;     // Speed/Stats
+    public TextMeshProUGUI uiGuideText;     // Footer
 
     [Header("References")]
     [Tooltip("차량 컨트롤러")]
@@ -253,6 +262,8 @@ public class AutonomousDrivingController : MonoBehaviour
                 ApplyAIControl();
             }
         }
+        
+        UpdateUI();
     }
 
     bool IsManualInputDetected()
@@ -500,69 +511,83 @@ public class AutonomousDrivingController : MonoBehaviour
         if (topViewCameraObj != null) Destroy(topViewCameraObj);
     }
 
-    void OnGUI()
+    void UpdateUI()
     {
-        GUI.Box(new Rect(10, 250, 320, 140), "");
-
-        GUIStyle style = new GUIStyle(GUI.skin.label);
-        style.fontSize = 14;
-        style.fontStyle = FontStyle.Bold;
+        float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
 
         if (isAutonomousMode)
         {
             if (isInterventionActive)
             {
-                // 개입 상태
-                style.normal.textColor = Color.yellow;
-                GUI.Label(new Rect(20, 255, 300, 25), $"🔴 INTERVENTION (#{interventionCount})", style);
+                // 1. Mode Header (Yellow)
+                if (uiModeText != null)
+                    uiModeText.text = $"<color=yellow>🔴 INTERVENTION (#{interventionCount})</color>";
 
-                style.normal.textColor = Color.white;
-                style.fontStyle = FontStyle.Normal;
-                float remaining = autoResumeDelay - interventionTimer;
-                GUI.Label(new Rect(20, 280, 300, 20), $"AI 복귀까지: {remaining:F1}초", style);
-                GUI.Label(new Rect(20, 300, 300, 20), "WASD로 직접 조작 중...", style);
+                // 2. Action / Main Info
+                if (uiActionText != null)
+                {
+                    float remaining = autoResumeDelay - interventionTimer;
+                    uiActionText.text = $"Return to AI in: {remaining:F1}s\nWASD Manual Control...";
+                }
+
+                // 3. Control Info (Empty or specific msg)
+                if (uiControlText != null)
+                    uiControlText.text = "";
             }
             else
             {
-                // AI 주행 상태
-                style.normal.textColor = Color.green;
-                GUI.Label(new Rect(20, 255, 300, 25), "● AUTONOMOUS (Speed-Aware)", style);
+                // 1. Mode Header (Green)
+                if (uiModeText != null)
+                    uiModeText.text = "<color=#00FF00>● AUTONOMOUS (Speed-Aware)</color>";
 
-                style.normal.textColor = Color.cyan;
-                style.fontStyle = FontStyle.Normal;
-                GUI.Label(new Rect(20, 280, 300, 20), $"Action: {predictedAction} ({confidence*100:F1}%)", style);
-                style.normal.textColor = Color.white;
-                GUI.Label(new Rect(20, 300, 300, 20), $"Steer: {appliedSteering:F2} | Throt: {appliedThrottle:F2}", style);
+                // 2. Action Info (Cyan)
+                if (uiActionText != null)
+                    uiActionText.text = $"Action: <color=#00FFFF>{predictedAction}</color> ({confidence * 100:F1}%)";
+
+                // 3. Control Info (White)
+                if (uiControlText != null)
+                    uiControlText.text = $"Steer: {appliedSteering:F2} | Throt: {appliedThrottle:F2}";
             }
 
-            float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
-            style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 320, 300, 20), $"Speed: {speed:F2} m/s | Interventions: {interventionCount}", style);
+            // 4. Stats (Common)
+            if (uiStatsText != null)
+                uiStatsText.text = $"Speed: {speed:F2} m/s | Interventions: {interventionCount}";
 
-            style.normal.textColor = Color.gray;
-            style.fontSize = 12;
-            GUI.Label(new Rect(20, 340, 300, 20), "WASD: 개입 | P: 모드 종료", style);
+            // 5. Guide (Footer)
+            if (uiGuideText != null)
+                uiGuideText.text = "<color=grey>WASD: Intervention | P: Stop Auto</color>";
         }
         else
         {
-            style.normal.textColor = Color.yellow;
-            GUI.Label(new Rect(20, 255, 300, 25), "○ MANUAL MODE", style);
+            // 1. Mode Header (Yellow)
+            if (uiModeText != null)
+                uiModeText.text = "<color=yellow>○ MANUAL MODE</color>";
 
-            style.normal.textColor = Color.white;
-            style.fontStyle = FontStyle.Normal;
-            GUI.Label(new Rect(20, 280, 300, 20), $"[{toggleKey}] 자율주행 시작", style);
+            // 2. Action Info (White)
+            if (uiActionText != null)
+                uiActionText.text = $"[{toggleKey}] Start Autonomous Mode";
 
-            if (interventionCount > 0)
+            // 3. Control Info (Cyan - Stats)
+            if (uiControlText != null)
             {
-                style.normal.textColor = Color.cyan;
-                GUI.Label(new Rect(20, 300, 300, 20), $"총 개입 횟수: {interventionCount}", style);
+                if (interventionCount > 0)
+                    uiControlText.text = $"<color=#00FFFF>Total Interventions: {interventionCount}</color>";
+                else
+                    uiControlText.text = "";
             }
 
-            if (!isModelLoaded)
+            // 4. Stats (Error Msg or empty)
+            if (uiStatsText != null)
             {
-                style.normal.textColor = Color.red;
-                GUI.Label(new Rect(20, 320, 300, 20), "! 모델이 로드되지 않음", style);
+                if (!isModelLoaded)
+                    uiStatsText.text = "<color=red>! Model Not Loaded</color>";
+                else
+                    uiStatsText.text = "";
             }
+
+            // 5. Guide
+            if (uiGuideText != null)
+                uiGuideText.text = "";
         }
     }
 }

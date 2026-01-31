@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.IO;
 using System.Collections.Generic;
+using TMPro;
 
 /// <summary>
 /// 분류 기반 주행 데이터 수집기 V2
@@ -41,6 +42,12 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         "FORWARD", "FORWARD_LEFT", "FORWARD_RIGHT",
         "LEFT", "RIGHT", "BACKWARD", "NONE"
     };
+
+    [Header("UI References")]
+    public TextMeshProUGUI uiStatusText;
+    public TextMeshProUGUI uiInfoText;
+    public TextMeshProUGUI uiActionText;
+    public TextMeshProUGUI uiSpeedText;
 
     [Header("References")]
     [Tooltip("CameraPublisher 참조 (Front View 카메라 자동 획득)")]
@@ -202,12 +209,17 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         if (Input.GetKeyDown(saveKey))
             SaveDataset();
 
+        // Update currentAction for UI display (Record or not)
+        currentAction = GetCurrentKeyAction();
+
         // 녹화 중이면 캡처
         if (isRecording && Time.time - lastCaptureTime >= captureInterval)
         {
             CaptureFrame();
             lastCaptureTime = Time.time;
         }
+
+        UpdateUI();
     }
 
     /// <summary>
@@ -443,43 +455,45 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         if (topViewCameraObj != null) Destroy(topViewCameraObj);
     }
 
-    void OnGUI()
+    void UpdateUI()
     {
-        GUI.Box(new Rect(10, 150, 280, 100), "");
-
-        GUIStyle style = new GUIStyle(GUI.skin.label);
-        style.fontSize = 14;
-        style.fontStyle = FontStyle.Bold;
-
-        if (isRecording)
+        // 1. Status Text (Main State)
+        if (uiStatusText != null)
         {
-            style.normal.textColor = Color.red;
-            GUI.Label(new Rect(20, 155, 260, 25), $"● REC: {frameCount} frames", style);
-
-            float duration = Time.time - recordingStartTime;
-            style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 175, 260, 20), $"Time: {duration:F1}s", style);
-            // 현재 키 입력 표시
-            style.normal.textColor = Color.cyan;
-            GUI.Label(new Rect(20, 195, 260, 20), $"Action: {KeyActionNames[(int)currentAction]}", style);
-
-            float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
-            style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 215, 260, 20), $"Speed: {speed:F2} m/s", style);
+            if (isRecording)
+                uiStatusText.text = $"<color=red>● REC: {frameCount}</color>";
+            else
+                uiStatusText.text = $"[{recordKey}] Rec  [{saveKey}] Save";
         }
-        else
-        {
-            style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 155, 260, 20), $"[{recordKey}] 녹화 시작", style);
-            GUI.Label(new Rect(20, 175, 260, 20), $"[{saveKey}] 저장", style);
 
-            style.normal.textColor = Color.cyan;
-            GUI.Label(new Rect(20, 195, 260, 20), $"Action: {KeyActionNames[(int)currentAction]}", style);
-            if (frameBuffer.Count > 0)
+        // 2. Info Text (Time / Unsaved)
+        if (uiInfoText != null)
+        {
+            if (isRecording)
             {
-                style.normal.textColor = Color.yellow;
-                GUI.Label(new Rect(20, 215, 260, 20), $"미저장: {frameBuffer.Count} frames", style);
+                float duration = Time.time - recordingStartTime;
+                uiInfoText.text = $"Time: {duration:F1}s";
             }
+            else
+            {
+                if (frameBuffer.Count > 0)
+                    uiInfoText.text = $"<color=yellow>Unsaved: {frameBuffer.Count}</color>";
+                else
+                    uiInfoText.text = "Ready";
+            }
+        }
+
+        // 3. Action Text
+        if (uiActionText != null)
+        {
+            uiActionText.text = $"Action: <color=#00FFFF>{KeyActionNames[(int)currentAction]}</color>";
+        }
+
+        // 4. Speed Text
+        if (uiSpeedText != null)
+        {
+            float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
+            uiSpeedText.text = $"Speed: {speed:F2} m/s";
         }
     }
 }
