@@ -502,7 +502,7 @@ public class AutonomousDrivingController : MonoBehaviour
 
     void OnGUI()
     {
-        GUI.Box(new Rect(10, 220, 320, 140), "");
+        GUI.Box(new Rect(10, 250, 320, 140), "");
 
         GUIStyle style = new GUIStyle(GUI.skin.label);
         style.fontSize = 14;
@@ -514,55 +514,54 @@ public class AutonomousDrivingController : MonoBehaviour
             {
                 // 개입 상태
                 style.normal.textColor = Color.yellow;
-                GUI.Label(new Rect(20, 225, 300, 25), $"🔴 INTERVENTION (#{interventionCount})", style);
+                GUI.Label(new Rect(20, 255, 300, 25), $"🔴 INTERVENTION (#{interventionCount})", style);
 
                 style.normal.textColor = Color.white;
                 style.fontStyle = FontStyle.Normal;
                 float remaining = autoResumeDelay - interventionTimer;
-                GUI.Label(new Rect(20, 250, 300, 20), $"AI 복귀까지: {remaining:F1}초", style);
-                GUI.Label(new Rect(20, 270, 300, 20), "WASD로 직접 조작 중...", style);
+                GUI.Label(new Rect(20, 280, 300, 20), $"AI 복귀까지: {remaining:F1}초", style);
+                GUI.Label(new Rect(20, 300, 300, 20), "WASD로 직접 조작 중...", style);
             }
             else
             {
                 // AI 주행 상태
                 style.normal.textColor = Color.green;
-                GUI.Label(new Rect(20, 225, 300, 25), "● AUTONOMOUS (Speed-Aware)", style);
+                GUI.Label(new Rect(20, 255, 300, 25), "● AUTONOMOUS (Speed-Aware)", style);
 
                 style.normal.textColor = Color.cyan;
                 style.fontStyle = FontStyle.Normal;
-                GUI.Label(new Rect(20, 250, 300, 20), $"Action: {predictedAction} ({confidence*100:F1}%)", style);
-
+                GUI.Label(new Rect(20, 280, 300, 20), $"Action: {predictedAction} ({confidence*100:F1}%)", style);
                 style.normal.textColor = Color.white;
-                GUI.Label(new Rect(20, 270, 300, 20), $"Steer: {appliedSteering:F2} | Throt: {appliedThrottle:F2}", style);
+                GUI.Label(new Rect(20, 300, 300, 20), $"Steer: {appliedSteering:F2} | Throt: {appliedThrottle:F2}", style);
             }
 
             float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
             style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 290, 300, 20), $"Speed: {speed:F2} m/s | Interventions: {interventionCount}", style);
+            GUI.Label(new Rect(20, 320, 300, 20), $"Speed: {speed:F2} m/s | Interventions: {interventionCount}", style);
 
             style.normal.textColor = Color.gray;
             style.fontSize = 12;
-            GUI.Label(new Rect(20, 310, 300, 20), "WASD: 개입 | P: 모드 종료", style);
+            GUI.Label(new Rect(20, 340, 300, 20), "WASD: 개입 | P: 모드 종료", style);
         }
         else
         {
             style.normal.textColor = Color.yellow;
-            GUI.Label(new Rect(20, 225, 300, 25), "○ MANUAL MODE", style);
+            GUI.Label(new Rect(20, 255, 300, 25), "○ MANUAL MODE", style);
 
             style.normal.textColor = Color.white;
             style.fontStyle = FontStyle.Normal;
-            GUI.Label(new Rect(20, 250, 300, 20), $"[{toggleKey}] 자율주행 시작", style);
+            GUI.Label(new Rect(20, 280, 300, 20), $"[{toggleKey}] 자율주행 시작", style);
 
             if (interventionCount > 0)
             {
                 style.normal.textColor = Color.cyan;
-                GUI.Label(new Rect(20, 270, 300, 20), $"총 개입 횟수: {interventionCount}", style);
+                GUI.Label(new Rect(20, 300, 300, 20), $"총 개입 횟수: {interventionCount}", style);
             }
 
             if (!isModelLoaded)
             {
                 style.normal.textColor = Color.red;
-                GUI.Label(new Rect(20, 290, 300, 20), "! 모델이 로드되지 않음", style);
+                GUI.Label(new Rect(20, 320, 300, 20), "! 모델이 로드되지 않음", style);
             }
         }
     }

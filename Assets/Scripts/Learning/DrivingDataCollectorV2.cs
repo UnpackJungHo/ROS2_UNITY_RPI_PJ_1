@@ -52,10 +52,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     [Tooltip("TopView 대상 오브젝트 (차량 base_link)")]
     public Transform topViewTarget;
 
-    [Header("External Action Source (Optional)")]
-    [Tooltip("리플레이 컨트롤러 (연결 시 리플레이 중 해당 액션 사용)")]
-    public RuleBasedReplayController replayController;
-
     [Header("DAgger Settings")]
     [Tooltip("자율주행 컨트롤러 (AI 모드 및 개입 상태 확인)")]
     public AutonomousDrivingController aiController;
@@ -193,11 +189,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         if (captureTopView && topViewTarget != null && topViewCamera != null)
             UpdateTopViewCamera();
 
-        // 현재 키 입력 상태 업데이트 (리플레이 중이면 리플레이 액션 사용)
-        currentAction = (replayController != null && replayController.IsReplaying)
-            ? replayController.CurrentAction
-            : GetCurrentKeyAction();
-
         // 녹화 토글
         if (Input.GetKeyDown(recordKey))
         {
@@ -280,10 +271,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     {
         if (frontCamera == null) return;
 
-        // 리플레이 중이면 리플레이 컨트롤러의 액션 사용
-        KeyAction action = (replayController != null && replayController.IsReplaying)
-            ? replayController.CurrentAction
-            : GetCurrentKeyAction();
+        KeyAction action = GetCurrentKeyAction();
         float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
 
         // NONE + 정지 상태는 스킵 (의미없는 데이터)
@@ -457,7 +445,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
     void OnGUI()
     {
-        GUI.Box(new Rect(10, 130, 280, 100), "");
+        GUI.Box(new Rect(10, 150, 280, 100), "");
 
         GUIStyle style = new GUIStyle(GUI.skin.label);
         style.fontSize = 14;
@@ -466,33 +454,31 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         if (isRecording)
         {
             style.normal.textColor = Color.red;
-            GUI.Label(new Rect(20, 135, 260, 25), $"● REC: {frameCount} frames", style);
+            GUI.Label(new Rect(20, 155, 260, 25), $"● REC: {frameCount} frames", style);
 
             float duration = Time.time - recordingStartTime;
             style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 155, 260, 20), $"Time: {duration:F1}s", style);
-
+            GUI.Label(new Rect(20, 175, 260, 20), $"Time: {duration:F1}s", style);
             // 현재 키 입력 표시
             style.normal.textColor = Color.cyan;
-            GUI.Label(new Rect(20, 175, 260, 20), $"Action: {KeyActionNames[(int)currentAction]}", style);
+            GUI.Label(new Rect(20, 195, 260, 20), $"Action: {KeyActionNames[(int)currentAction]}", style);
 
             float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
             style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 195, 260, 20), $"Speed: {speed:F2} m/s", style);
+            GUI.Label(new Rect(20, 215, 260, 20), $"Speed: {speed:F2} m/s", style);
         }
         else
         {
             style.normal.textColor = Color.white;
-            GUI.Label(new Rect(20, 135, 260, 20), $"[{recordKey}] 녹화 시작", style);
-            GUI.Label(new Rect(20, 155, 260, 20), $"[{saveKey}] 저장", style);
+            GUI.Label(new Rect(20, 155, 260, 20), $"[{recordKey}] 녹화 시작", style);
+            GUI.Label(new Rect(20, 175, 260, 20), $"[{saveKey}] 저장", style);
 
             style.normal.textColor = Color.cyan;
-            GUI.Label(new Rect(20, 175, 260, 20), $"Action: {KeyActionNames[(int)currentAction]}", style);
-
+            GUI.Label(new Rect(20, 195, 260, 20), $"Action: {KeyActionNames[(int)currentAction]}", style);
             if (frameBuffer.Count > 0)
             {
                 style.normal.textColor = Color.yellow;
-                GUI.Label(new Rect(20, 195, 260, 20), $"미저장: {frameBuffer.Count} frames", style);
+                GUI.Label(new Rect(20, 215, 260, 20), $"미저장: {frameBuffer.Count} frames", style);
             }
         }
     }

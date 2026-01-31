@@ -96,7 +96,6 @@ class DrivingNet(nn.Module):
         steering, throttle = self.forward(x)
         return torch.stack([steering, throttle], dim=1)
 
-
 class DrivingNetWithAux(DrivingNet):
     """
     보조 출력 추가 버전 (차선 감지 등)
@@ -125,7 +124,6 @@ class DrivingNetWithAux(DrivingNet):
         aux_output = self.aux_head(features)
         
         return steering, throttle, aux_output
-
 
 class DualViewDrivingNet(nn.Module):
     """

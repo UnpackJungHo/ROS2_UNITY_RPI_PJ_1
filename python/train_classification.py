@@ -209,7 +209,7 @@ class SpeedAwareClassificationDataset(Dataset):
         class_counts = np.bincount(labels, minlength=NUM_CLASSES)
 
         # 가중치 = 1 / count (희귀 클래스에 높은 가중치)
-        class_weights = 1.0 / (class_counts + 1)
+        class_weights = 1.0 / np.sqrt(class_counts + 1)  # sqrt로 완화
         class_weights = class_weights / class_weights.sum() * NUM_CLASSES
 
         self.class_weights = torch.FloatTensor(class_weights)
@@ -342,6 +342,7 @@ def train_speed_aware(
     use_class_weights: bool = True,
     early_stopping_patience: int = 10,
     speed_normalize: float = 5.0,
+    freeze_backbone: bool = False,
     device: str = "cuda",
     graph_save_dir: str = None
 ):
@@ -396,9 +397,19 @@ def train_speed_aware(
     # 모델
     model = SpeedAwareDualViewNet(backbone=backbone, pretrained=True, dropout=dropout).to(device)
 
+    # Backbone Freeze (과적합 방지)
+    if freeze_backbone:
+        for param in model.front_encoder.parameters():
+            param.requires_grad = False
+        for param in model.top_encoder.parameters():
+            param.requires_grad = False
+        print(f"\n[Model] Backbone FROZEN - only classifier will be trained")
+
     total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"\n[Model] Backbone: {backbone}")
     print(f"[Model] Total params: {total_params:,}")
+    print(f"[Model] Trainable params: {trainable_params:,}")
     print(f"[Model] Speed normalization: {speed_normalize} m/s")
 
     # 손실 함수 (클래스 가중치 적용)
@@ -559,17 +570,19 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Speed-Aware DAgger Classification Training")
-    parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--weight_decay", type=float, default=1e-4)
-    parser.add_argument("--dropout", type=float, default=0.5)
-    parser.add_argument("--val_ratio", type=float, default=0.2)
-    parser.add_argument("--early_stopping", type=int, default=10)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--weight_decay", type=float, default=1e-5)
+    parser.add_argument("--dropout", type=float, default=0.3)
+    parser.add_argument("--val_ratio", type=float, default=0.3)
+    parser.add_argument("--early_stopping", type=int, default=15)
     parser.add_argument("--backbone", type=str, default="resnet18",
                         choices=["resnet18", "mobilenet_v3_small"])
     parser.add_argument("--speed_norm", type=float, default=5.0,
                         help="속도 정규화 기준값 (m/s)")
+    parser.add_argument("--freeze_backbone", action="store_true",
+                        help="Backbone(ResNet/MobileNet) 고정, classifier만 학습")
     parser.add_argument("--test", action="store_true", help="테스트 모드")
     args = parser.parse_args()
 
@@ -618,6 +631,7 @@ if __name__ == "__main__":
         use_class_weights=False,
         early_stopping_patience=args.early_stopping,
         speed_normalize=args.speed_norm,
+        freeze_backbone=args.freeze_backbone,
         device="cuda" if torch.cuda.is_available() else "cpu",
         graph_save_dir=str(graph_dir)
     )
