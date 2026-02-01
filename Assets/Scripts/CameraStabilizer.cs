@@ -195,18 +195,14 @@ public class CameraStabilizer : MonoBehaviour
         }
 
         // 회전은 더 빠르게 따라가도록 (전방 뷰에서 방향이 중요)
-        // 회전 지연도 방지
         float rotationLag = Quaternion.Angle(newRotation, targetRot);
-        if (rotationLag > 5f) // 5도 이상 차이나면 더 빠르게 따라잡음
+        if (rotationLag > 10f)
         {
-            newRotation = Quaternion.Slerp(newRotation, targetRot, 0.5f);
+            newRotation = Quaternion.Slerp(newRotation, targetRot, 0.3f);
         }
 
-        // 회전 데드존 적용
-        if (Quaternion.Angle(newRotation, smoothedRotation) > rotationDeadZone)
-        {
-            smoothedRotation = newRotation;
-        }
+        // 회전 데드존 제거 - 항상 부드럽게 적용
+        smoothedRotation = newRotation;
 
         // 최종 적용
         transform.position = smoothedPosition;

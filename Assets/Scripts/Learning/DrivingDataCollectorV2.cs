@@ -223,10 +223,24 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 눌린 키를 분석하여 KeyAction 반환
+    /// 현재 액션을 반환
+    /// - 자율주행 모드(개입 아님): AI 예측 액션 반환
+    /// - 수동/개입 모드: 키보드 입력 반환
     /// </summary>
     KeyAction GetCurrentKeyAction()
     {
+        // 자율주행 모드 + 개입 아님 = AI가 제어 중
+        if (aiController != null && aiController.isAutonomousMode && !aiController.IsInterventionActive())
+        {
+            // AI의 예측된 클래스를 반환
+            int predictedClass = aiController.GetPredictedClass();
+            if (predictedClass >= 0 && predictedClass < 7)
+            {
+                return (KeyAction)predictedClass;
+            }
+        }
+
+        // 수동 모드 또는 개입 중 - 키보드 입력 확인
         bool w = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
         bool a = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
         bool s = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);

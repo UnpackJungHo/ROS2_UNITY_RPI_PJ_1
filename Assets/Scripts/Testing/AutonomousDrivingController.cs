@@ -286,6 +286,22 @@ public class AutonomousDrivingController : MonoBehaviour
         Debug.Log($"[AutonomousDriving] 자율주행 모드: {(isAutonomousMode ? "ON" : "OFF")}");
     }
 
+    /// <summary>
+    /// AI가 예측한 클래스 번호 반환 (DrivingDataCollectorV2 연동용)
+    /// </summary>
+    public int GetPredictedClass()
+    {
+        return predictedClass;
+    }
+
+    /// <summary>
+    /// 현재 개입 상태인지 반환 (DrivingDataCollectorV2 연동용)
+    /// </summary>
+    public bool IsInterventionActive()
+    {
+        return isInterventionActive;
+    }
+
     void StartIntervention()
     {
         if (isInterventionActive) return;
