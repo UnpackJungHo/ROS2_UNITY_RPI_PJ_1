@@ -15,6 +15,10 @@ public class CameraPublisher : MonoBehaviour
     public int imageWidth = 640;
     public int imageHeight = 480;
 
+    [Tooltip("카메라 X축 회전 각도 (피치)")]
+    [Range(-90f, 90f)]
+    public float cameraXRotation = 0f;
+
     [Header("Camera Reference")]
     [Tooltip("카메라가 부착된 Transform을 직접 할당하세요 (camera_link)")]
     public Transform cameraTransform;
@@ -98,6 +102,7 @@ public class CameraPublisher : MonoBehaviour
         stabilizer.stabilizeVertical = stabilizeVertical;
         stabilizer.stabilizeRoll = stabilizeRoll;
         stabilizer.stabilizePitch = false; // 피치는 전방 시야 확보를 위해 기본 off
+        stabilizer.targetXRotation = cameraXRotation; // X축 회전 각도 전달
 
         // 4. 렌더 텍스처 설정
         renderTexture = new RenderTexture(imageWidth, imageHeight, 24, RenderTextureFormat.ARGB32);
@@ -124,6 +129,9 @@ public class CameraPublisher : MonoBehaviour
         cam.nearClipPlane = 0.1f;
         cam.farClipPlane = 100f;
         cam.fieldOfView = 60f;
+
+        // X축 회전 적용
+        cam.transform.localRotation = Quaternion.Euler(cameraXRotation, 0f, 0f);
 
         renderTexture = new RenderTexture(imageWidth, imageHeight, 24, RenderTextureFormat.ARGB32);
         renderTexture.Create();

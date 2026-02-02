@@ -41,6 +41,10 @@ public class CameraStabilizer : MonoBehaviour
     [Tooltip("피치(앞뒤 기울기) 안정화 - 가감속 시 끄덕임 감소")]
     public bool stabilizePitch = false;
 
+    [Tooltip("목표 X축 회전 각도 (CameraPublisher에서 설정)")]
+    [HideInInspector]
+    public float targetXRotation = 0f;
+
     [Header("Damping")]
     [Tooltip("위치 변화 데드존 (이 이하의 미세 움직임 무시)")]
     public float positionDeadZone = 0.001f;
@@ -216,7 +220,9 @@ public class CameraStabilizer : MonoBehaviour
     /// </summary>
     Quaternion GetTargetRotation()
     {
-        return targetTransform.rotation * Quaternion.Euler(rotationOffset);
+        // rotationOffset과 targetXRotation을 함께 적용
+        Vector3 combinedOffset = rotationOffset + new Vector3(targetXRotation, 0f, 0f);
+        return targetTransform.rotation * Quaternion.Euler(combinedOffset);
     }
 
     /// <summary>
