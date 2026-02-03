@@ -30,7 +30,7 @@ def preprocess_image(image_path, size):
 
 def test_onnx_model():
     # ONNX 모델 경로
-    onnx_path = Path(__file__).parent.parent / "Assets" / "Models" / "ONNX" / "driving_classifier_v2_single.onnx"
+    onnx_path = Path(__file__).parent.parent / "Assets" / "Models" / "ONNX" / "driving_classifier_single.onnx"
     
     if not onnx_path.exists():
         print(f"Error: ONNX 파일을 찾을 수 없습니다: {onnx_path}")
@@ -50,7 +50,7 @@ def test_onnx_model():
     print()
     
     # 세션 폴더 찾기
-    data_base = Path(__file__).parent.parent / "TrainingDataV2"
+    data_base = Path(__file__).parent.parent / "TrainingData"
     sessions = sorted(glob.glob(str(data_base / "session_*")))
     
     if not sessions:
@@ -60,6 +60,16 @@ def test_onnx_model():
     # 첫 번째 세션에서 테스트
     test_session = Path(sessions[0])
     front_files = sorted(glob.glob(str(test_session / "front" / "*.jpg")))[:10]
+    # 마스크 파일 경로 확인 (generated_masks)
+    mask_dir = test_session / "generated_masks"
+    if not mask_dir.exists():
+        print(f"Warning: {mask_dir} not found. Running with random masks.")
+        mask_files = []
+    else:
+        # Assuming mask filenames match front filenames (or close enough for this test)
+        # Actually generate_masks.py saves as mask_XXXXXX.png.
+        # Let's just grab sorted mask files.
+        mask_files = sorted(glob.glob(str(mask_dir / "*.png")))[:10]
     
     print(f"테스트 세션: {test_session.name}")
     print(f"테스트 이미지: {len(front_files)}개")
@@ -67,20 +77,23 @@ def test_onnx_model():
     
     predictions = {}
     
-    for fp in front_files:
+    for i, fp in enumerate(front_files):
         # 이미지 전처리
         front_np = preprocess_image(fp, (66, 200))
         
-        top_path = fp.replace('/front/', '/top/')
-        top_np = preprocess_image(top_path, (128, 128))
-        
+        # 마스크 로드 (파일이 있으면 사용, 없으면 랜덤/더미)
+        if i < len(mask_files):
+            mask_np = preprocess_image(mask_files[i], (128, 128))
+        else:
+            mask_np = np.random.randn(1, 3, 128, 128).astype(np.float32)
+
         # 속도 (정규화된 값)
         speed_np = np.array([[0.6]], dtype=np.float32)  # 3m/s / 5.0
         
         # 추론
         outputs = session.run(None, {
             'front_image': front_np,
-            'top_image': top_np,
+            'mask_image': mask_np,
             'speed': speed_np
         })
         
@@ -103,7 +116,7 @@ def test_onnx_model():
 
 def test_random_input():
     """랜덤 입력으로 모델 테스트"""
-    onnx_path = Path(__file__).parent.parent / "Assets" / "Models" / "ONNX" / "driving_classifier_v2_single.onnx"
+    onnx_path = Path(__file__).parent.parent / "Assets" / "Models" / "ONNX" / "driving_classifier_single.onnx"
     
     if not onnx_path.exists():
         print(f"Error: ONNX 파일을 찾을 수 없습니다!")
@@ -115,12 +128,12 @@ def test_random_input():
     
     for i in range(5):
         front_np = np.random.randn(1, 3, 66, 200).astype(np.float32)
-        top_np = np.random.randn(1, 3, 128, 128).astype(np.float32)
+        mask_np = np.random.randn(1, 3, 128, 128).astype(np.float32)
         speed_np = np.array([[0.5]], dtype=np.float32)
         
         outputs = session.run(None, {
             'front_image': front_np,
-            'top_image': top_np,
+            'mask_image': mask_np,
             'speed': speed_np
         })
         

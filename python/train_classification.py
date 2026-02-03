@@ -59,7 +59,7 @@ class SpeedAwareDualViewNet(nn.Module):
             self.front_encoder = models.resnet18(
                 weights=models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
             )
-            self.top_encoder = models.resnet18(
+            self.mask_encoder = models.resnet18(
                 weights=models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
             )
             feature_dim = 512
@@ -68,19 +68,21 @@ class SpeedAwareDualViewNet(nn.Module):
             self.front_encoder = models.mobilenet_v3_small(
                 weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None
             )
-            self.top_encoder = models.mobilenet_v3_small(
+            self.mask_encoder = models.mobilenet_v3_small(
                 weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1 if pretrained else None
             )
             feature_dim = 576  # mobilenet_v3_small의 마지막 레이어 출력
             self.front_encoder.classifier = nn.Identity()
-            self.top_encoder.classifier = nn.Identity()
+            self.front_encoder.classifier = nn.Identity()
+            self.mask_encoder.classifier = nn.Identity()
         else:
             raise ValueError(f"Unknown backbone: {backbone}")
 
         # ResNet의 FC 레이어 제거
         if backbone == "resnet18":
             self.front_encoder.fc = nn.Identity()
-            self.top_encoder.fc = nn.Identity()
+            self.front_encoder.fc = nn.Identity()
+            self.mask_encoder.fc = nn.Identity()
 
         self.backbone = backbone
         self.feature_dim = feature_dim
@@ -106,27 +108,27 @@ class SpeedAwareDualViewNet(nn.Module):
             nn.Linear(128, NUM_CLASSES)
         )
 
-    def forward(self, front_img, top_img, speed):
+    def forward(self, front_img, mask_img, speed):
         """
         Args:
             front_img: (B, 3, H, W) 전방 카메라 이미지
-            top_img: (B, 3, H, W) 탑뷰 이미지
+            mask_img: (B, 3, H, W) 마스크 이미지 (RGB 변환됨)
             speed: (B, 1) 현재 속도 (정규화됨)
         Returns:
             logits: (B, 7) 클래스별 로짓
         """
         front_features = self.front_encoder(front_img)
-        top_features = self.top_encoder(top_img)
+        mask_features = self.mask_encoder(mask_img)
 
         # MobileNet의 경우 pooling 적용
         if self.backbone == "mobilenet_v3_small":
             if len(front_features.shape) == 4:
                 front_features = front_features.mean([2, 3])
-                top_features = top_features.mean([2, 3])
+                mask_features = mask_features.mean([2, 3])
 
         speed_features = self.speed_embedding(speed)
 
-        combined = torch.cat([front_features, top_features, speed_features], dim=1)
+        combined = torch.cat([front_features, mask_features, speed_features], dim=1)
         logits = self.classifier(combined)
 
         return logits
@@ -155,10 +157,13 @@ class SpeedAwareClassificationDataset(Dataset):
 
         for data_dir in data_dirs:
             data_dir = Path(data_dir)
-            csv_path = data_dir / "driving_log.csv"
+            # driving_log_masks.csv 사용 (마스크 포함된 버전)
+            csv_path = data_dir / "driving_log_masks.csv"
 
             if not csv_path.exists():
-                print(f"[Warning] {csv_path} not found, skipping...")
+                # Backwards compatibility: try normal log if mask log doesn't exist?
+                # But user explicitly wants mask training.
+                print(f"[Warning] {csv_path} not found (try running generate_masks.py), skipping...")
                 continue
 
             df = pd.read_csv(csv_path)
@@ -167,11 +172,19 @@ class SpeedAwareClassificationDataset(Dataset):
             if 'key_action' not in df.columns:
                 print(f"[Warning] {csv_path} is not V2 format (no key_action), skipping...")
                 continue
+                
+            if 'mask_image' not in df.columns:
+                 print(f"[Warning] {csv_path} does not have 'mask_image' column, skipping...")
+                 continue
 
             for idx, row in df.iterrows():
+                # 마스크 경로가 비어있으면 스킵
+                if pd.isna(row['mask_image']) or str(row['mask_image']) == '':
+                    continue
+                    
                 self.data.append({
                     'front_path': str(data_dir / row['front_image']),
-                    'top_path': str(data_dir / row['top_image']),
+                    'mask_path': str(data_dir / row['mask_image']),
                     'key_action': int(row['key_action']),
                     'speed': float(row['speed'])
                 })
@@ -234,7 +247,8 @@ class SpeedAwareClassificationDataset(Dataset):
         item = self.data[idx]
 
         front_image = np.array(Image.open(item['front_path']).convert('RGB'))
-        top_image = np.array(Image.open(item['top_path']).convert('RGB'))
+        # Mask는 흑백이지만, ResNet 입력을 위해 RGB로 변환 (3채널 복사)
+        mask_image = np.array(Image.open(item['mask_path']).convert('RGB'))
 
         label = item['key_action']
         speed = item['speed'] / self.speed_normalize  # 정규화된 속도
@@ -242,7 +256,7 @@ class SpeedAwareClassificationDataset(Dataset):
         # 좌우 반전 augmentation (50% 확률)
         if self.augment and np.random.random() < 0.5:
             front_image = np.fliplr(front_image).copy()
-            top_image = np.fliplr(top_image).copy()
+            mask_image = np.fliplr(mask_image).copy()
 
             # 레이블 교환: LEFT <-> RIGHT, FORWARD_LEFT <-> FORWARD_RIGHT
             if label == 1:  # FORWARD_LEFT -> FORWARD_RIGHT
@@ -257,15 +271,18 @@ class SpeedAwareClassificationDataset(Dataset):
         # 기타 augmentation
         if self.aug_transform is not None:
             front_image = self.aug_transform(image=front_image)['image']
-            top_image = self.aug_transform(image=top_image)['image']
+            # 마스크에는 모션 블러 등을 적용하면 안 될 수도 있지만, 
+            # Robustness를 위해 약하게 적용하거나 생략 가능. 
+            # 여기서는 일관성을 위해 같이 적용.
+            mask_image = self.aug_transform(image=mask_image)['image']
 
         # 정규화
         front_image = self.normalize(image=front_image)['image']
-        top_image = self.normalize(image=top_image)['image']
+        mask_image = self.normalize(image=mask_image)['image']
 
         return (
             front_image,
-            top_image,
+            mask_image,
             torch.tensor([speed], dtype=torch.float32),
             torch.tensor(label, dtype=torch.long)
         )
@@ -334,7 +351,7 @@ def train_speed_aware(
     model_save_path: str = "checkpoints/driving_classifier.pth",
     epochs: int = 50,
     batch_size: int = 32,
-    learning_rate: float = 1e-4,
+    learning_rate: float = 3e-4,
     weight_decay: float = 1e-4,
     dropout: float = 0.5,
     backbone: str = "resnet18",
@@ -401,7 +418,7 @@ def train_speed_aware(
     if freeze_backbone:
         for param in model.front_encoder.parameters():
             param.requires_grad = False
-        for param in model.top_encoder.parameters():
+        for param in model.mask_encoder.parameters():
             param.requires_grad = False
         print(f"\n[Model] Backbone FROZEN - only classifier will be trained")
 
@@ -444,14 +461,14 @@ def train_speed_aware(
         train_total = 0
 
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
-        for front_imgs, top_imgs, speeds, labels in pbar:
+        for front_imgs, mask_imgs, speeds, labels in pbar:
             front_imgs = front_imgs.to(device)
-            top_imgs = top_imgs.to(device)
+            mask_imgs = mask_imgs.to(device)
             speeds = speeds.to(device)
             labels = labels.to(device)
 
             optimizer.zero_grad()
-            logits = model(front_imgs, top_imgs, speeds)
+            logits = model(front_imgs, mask_imgs, speeds)
             loss = criterion(logits, labels)
             loss.backward()
 
@@ -475,13 +492,13 @@ def train_speed_aware(
         val_total = 0
 
         with torch.no_grad():
-            for front_imgs, top_imgs, speeds, labels in val_loader:
+            for front_imgs, mask_imgs, speeds, labels in val_loader:
                 front_imgs = front_imgs.to(device)
-                top_imgs = top_imgs.to(device)
+                mask_imgs = mask_imgs.to(device)
                 speeds = speeds.to(device)
                 labels = labels.to(device)
 
-                logits = model(front_imgs, top_imgs, speeds)
+                logits = model(front_imgs, mask_imgs, speeds)
                 loss = criterion(logits, labels)
 
                 val_loss += loss.item()
@@ -627,8 +644,8 @@ if __name__ == "__main__":
         weight_decay=args.weight_decay,
         dropout=args.dropout,
         backbone=args.backbone,
-        use_weighted_sampling=False,
-        use_class_weights=False,
+        use_weighted_sampling=True,   # 클래스 균형 샘플링 활성화
+        use_class_weights=True,       # 손실 함수 가중치 활성화
         early_stopping_patience=args.early_stopping,
         speed_normalize=args.speed_norm,
         freeze_backbone=args.freeze_backbone,

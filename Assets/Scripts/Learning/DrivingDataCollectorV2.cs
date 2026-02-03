@@ -56,19 +56,9 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     [Tooltip("차량 컨트롤러")]
     public WheelTest wheelController;
 
-    [Tooltip("TopView 대상 오브젝트 (차량 base_link)")]
-    public Transform topViewTarget;
-
     [Header("DAgger Settings")]
     [Tooltip("자율주행 컨트롤러 (AI 모드 및 개입 상태 확인)")]
     public AutonomousDrivingController aiController;
-
-    [Header("TopView Settings")]
-    [Tooltip("TopView 카메라 높이")]
-    public float topViewHeight = 8f;
-
-    [Tooltip("TopView도 함께 저장")]
-    public bool captureTopView = true;
 
     [Header("Image Settings")]
     [Tooltip("Front View 이미지 너비")]
@@ -76,9 +66,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
     [Tooltip("Front View 이미지 높이 (PilotNet: 66)")]
     public int frontImageHeight = 66;
-
-    [Tooltip("Top View 이미지 크기")]
-    public int topViewImageSize = 128;
 
     [Header("Collection Settings")]
     public KeyCode recordKey = KeyCode.R;
@@ -93,15 +80,9 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     // Front View 카메라
     private Camera frontCamera;
 
-    // Top View 카메라 (동적 생성)
-    private Camera topViewCamera;
-    private GameObject topViewCameraObj;
-
     // 렌더 텍스처
     private RenderTexture frontRenderTexture;
-    private RenderTexture topRenderTexture;
     private Texture2D frontCaptureTexture;
-    private Texture2D topCaptureTexture;
 
     // 데이터 저장
     private string sessionFolder;
@@ -109,11 +90,9 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     private float lastCaptureTime;
     private float recordingStartTime;
 
-    [Serializable]
     public class DrivingFrameV2
     {
         public string frontImagePath;
-        public string topImagePath;
         public int keyAction;           // KeyAction enum의 int 값
         public string keyActionName;    // 가독성을 위한 이름
         public float speed;             // m/s
@@ -126,13 +105,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         // 렌더 텍스처 초기화
         frontRenderTexture = new RenderTexture(frontImageWidth, frontImageHeight, 24);
         frontCaptureTexture = new Texture2D(frontImageWidth, frontImageHeight, TextureFormat.RGB24, false);
-
-        if (captureTopView)
-        {
-            topRenderTexture = new RenderTexture(topViewImageSize, topViewImageSize, 24);
-            topCaptureTexture = new Texture2D(topViewImageSize, topViewImageSize, TextureFormat.RGB24, false);
-            CreateTopViewCamera();
-        }
 
         AutoFindReferences();
         ValidateReferences();
@@ -159,9 +131,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
             if (wheelController == null)
                 wheelController = FindObjectOfType<WheelTest>();
         }
-
-        if (topViewTarget == null && wheelController != null)
-            topViewTarget = wheelController.transform;
     }
 
     void ValidateReferences()
@@ -170,31 +139,12 @@ public class DrivingDataCollectorV2 : MonoBehaviour
             Debug.LogError("[DataCollectorV2] CameraPublisher를 찾을 수 없습니다!");
         if (wheelController == null)
             Debug.LogError("[DataCollectorV2] WheelTest를 찾을 수 없습니다!");
-        if (captureTopView && topViewTarget == null)
-        {
-            Debug.LogWarning("[DataCollectorV2] TopView 대상이 없습니다. TopView 캡처 비활성화.");
-            captureTopView = false;
-        }
-    }
-
-    void CreateTopViewCamera()
-    {
-        topViewCameraObj = new GameObject("DataCollectorV2_TopViewCamera");
-        topViewCamera = topViewCameraObj.AddComponent<Camera>();
-        topViewCamera.nearClipPlane = 0.1f;
-        topViewCamera.farClipPlane = 100f;
-        topViewCamera.fieldOfView = 60f;
-        topViewCamera.enabled = false;
-        topViewCamera.targetTexture = topRenderTexture;
     }
 
     void Update()
     {
         if (frontCamera == null && cameraPublisher != null)
             frontCamera = cameraPublisher.GetCamera();
-
-        if (captureTopView && topViewTarget != null && topViewCamera != null)
-            UpdateTopViewCamera();
 
         // 녹화 토글
         if (Input.GetKeyDown(recordKey))
@@ -212,7 +162,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         // Update currentAction for UI display (Record or not)
         currentAction = GetCurrentKeyAction();
 
-        // 녹화 중이면 캡처
+        // 녹화 중이면 캕처
         if (isRecording && Time.time - lastCaptureTime >= captureInterval)
         {
             CaptureFrame();
@@ -257,14 +207,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         return KeyAction.NONE;
     }
 
-    void UpdateTopViewCamera()
-    {
-        Vector3 targetPosition = topViewTarget.position;
-        topViewCamera.transform.position = targetPosition + Vector3.up * topViewHeight;
-        float yRotation = topViewTarget.eulerAngles.y;
-        topViewCamera.transform.rotation = Quaternion.Euler(90f, yRotation, 0f);
-    }
-
     void StartRecording()
     {
         string basePath = Path.Combine(Application.dataPath, "..", "TrainingData");
@@ -272,9 +214,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
         Directory.CreateDirectory(sessionFolder);
         Directory.CreateDirectory(Path.Combine(sessionFolder, "front"));
-
-        if (captureTopView)
-            Directory.CreateDirectory(Path.Combine(sessionFolder, "top"));
 
         frameBuffer.Clear();
         frameCount = 0;
@@ -311,15 +250,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         string frontImagePath = Path.Combine(sessionFolder, "front", frontImageName);
         CaptureCamera(frontCamera, frontRenderTexture, frontCaptureTexture, frontImagePath);
 
-        // Top View 캡처
-        string topImageName = "";
-        if (captureTopView && topViewCamera != null)
-        {
-            topImageName = $"frame_{frameNum}.jpg";
-            string topImagePath = Path.Combine(sessionFolder, "top", topImageName);
-            CaptureCamera(topViewCamera, topRenderTexture, topCaptureTexture, topImagePath);
-        }
-
         // 프레임 데이터 저장
         // DAgger: AI 컨트롤러가 개입 상태인지 확인
         bool isIntervening = (aiController != null && aiController.isAutonomousMode &&
@@ -331,7 +261,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         DrivingFrameV2 frame = new DrivingFrameV2
         {
             frontImagePath = $"front/{frontImageName}",
-            topImagePath = captureTopView ? $"top/{topImageName}" : "",
             keyAction = (int)action,
             keyActionName = KeyActionNames[(int)action],
             speed = speed,
@@ -377,23 +306,13 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         using (StreamWriter writer = new StreamWriter(csvPath))
         {
             // 헤더
-            if (captureTopView)
-                writer.WriteLine("front_image,top_image,key_action,key_action_name,speed,timestamp,intervention");
-            else
-                writer.WriteLine("front_image,key_action,key_action_name,speed,timestamp,intervention");
+            writer.WriteLine("front_image,key_action,key_action_name,speed,timestamp,intervention");
 
             // 데이터
             foreach (var frame in frameBuffer)
             {
                 int intervention = frame.isIntervention ? 1 : 0;
-                if (captureTopView)
-                {
-                    writer.WriteLine($"{frame.frontImagePath},{frame.topImagePath},{frame.keyAction},{frame.keyActionName},{frame.speed:F6},{frame.timestamp:F6},{intervention}");
-                }
-                else
-                {
-                    writer.WriteLine($"{frame.frontImagePath},{frame.keyAction},{frame.keyActionName},{frame.speed:F6},{frame.timestamp:F6},{intervention}");
-                }
+                writer.WriteLine($"{frame.frontImagePath},{frame.keyAction},{frame.keyActionName},{frame.speed:F6},{frame.timestamp:F6},{intervention}");
             }
         }
 
@@ -422,9 +341,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     ""num_classes"": 7,
     ""class_names"": [""FORWARD"", ""FORWARD_LEFT"", ""FORWARD_RIGHT"", ""LEFT"", ""RIGHT"", ""BACKWARD"", ""NONE""],
     ""front_image_size"": {{ ""width"": {frontImageWidth}, ""height"": {frontImageHeight} }},
-    ""top_image_size"": {{ ""width"": {topViewImageSize}, ""height"": {topViewImageSize} }},
-    ""top_view_enabled"": {captureTopView.ToString().ToLower()},
-    ""top_view_height"": {topViewHeight},
     ""capture_fps"": {1f / captureInterval:F1},
     ""created"": ""{DateTime.Now:yyyy-MM-dd HH:mm:ss}"",
     ""class_distribution"": {{
@@ -463,10 +379,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     void OnDestroy()
     {
         if (frontRenderTexture != null) Destroy(frontRenderTexture);
-        if (topRenderTexture != null) Destroy(topRenderTexture);
         if (frontCaptureTexture != null) Destroy(frontCaptureTexture);
-        if (topCaptureTexture != null) Destroy(topCaptureTexture);
-        if (topViewCameraObj != null) Destroy(topViewCameraObj);
     }
 
     void UpdateUI()

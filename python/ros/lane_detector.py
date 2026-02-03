@@ -180,7 +180,7 @@ class LaneDetector(Node):
         height, width = image.shape[:2]
         
         # ========== 1. 전처리 ==========
-        roi_top = int(height * 0.35)
+        roi_top = int(height * 0.15)  # 상단 15% 제거
         roi = image[roi_top:, :].copy()
         roi_height, roi_width = roi.shape[:2]
         self.publish_image(self.pub_roi, roi)
@@ -195,8 +195,12 @@ class LaneDetector(Node):
         self.publish_image(self.pub_white_mask, white_mask)
         
         edges = cv2.Canny(blur, params['canny_low'], params['canny_high'])
-        self.publish_image(self.pub_edges, edges)
-        
+
+        # Unity 모델용 edges 발행 (학습 시 mask 크기와 일치: 200x66)
+        edges_resized = cv2.resize(edges, (200, 66), interpolation=cv2.INTER_AREA)
+        edges_rgb = cv2.cvtColor(edges_resized, cv2.COLOR_GRAY2RGB)
+        self.publish_image(self.pub_edges, edges_rgb, encoding='rgb8')   
+
         combined = cv2.bitwise_or(edges, white_mask)
         self.publish_image(self.pub_combined, combined)
         

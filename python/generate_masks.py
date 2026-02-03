@@ -21,20 +21,51 @@ def process_image(image_path):
         
     height, width = img.shape[:2]
     
-    # 1. ROI Crop (Top 35% removal - matching lane_detector.py)
+    # 1. ROI Crop (Top 60% removal - matching lane_detector.py)
     # Note: Training data usually keeps full size, but for UNet we might want to train on ROI or full.
     # If we train on full, the model learns to ignore the sky.
     # However, to match the "Teacher", let's process the full image but zero out the top.session_20260203_012834
     
-    roi_top = int(height * 0.35)
+    roi_top = int(height * 0.6)
     
     # Convert to Gray
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-    # Gaussian Blur
+    # ============================================================
+    # Gaussian Blur (가우시안 블러)
+    # ============================================================
+    # 파라미터: (커널 크기, 커널 크기), 시그마
+    # 
+    # 커널 크기 (5, 5):
+    #   - 작을수록 (3,3): 노이즈 제거 약함, 디테일 유지, 에지가 날카로움
+    #   - 클수록 (7,7), (9,9): 노이즈 제거 강함, 에지가 부드러워짐 (뭉개짐)
+    #   - 홀수만 사용 가능 (3, 5, 7, 9...)
+    #
+    # 시그마 (0):
+    #   - 0이면 커널 크기에서 자동 계산
+    #   - 값이 클수록 더 많이 블러됨
+    # ============================================================
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     
-    # Canny Edge Detection (Parameters from lane_detector.py defaults: 50, 150)
+    # ============================================================
+    # Canny Edge Detection (캐니 에지 검출)
+    # ============================================================
+    # 파라미터: (낮은 임계값, 높은 임계값)
+    #
+    # 낮은 임계값 (50):
+    #   - 작을수록 (30): 약한 에지도 검출 → 노이즈 증가, 더 많은 선 검출
+    #   - 클수록 (70, 100): 강한 에지만 검출 → 깔끔하지만 일부 에지 누락
+    #
+    # 높은 임계값 (150):
+    #   - 작을수록 (100): 더 많은 에지 검출
+    #   - 클수록 (200, 250): 매우 강한 에지만 검출, 선이 끊어질 수 있음
+    #
+    # 권장 비율: 높은 임계값 = 낮은 임계값 × 2~3
+    # 예시:
+    #   - (30, 90): 많은 에지 검출 (노이즈 포함 가능)
+    #   - (50, 150): 균형잡힌 기본값 (현재 사용)
+    #   - (100, 200): 강한 에지만 검출 (깔끔하지만 누락 가능)
+    # ============================================================
     edges = cv2.Canny(blur, 50, 150)
     
     # Manual ROI Masking (Zero out top part)
@@ -42,8 +73,13 @@ def process_image(image_path):
     mask[roi_top:, :] = 255
     masked_edges = cv2.bitwise_and(edges, mask)
     
-    # Dilation (Thicken lines for better training signal)
-    # A 3x3 kernel with 1 iteration makes lines slightly thicker
+    # ============================================================
+    # Dilation (팽창)
+    # ============================================================
+    # 파라미터: 커널 크기, iterations
+    #   - 커널이 클수록, iterations가 많을수록 선이 두꺼워짐
+    #   - 학습 시 더 굵은 선이 타겟으로 사용되어 학습 신호 증가
+    # ============================================================
     kernel = np.ones((3,3), np.uint8)
     dilated = cv2.dilate(masked_edges, kernel, iterations=1)
     

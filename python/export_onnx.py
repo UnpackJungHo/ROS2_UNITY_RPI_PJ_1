@@ -2,7 +2,7 @@
 """
 Speed-Aware 분류 모델을 ONNX 형식으로 변환
 
-입력: front_image + top_image + speed
+입력: front_image + mask_image + speed
 출력: logits [1, 7]
 """
 import torch
@@ -18,7 +18,7 @@ def export_speed_aware_to_onnx(
     checkpoint_path: str,
     output_path: str,
     front_size: tuple = (66, 200),
-    top_size: tuple = (128, 128),
+    mask_size: tuple = (66, 200),  # 학습 시 mask 크기와 동일
 ):
     """Speed-Aware 분류 모델을 ONNX로 변환"""
     from train_classification import SpeedAwareDualViewNet, CLASS_NAMES
@@ -49,7 +49,7 @@ def export_speed_aware_to_onnx(
 
     # 더미 입력
     dummy_front = torch.randn(1, 3, front_size[0], front_size[1])
-    dummy_top = torch.randn(1, 3, top_size[0], top_size[1])
+    dummy_mask = torch.randn(1, 3, mask_size[0], mask_size[1])
     dummy_speed = torch.randn(1, 1)
 
     # ONNX 변환
@@ -59,16 +59,16 @@ def export_speed_aware_to_onnx(
     # Unity Sentis는 .data 외부 파일을 읽지 못하므로 단일 파일로 내보내야 함
     torch.onnx.export(
         model,
-        (dummy_front, dummy_top, dummy_speed),
+        (dummy_front, dummy_mask, dummy_speed),
         output_path,
         export_params=True,
         opset_version=17,  # Unity Sentis 호환
         do_constant_folding=True,
-        input_names=['front_image', 'top_image', 'speed'],
+        input_names=['front_image', 'mask_image', 'speed'],
         output_names=['logits'],
         dynamic_axes={
             'front_image': {0: 'batch_size'},
-            'top_image': {0: 'batch_size'},
+            'mask_image': {0: 'batch_size'},
             'speed': {0: 'batch_size'},
             'logits': {0: 'batch_size'}
         },
@@ -76,7 +76,7 @@ def export_speed_aware_to_onnx(
     )
 
     print(f"ONNX export complete!")
-    print(f"  Inputs: front_image, top_image, speed")
+    print(f"  Inputs: front_image, mask_image, speed")
     print(f"  Output: logits [batch, 7] = {CLASS_NAMES}")
     print(f"")
     print(f"[중요] Unity에서 사용 시:")
@@ -101,12 +101,12 @@ def export_speed_aware_to_onnx(
 
         session = ort.InferenceSession(output_path)
         front_np = np.random.randn(1, 3, front_size[0], front_size[1]).astype(np.float32)
-        top_np = np.random.randn(1, 3, top_size[0], top_size[1]).astype(np.float32)
+        mask_np = np.random.randn(1, 3, mask_size[0], mask_size[1]).astype(np.float32)
         speed_np = np.array([[0.5]], dtype=np.float32)  # 정규화된 속도
 
         outputs = session.run(None, {
             'front_image': front_np,
-            'top_image': top_np,
+            'mask_image': mask_np,
             'speed': speed_np
         })
 
@@ -129,7 +129,7 @@ def export_speed_aware_to_onnx(
             'speed_normalize': speed_normalize,
             'class_names': CLASS_NAMES,
             'front_size': front_size,
-            'top_size': top_size,
+            'mask_size': mask_size,
         }, f, indent=2)
     print(f"Metadata saved to: {meta_path}")
 
@@ -157,5 +157,5 @@ if __name__ == "__main__":
         print("Unity AutonomousDrivingController의 Model Asset에 이 파일을 할당하세요.")
     else:
         print(f"Error: No Speed-Aware checkpoint found at {v2_checkpoint}")
-        print("먼저 train_classification_v2.py를 실행하여 학습하세요.")
+        print("먼저 train_classification.py를 실행하여 학습하세요.")
         exit(1)
