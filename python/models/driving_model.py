@@ -1,4 +1,6 @@
 # models/driving_model.py
+# 회귀(Regression) 방식의 자율주행 모델들을 정의한 파일
+# 조향(Steering)과 가속(Throttle) 값을 실수형(Float)으로 직접 예측하는 모델
 import torch
 import torch.nn as nn
 import torchvision.models as models

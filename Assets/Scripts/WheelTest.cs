@@ -32,65 +32,37 @@ public class WheelTest : MonoBehaviour
     [Tooltip("바퀴 반지름 (m)")]
     public float wheelRadius = 0.1f;
     [Tooltip("무게중심 높이 (m)")]
-    public float centerOfMassHeight = 0.22f;
+    public float centerOfMassHeight = 0.25f;
 
-    [Header("Motor/Engine")]
-    [Tooltip("최대 모터 토크 (Nm) - 안정적 주행을 위해 낮게 설정")]
-    public float maxMotorTorque = 3f;
+    [Header("Electric Motor (배달 AMR)")]
+    [Tooltip("최대 모터 토크 (Nm)")]
+    public float maxMotorTorque = 5f;
     [Tooltip("최대 모터 RPM")]
-    public float maxMotorRPM = 1000f;
+    public float maxMotorRPM = 400f;
     [Tooltip("모터 토크 커브 (X: RPM 비율 0~1, Y: 토크 비율 0~1)")]
     public AnimationCurve torqueCurve;
+    [Tooltip("감속비 (전기모터 → 바퀴)")]
+    public float reductionRatio = 3.0f;
 
-    [Header("Transmission")]
-    [Tooltip("각 기어의 기어비 - 단일 기어로 단순화")]
-    public float[] gearRatios = { 1.5f };
-
-    [Tooltip("최종 감속비 (차동기어)")]
-    public float finalDriveRatio = 2.0f;
-
-    [Tooltip("자동 변속 여부")]
-    public bool autoTransmission = true;
-
-    [Tooltip("기어 변속 RPM 상한")]
-    public float shiftUpRPM = 800f;
-
-    [Tooltip("기어 변속 RPM 하한")]
-    public float shiftDownRPM = 300f;
-
-    [Header("Speed & Stability Limits")]
-    [Tooltip("최고 속도 제한 (m/s) - 롤오버 방지")]
-    public float maxSpeed = 4.0f;
-    [Tooltip("최대 가속도 제한 (m/s²) - 뒤집힘 방지, 권장: 5 이하")]
-    public float maxAcceleration = 4.0f;
-    [Tooltip("고속 조향 제한 활성화 - 속도가 빠를수록 조향각 감소")]
+    [Header("Speed & Stability Limits (배달 AMR: 0.5~2.0 m/s)")]
+    [Tooltip("최고 속도 제한 (m/s)")]
+    public float maxSpeed = 2.0f;
+    [Tooltip("최대 가속도 제한 (m/s²) - 부드러운 주행: 0.3~0.5")]
+    public float maxAcceleration = 0.5f;
+    [Tooltip("최대 감속도 제한 (m/s²)")]
+    public float maxDeceleration = 1.0f;
+    [Tooltip("고속 조향 제한 활성화")]
     public bool enableSpeedBasedSteeringLimit = true;
-    [Tooltip("조향 제한 없는 최대 속도 (m/s) - 이 속도까지는 풀 조향 가능")]
-    public float fullSteeringSpeed = 1.0f;
+    [Tooltip("조향 제한 없는 최대 속도 (m/s)")]
+    public float fullSteeringSpeed = 0.5f;
 
-    [Header("Acceleration & Deceleration Tuning")]
-    [Tooltip("가속 응답 배율 - 값이 클수록 0에서 빠르게 가속됨 (기본: 1.0, 권장: 1.0~3.0)")]
-    [Range(0.5f, 5.0f)]
-    public float accelerationMultiplier = 1.0f;
-    [Tooltip("감속 응답 배율 - 값이 클수록 입력 해제 시 빠르게 정지함 (기본: 1.0, 권장: 1.0~5.0)")]
-    [Range(0.5f, 10.0f)]
-    public float decelerationMultiplier = 1.0f;
-    [Tooltip("저속 부스트 임계값 (m/s) - 이 속도 이하에서 추가 가속 부스트 적용")]
-    public float lowSpeedBoostThreshold = 1.0f;
-    [Tooltip("저속 부스트 배율 - 저속에서의 추가 가속력 배율 (기본: 2.0)")]
-    [Range(1.0f, 5.0f)]
-    public float lowSpeedBoostMultiplier = 2.0f;
-
-    [Header("Resistance Coefficients")]
-    [Tooltip("공기저항 계수 (Cd)")]
-    public float dragCoefficient = 0.5f;
-
+    [Header("Resistance Coefficients (실외)")]
+    [Tooltip("구름저항 계수 - 실외 아스팔트: 0.015, 거친 노면: 0.03")]
+    public float rollingResistance = 0.025f;
+    [Tooltip("공기저항 계수 (Cd) - 저속에서는 영향 미미")]
+    public float dragCoefficient = 0.1f;
     [Tooltip("전면 투영 면적 (m²)")]
     public float frontalArea = 0.4f;
-
-    [Tooltip("구름저항 계수 (Cr)")]
-    public float rollingResistance = 0.02f;
-
     [Tooltip("공기 밀도 (kg/m³)")]
     public float airDensity = 1.225f;
 
@@ -119,14 +91,11 @@ public class WheelTest : MonoBehaviour
     [SerializeField] private float currentSpeed_ms;      // 현재 속도 (m/s)
     [SerializeField] private float currentSpeed_kmh;     // 현재 속도 (km/h)
     [SerializeField] private float currentMotorRPM;      // 현재 모터 RPM
-    [SerializeField] private int currentGear;            // 현재 기어 (0-indexed)
     [SerializeField] private float currentAcceleration;  // 현재 가속도 (m/s²)
     [SerializeField] private float currentDriveForce;    // 현재 구동력 (N)
-    [SerializeField] private float currentDragForce;     // 현재 공기저항 (N)
-    [SerializeField] private float currentRollResist;    // 현재 구름저항 (N)
+    [SerializeField] private float currentResistForce;   // 현재 총 저항력 (N)
     [SerializeField] private float frontAxleLoad;        // 앞축 하중 (N)
     [SerializeField] private float rearAxleLoad;         // 뒷축 하중 (N)
-    [SerializeField] private float averageSlipRatio;     // 평균 슬립률
 
     // 내부 상태 변수
     private float currentSteeringAngle = 0f;
@@ -156,8 +125,6 @@ public class WheelTest : MonoBehaviour
         float totalWeight = vehicleMass * GRAVITY;
         frontAxleLoad = totalWeight * 0.5f;
         rearAxleLoad = totalWeight * 0.5f;
-
-        currentGear = 0;
     }
 
     void FindReferences()
@@ -241,15 +208,6 @@ public class WheelTest : MonoBehaviour
                 brakeInput = 1f;
                 throttleInput = 0f;  // 브레이크 시 가속 해제
             }
-
-            // 수동 변속 (Q/E 키)
-            if (!autoTransmission)
-            {
-                if (Input.GetKeyDown(KeyCode.E) && currentGear < gearRatios.Length - 1)
-                    currentGear++;
-                if (Input.GetKeyDown(KeyCode.Q) && currentGear > 0)
-                    currentGear--;
-            }
         }
 
         // 조향 업데이트 (Update에서 수행 - 시각적 반응성)
@@ -276,38 +234,32 @@ public class WheelTest : MonoBehaviour
         // 2. 모터 RPM 계산 (현재 속도 기반)
         CalculateMotorRPM();
 
-        // 3. 자동 변속
-        if (autoTransmission)
-        {
-            AutoShift();
-        }
-
-        // 4. 구동력 계산
+        // 3. 구동력 계산
         float driveForce = CalculateDriveForce();
 
-        // 5. 저항력 계산
+        // 4. 저항력 계산
         float dragForce = CalculateDragForce();
         float rollingForce = CalculateRollingResistance();
+        float totalResistance = dragForce + rollingForce;
 
-        // 6. 브레이크력 계산
+        // 5. 브레이크력 계산
         float brakeForce = CalculateBrakeForce();
 
-        // 7. 엔진 브레이크 (스로틀 해제 시) - 감속 배율 적용
-        float engineBrake = 0f;
+        // 6. 회생 제동 (스로틀 해제 시 자연 감속)
+        float regenBrake = 0f;
         if (Mathf.Abs(throttleInput) < 0.1f && Mathf.Abs(currentSpeed_ms) > 0.1f)
         {
-            engineBrake = engineBrakeForce * decelerationMultiplier * Mathf.Sign(currentSpeed_ms);
+            regenBrake = engineBrakeForce * Mathf.Sign(currentSpeed_ms);
         }
 
-        // 8. 타이어 그립 한계 계산
+        // 7. 타이어 그립 한계 계산
         float maxTractionForce = CalculateMaxTractionForce();
 
         // 구동력을 그립 한계로 제한
         float effectiveDriveForce = Mathf.Sign(driveForce) *
             Mathf.Min(Mathf.Abs(driveForce), maxTractionForce);
 
-        // 9. 순 힘 계산
-        // 저항력들은 sign(속도) 방향으로 계산되어 있으므로, 항상 빼면 속도를 0으로 되돌림
+        // 8. 순 힘 계산
         float netForce;
         if (Mathf.Abs(currentSpeed_ms) < 0.05f && Mathf.Abs(throttleInput) < 0.1f && brakeInput < 0.1f)
         {
@@ -317,37 +269,33 @@ public class WheelTest : MonoBehaviour
         }
         else
         {
-            // 구동력에서 모든 저항력을 뺌 (전진/후진 동일)
-            // 스로틀 해제 상태에서는 저항력에 감속 배율 적용
-            float resistanceMultiplier = (Mathf.Abs(throttleInput) < 0.1f) ? decelerationMultiplier : 1.0f;
-            netForce = effectiveDriveForce - (dragForce + rollingForce) * resistanceMultiplier - brakeForce - engineBrake;
+            netForce = effectiveDriveForce - totalResistance - brakeForce - regenBrake;
 
             // 브레이크 중 속도가 거의 0이면 완전 정지
-            if (brakeInput > 0.5f && Mathf.Abs(currentSpeed_ms) < 0.3f)
+            if (brakeInput > 0.5f && Mathf.Abs(currentSpeed_ms) < 0.2f)
             {
-                netForce = -currentSpeed_ms * 50f;  // 강제 정지력
+                netForce = -currentSpeed_ms * 100f;  // 강제 정지력
             }
         }
 
-        // 10. 가속도 계산 (F = ma → a = F/m)
+        // 9. 가속도 계산 (F = ma → a = F/m)
         currentAcceleration = netForce / vehicleMass;
 
-        // 11. 가속도 제한 (뒤집힘 방지)
-        currentAcceleration = Mathf.Clamp(currentAcceleration, -maxAcceleration * 1.5f, maxAcceleration);
+        // 10. 가속도 제한 (부드러운 주행)
+        currentAcceleration = Mathf.Clamp(currentAcceleration, -maxDeceleration, maxAcceleration);
 
-        // 12. 속도 적분 (v = v0 + a*t)
+        // 11. 속도 적분 (v = v0 + a*t)
         currentSpeed_ms += currentAcceleration * dt;
 
-        // 13. 최고속도 제한 (롤오버 방지)
+        // 12. 최고속도 제한
         currentSpeed_ms = Mathf.Clamp(currentSpeed_ms, -maxSpeed * 0.5f, maxSpeed);
 
         // 디버그 정보 업데이트
         currentSpeed_kmh = currentSpeed_ms * 3.6f;
         currentDriveForce = effectiveDriveForce;
-        currentDragForce = dragForce;
-        currentRollResist = rollingForce;
+        currentResistForce = totalResistance + brakeForce + regenBrake;
 
-        // 12. 슬립률 계산 및 바퀴 속도 적용
+        // 13. 바퀴 속도 적용
         ApplyWheelVelocities();
     }
 
@@ -375,55 +323,31 @@ public class WheelTest : MonoBehaviour
     }
 
     // ============================================
-    // 모터 RPM 계산
+    // 모터 RPM 계산 (전기모터 - 단순 감속비)
     // ============================================
 
     void CalculateMotorRPM()
     {
-        if (gearRatios.Length == 0) return;
-
         // 바퀴 회전속도 (rad/s) = 차량속도 / 바퀴반지름
         float wheelAngularVelocity = Mathf.Abs(currentSpeed_ms) / wheelRadius;
 
         // 바퀴 RPM = (rad/s) × (60 / 2π)
         float wheelRPM = wheelAngularVelocity * 60f / (2f * Mathf.PI);
 
-        // 모터 RPM = 바퀴 RPM × 기어비 × 최종감속비
-        float gearRatio = gearRatios[currentGear];
-        currentMotorRPM = wheelRPM * gearRatio * finalDriveRatio;
+        // 모터 RPM = 바퀴 RPM × 감속비
+        currentMotorRPM = wheelRPM * reductionRatio;
 
         // RPM 제한
         currentMotorRPM = Mathf.Clamp(currentMotorRPM, 0f, maxMotorRPM);
     }
 
     // ============================================
-    // 자동 변속
-    // ============================================
-
-    void AutoShift()
-    {
-        if (gearRatios.Length <= 1) return;
-
-        // 업시프트
-        if (currentMotorRPM > shiftUpRPM && currentGear < gearRatios.Length - 1)
-        {
-            currentGear++;
-        }
-        // 다운시프트
-        else if (currentMotorRPM < shiftDownRPM && currentGear > 0)
-        {
-            currentGear--;
-        }
-    }
-
-    // ============================================
-    // 구동력 계산
+    // 구동력 계산 (전기모터 - 단순화)
     // ============================================
 
     float CalculateDriveForce()
     {
         if (Mathf.Abs(throttleInput) < 0.01f) return 0f;
-        if (gearRatios.Length == 0) return 0f;
 
         // 토크 커브에서 현재 RPM의 토크 비율 가져오기
         float rpmRatio = currentMotorRPM / maxMotorRPM;
@@ -432,24 +356,11 @@ public class WheelTest : MonoBehaviour
         // 모터 토크 = 최대 토크 × 스로틀 × 토크커브
         float motorTorque = maxMotorTorque * Mathf.Abs(throttleInput) * torqueMultiplier;
 
-        // 바퀴 토크 = 모터 토크 × 기어비 × 최종감속비
-        float gearRatio = gearRatios[currentGear];
-        float wheelTorque = motorTorque * gearRatio * finalDriveRatio;
+        // 바퀴 토크 = 모터 토크 × 감속비
+        float wheelTorque = motorTorque * reductionRatio;
 
         // 구동력 = 바퀴 토크 / 바퀴 반지름
         float driveForce = wheelTorque / wheelRadius;
-
-        // 가속 배율 적용
-        driveForce *= accelerationMultiplier;
-
-        // 저속 부스트 적용 (정지~저속 구간에서 추가 가속력)
-        float currentAbsSpeed = Mathf.Abs(currentSpeed_ms);
-        if (currentAbsSpeed < lowSpeedBoostThreshold)
-        {
-            // 속도가 낮을수록 부스트 효과 큼 (선형 감소)
-            float boostRatio = 1.0f - (currentAbsSpeed / lowSpeedBoostThreshold);
-            driveForce *= (1.0f + boostRatio * (lowSpeedBoostMultiplier - 1.0f));
-        }
 
         // 후진 시 음수
         if (throttleInput < 0)
@@ -506,83 +417,64 @@ public class WheelTest : MonoBehaviour
         // 4WD이므로 모든 바퀴의 하중 사용
         float totalNormalForce = frontAxleLoad + rearAxleLoad;
 
-        // 슬립률 기반 마찰 계수 계산 (간소화된 Pacejka)
-        float slipRatio = CalculateSlipRatio();
-        float frictionCoeff = CalculateFrictionCoefficient(slipRatio);
-
-        averageSlipRatio = slipRatio;
-
         // 최대 견인력 = 수직력 × 마찰계수
-        return totalNormalForce * frictionCoeff;
+        return totalNormalForce * CalculateFrictionCoefficient();
     }
 
     // ============================================
-    // 슬립률 계산
+    // 마찰 계수 계산 (실외 노면)
     // ============================================
 
-    float CalculateSlipRatio()
+    float CalculateFrictionCoefficient()
     {
-        if (Mathf.Abs(currentSpeed_ms) < 0.1f && Mathf.Abs(throttleInput) > 0.1f)
-        {
-            // 정지 상태에서 출발 시 높은 슬립률
-            return Mathf.Abs(throttleInput) * 0.3f;
-        }
-
-        // 목표 바퀴 속도 (구동력이 만들어내려는 속도)
-        float targetWheelSpeed = currentSpeed_ms;
-        if (Mathf.Abs(throttleInput) > 0.1f)
-        {
-            // 스로틀 입력에 따른 추가 속도 요구
-            float additionalSpeed = throttleInput * 2f;  // m/s
-            targetWheelSpeed = currentSpeed_ms + additionalSpeed;
-        }
-
-        float actualSpeed = currentSpeed_ms;
-        float maxSpeed = Mathf.Max(Mathf.Abs(targetWheelSpeed), Mathf.Abs(actualSpeed), 0.1f);
-
-        float slip = (targetWheelSpeed - actualSpeed) / maxSpeed;
-        return Mathf.Clamp(slip, -1f, 1f);
+        // 배달 AMR 저속에서는 항상 최대 그립 유지
+        return peakFriction;
     }
 
     // ============================================
-    // 마찰 계수 계산 (간소화된 Pacejka Magic Formula)
-    // ============================================
-
-    float CalculateFrictionCoefficient(float slipRatio)
-    {
-        float absSlip = Mathf.Abs(slipRatio);
-
-        // 최적 슬립률 이하: 선형 증가
-        if (absSlip <= optimalSlipRatio)
-        {
-            return peakFriction * (absSlip / optimalSlipRatio);
-        }
-        // 최적 슬립률 초과: 점진적 감소 (휠스핀 영역)
-        else
-        {
-            float overSlip = absSlip - optimalSlipRatio;
-            float dropOff = 1f - (overSlip * 0.5f);  // 슬립이 증가할수록 그립 감소
-            return peakFriction * Mathf.Max(dropOff, 0.3f);  // 최소 30% 그립 유지
-        }
-    }
-
-    // ============================================
-    // 바퀴 속도 적용
+    // 바퀴 속도 적용 (4WD + 디퍼렌셜 시뮬레이션)
     // ============================================
 
     void ApplyWheelVelocities()
     {
-        // 현재 속도를 바퀴 회전속도로 변환
-        // ω = v / r (rad/s)
-        // deg/s = ω × (180/π)
-        float wheelAngularVelocity = currentSpeed_ms / wheelRadius;
-        float wheelDegPerSec = wheelAngularVelocity * Mathf.Rad2Deg;
+        // 기본 바퀴 회전속도 (deg/s)
+        float baseWheelDegPerSec = (currentSpeed_ms / wheelRadius) * Mathf.Rad2Deg;
 
-        // 4WD: 모든 바퀴에 동일한 속도 적용
-        SetWheelVelocity(frontLeftWheel, wheelDegPerSec);
-        SetWheelVelocity(frontRightWheel, wheelDegPerSec);
-        SetWheelVelocity(rearLeftWheel, wheelDegPerSec);
-        SetWheelVelocity(rearRightWheel, wheelDegPerSec);
+        // 조향 중일 때 좌/우 바퀴 속도 차이 계산 (디퍼렌셜)
+        float leftSpeedRatio = 1f;
+        float rightSpeedRatio = 1f;
+
+        if (Mathf.Abs(currentSteeringAngle) > 0.5f && Mathf.Abs(currentSpeed_ms) > 0.1f)
+        {
+            // 회전 반경 계산
+            float steerRad = currentSteeringAngle * Mathf.Deg2Rad;
+            float turnRadius = wheelBase / Mathf.Tan(Mathf.Abs(steerRad));
+
+            // 내륜/외륜 반경
+            float innerRadius = turnRadius - (trackWidth / 2f);
+            float outerRadius = turnRadius + (trackWidth / 2f);
+
+            // 속도 비율 = 반경 비율
+            float innerRatio = innerRadius / turnRadius;
+            float outerRatio = outerRadius / turnRadius;
+
+            if (currentSteeringAngle > 0)  // 좌회전
+            {
+                leftSpeedRatio = innerRatio;   // 왼쪽이 내륜
+                rightSpeedRatio = outerRatio;  // 오른쪽이 외륜
+            }
+            else  // 우회전
+            {
+                leftSpeedRatio = outerRatio;   // 왼쪽이 외륜
+                rightSpeedRatio = innerRatio;  // 오른쪽이 내륜
+            }
+        }
+
+        // 4WD: 전륜/후륜 모두 구동 (좌/우 속도 차이 적용)
+        SetWheelVelocity(frontLeftWheel, baseWheelDegPerSec * leftSpeedRatio);
+        SetWheelVelocity(frontRightWheel, baseWheelDegPerSec * rightSpeedRatio);
+        SetWheelVelocity(rearLeftWheel, baseWheelDegPerSec * leftSpeedRatio);
+        SetWheelVelocity(rearRightWheel, baseWheelDegPerSec * rightSpeedRatio);
     }
 
     void SetWheelVelocity(ArticulationBody wheel, float velocity)
@@ -622,8 +514,7 @@ public class WheelTest : MonoBehaviour
         float targetAngle = -input * effectiveMaxSteeringAngle;
         currentSteeringAngle = Mathf.MoveTowards(currentSteeringAngle, targetAngle, steeringSpeed * Time.deltaTime);
 
-        float leftAngle, rightAngle;
-        CalculateAckermannAngles(currentSteeringAngle, out leftAngle, out rightAngle);
+        CalculateAckermannAngles(currentSteeringAngle, out float leftAngle, out float rightAngle);
 
         SetSteeringAngle(frontLeftSteering, leftAngle);
         SetSteeringAngle(frontRightSteering, rightAngle);
@@ -690,14 +581,29 @@ public class WheelTest : MonoBehaviour
     public float GetMotorRPM() => currentMotorRPM;
 
     /// <summary>
-    /// 현재 기어 (1-indexed for display)
-    /// </summary>
-    public int GetCurrentGear() => currentGear + 1;
-
-    /// <summary>
     /// 현재 가속도 (m/s²)
     /// </summary>
     public float GetAcceleration() => currentAcceleration;
+
+    /// <summary>
+    /// 현재 조향 입력 [-1, 1]
+    /// </summary>
+    public float GetSteeringInput() => steeringInput;
+
+    /// <summary>
+    /// 현재 스로틀 입력 [-1, 1]
+    /// </summary>
+    public float GetThrottleInput() => throttleInput;
+
+    /// <summary>
+    /// 현재 브레이크 입력 [0, 1]
+    /// </summary>
+    public float GetBrakeInput() => brakeInput;
+
+    /// <summary>
+    /// 현재 실제 조향각 (도)
+    /// </summary>
+    public float GetSteeringAngle() => currentSteeringAngle;
 
     /// <summary>
     /// 외부에서 스로틀 입력 설정 (ROS 등)

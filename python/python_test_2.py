@@ -1,4 +1,5 @@
 # python_test_2.py
+# ONNX 모델(.onnx) 로드 및 추론 테스트 (Unity 적용 전 검증용).
 """
 ONNX 모델 추론 테스트 스크립트
 

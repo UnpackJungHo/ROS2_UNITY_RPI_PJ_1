@@ -1,3 +1,5 @@
+# PyTorch 모델(.pth) 로드 및 추론 테스트.
+
 import torch
 from train_classification import SpeedAwareDualViewNet, CLASS_NAMES
 

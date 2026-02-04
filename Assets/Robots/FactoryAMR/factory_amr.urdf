@@ -38,22 +38,22 @@
   <link name="base_link">
     <visual>
       <geometry>
-        <box size="0.8 0.5 0.25"/>
+        <box size="0.8 0.5 0.4"/>
       </geometry>
-      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <origin xyz="0 0 0.2" rpy="0 0 0"/>
       <material name="orange"/>
     </visual>
     <collision>
       <geometry>
-        <box size="0.8 0.5 0.25"/>
+        <box size="0.8 0.5 0.4"/>
       </geometry>
-      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <origin xyz="0 0 0.2" rpy="0 0 0"/>
     </collision>
     <inertial>
-      <origin xyz="0 0 0.125" rpy="0 0 0"/>
+      <origin xyz="0 0 0.2" rpy="0 0 0"/>
       <mass value="50.0"/>
-      <inertia ixx="2.604" ixy="0" ixz="0"
-               iyy="3.385" iyz="0"
+      <inertia ixx="3.417" ixy="0" ixz="0"
+               iyy="3.855" iyz="0"
                izz="4.167"/>
     </inertial>
   </link>
@@ -92,7 +92,7 @@
   <joint name="top_plate_joint" type="fixed">
     <parent link="base_link"/>
     <child link="top_plate"/>
-    <origin xyz="0 0 0.26" rpy="0 0 0"/>
+    <origin xyz="0 0 0.41" rpy="0 0 0"/>
   </joint>
 
   <!-- ========================== -->
@@ -112,8 +112,8 @@
     <child link="front_left_steering"/>
     <origin xyz="0.3 0.325 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-0.6" upper="0.6" effort="100" velocity="2"/>
-    <dynamics damping="10" friction="0.1"/>
+    <limit lower="-0.6" upper="0.6" effort="200" velocity="3"/>
+    <dynamics damping="50" friction="0.5"/>
   </joint>
 
   <!-- ==================== -->
@@ -146,8 +146,8 @@
     <child link="front_left_wheel"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
-    <limit effort="10" velocity="20"/>
+    <dynamics damping="1.0" friction="0.1"/>
+    <limit effort="30" velocity="60"/>
   </joint>
 
   <!-- =========================== -->
@@ -167,8 +167,8 @@
     <child link="front_right_steering"/>
     <origin xyz="0.3 -0.325 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-0.6" upper="0.6" effort="100" velocity="2"/>
-    <dynamics damping="10" friction="0.1"/>
+    <limit lower="-0.6" upper="0.6" effort="200" velocity="3"/>
+    <dynamics damping="50" friction="0.5"/>
   </joint>
 
   <!-- ==================== -->
@@ -201,8 +201,8 @@
     <child link="front_right_wheel"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
-    <limit effort="10" velocity="20"/>
+    <dynamics damping="1.0" friction="0.1"/>
+    <limit effort="30" velocity="60"/>
   </joint>
 
   <!-- ==================== -->
@@ -235,8 +235,8 @@
     <child link="rear_left_wheel"/>
     <origin xyz="-0.3 0.325 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
-    <limit effort="10" velocity="20"/>
+    <dynamics damping="1.0" friction="0.1"/>
+    <limit effort="30" velocity="60"/>
   </joint>
 
   <!-- ==================== -->
@@ -269,8 +269,8 @@
     <child link="rear_right_wheel"/>
     <origin xyz="-0.3 -0.325 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-    <dynamics damping="0.1" friction="0.1"/>
-    <limit effort="10" velocity="20"/>
+    <dynamics damping="1.0" friction="0.1"/>
+    <limit effort="30" velocity="60"/>
   </joint>
 
   <!-- ======================================== -->
@@ -343,16 +343,16 @@
   <link name="camera_mount">
     <visual>
       <geometry>
-        <cylinder radius="0.012" length="0.7"/>
+        <cylinder radius="0.012" length="0.5"/>
       </geometry>
-      <origin xyz="0 0 0.35" rpy="0 0 0"/>
+      <origin xyz="0 0 0.25" rpy="0 0 0"/>
       <material name="dark_gray"/>
     </visual>
     <collision>
       <geometry>
-        <cylinder radius="0.012" length="0.7"/>
+        <cylinder radius="0.012" length="0.5"/>
       </geometry>
-      <origin xyz="0 0 0.35" rpy="0 0 0"/>
+      <origin xyz="0 0 0.25" rpy="0 0 0"/>
     </collision>
     <inertial>
       <mass value="0.1"/>
@@ -365,8 +365,8 @@
   <joint name="camera_mount_joint" type="fixed">
     <parent link="base_link"/>
     <child link="camera_mount"/>
-    <!-- 전방 상판 위 (상판 z=0.26, 기둥 시작) -->
-    <origin xyz="0.35 0 0.25" rpy="0 0 0"/>
+    <!-- 전방 상판 위 (상판 z=0.41, 기둥 시작) -->
+    <origin xyz="0.35 0 0.40" rpy="0 0 0"/>
   </joint>
 
   <!-- ======================================== -->
@@ -398,7 +398,7 @@
     <parent link="camera_mount"/>
     <child link="camera_link"/>
     <!-- 기둥 위 -->
-    <origin xyz="0 0 0.72" rpy="0 0 0"/>
+    <origin xyz="0 0 0.52" rpy="0 0 0"/>
   </joint>
 
   <!-- Camera optical frame -->
@@ -623,7 +623,7 @@
   <joint name="imu_joint" type="fixed">
     <parent link="base_link"/>
     <child link="imu_link"/>
-    <origin xyz="0 0 0.26" rpy="0 0 0"/>
+    <origin xyz="0 0 0.41" rpy="0 0 0"/>
   </joint>
 
 </robot>

@@ -576,14 +576,49 @@ public class RoadCreator : EditorWindow
             Vector3 point = splinePoints[i];
             Vector3 forward;
             
-            // 진행 방향 계산
-            if (i < splinePoints.Count - 1)
+            // 진행 방향 계산 (Tangents)
+            if (isLooped)
             {
-                forward = (splinePoints[i + 1] - point).normalized;
+                // 루프일 때: 시작과 끝이 부드럽게 이어지도록 처리
+                Vector3 prevPoint, nextPoint;
+
+                if (i == 0)
+                {
+                    // 시작점의 이전 점은 (끝점 바로 앞의 점)
+                    // splinePoints의 마지막은 시작점과 같으므로 그 이전 점을 사용
+                    prevPoint = splinePoints[splinePoints.Count - 2];
+                    nextPoint = splinePoints[i + 1];
+                }
+                else if (i == splinePoints.Count - 1)
+                {
+                    // 끝점의 다음 점은 (시작점 바로 다음 점)
+                    prevPoint = splinePoints[i - 1];
+                    nextPoint = splinePoints[1];
+                }
+                else
+                {
+                    prevPoint = splinePoints[i - 1];
+                    nextPoint = splinePoints[i + 1];
+                }
+                
+                forward = (nextPoint - prevPoint).normalized;
             }
             else
             {
-                forward = (point - splinePoints[i - 1]).normalized;
+                // 열린 도로일 때: 기존 로직 + 양끝 처리
+                if (i == 0)
+                {
+                    forward = (splinePoints[i + 1] - point).normalized;
+                }
+                else if (i == splinePoints.Count - 1)
+                {
+                    forward = (point - splinePoints[i - 1]).normalized;
+                }
+                else
+                {
+                    // 중간점은 앞뒤 평균 (Central Difference)
+                    forward = (splinePoints[i + 1] - splinePoints[i - 1]).normalized;
+                }
             }
             
             // 오른쪽 방향 (Y축 기준)
@@ -606,18 +641,10 @@ public class RoadCreator : EditorWindow
             {
                 int baseIndex = (i - 1) * 2;
                 
-                // 마지막 포인트이고 루프일 때: 처음 버텍스와 연결
-                int nextLeft, nextRight;
-                if (i == splinePoints.Count - 1 && isLooped)
-                {
-                    nextLeft = 0;
-                    nextRight = 1;
-                }
-                else
-                {
-                    nextLeft = baseIndex + 2;
-                    nextRight = baseIndex + 3;
-                }
+                // 루프여도 마지막 점을 복제하여 따로 생성하므로
+                // 특별한 인덱스 연결 로직이 필요 없음 (자연스럽게 이어짐)
+                int nextLeft = baseIndex + 2;
+                int nextRight = baseIndex + 3;
                 
                 // 첫 번째 삼각형
                 triangles.Add(baseIndex);
@@ -631,19 +658,48 @@ public class RoadCreator : EditorWindow
             }
             
             // 길이 누적
-            if (i > 0)
+            if (i < splinePoints.Count - 1)
             {
-                currentLength += Vector3.Distance(splinePoints[i - 1], splinePoints[i]);
+                currentLength += Vector3.Distance(splinePoints[i], splinePoints[i + 1]);
             }
         }
         
         mesh.vertices = vertices.ToArray();
         mesh.uv = uvs.ToArray();
         mesh.triangles = triangles.ToArray();
+        
         mesh.RecalculateNormals();
+        
+        // 루프일 때 시작점과 끝점의 노말을 일치시킴 (심 제거)
+        if (isLooped)
+        {
+            WeldNormals(mesh);
+        }
+        
         mesh.RecalculateBounds();
         
         return mesh;
+    }
+
+    private void WeldNormals(Mesh mesh)
+    {
+        Vector3[] normals = mesh.normals;
+        int vertexCount = normals.Length;
+        
+        // 시작점 (0, 1)과 끝점 (count-2, count-1)은 같은 위치임
+        // 각각의 평균 노말을 계산하여 적용
+        
+        // 왼쪽 버텍스
+        Vector3 leftNormal = (normals[0] + normals[vertexCount - 2]).normalized;
+        normals[0] = leftNormal;
+        normals[vertexCount - 2] = leftNormal;
+        
+        // 오른쪽 버텍스
+        Vector3 rightNormal = (normals[1] + normals[vertexCount - 1]).normalized;
+        normals[1] = rightNormal;
+        normals[vertexCount - 1] = rightNormal;
+        
+        mesh.normals = normals;
     }
     
     private float CalculateTotalLength(List<Vector3> points)

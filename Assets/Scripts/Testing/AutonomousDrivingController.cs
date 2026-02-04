@@ -1,12 +1,9 @@
 using UnityEngine;
 using Unity.Sentis;
 using TMPro;
-using UnityEngine.UI;
-using Unity.Robotics.ROSTCPConnector;
-using RosMessageTypes.Sensor;
 
 /// <summary>
-/// Speed-Aware DAgger 자율주행 컨트롤러
+/// Speed-Aware 자율주행 컨트롤러 (Single View)
 ///
 /// 기능:
 /// - P키: 자율주행 모드 토글
@@ -14,7 +11,7 @@ using RosMessageTypes.Sensor;
 /// - 3초 후 자동으로 AI 모드 복귀
 /// - DrivingDataCollectorV2 연동하여 개입 데이터 수집
 ///
-/// 모델 입력: front_image + mask_image + speed
+/// 모델 입력: front_image + speed
 /// 모델 출력: 7개 클래스 logits
 /// </summary>
 public class AutonomousDrivingController : MonoBehaviour
@@ -36,15 +33,15 @@ public class AutonomousDrivingController : MonoBehaviour
     };
 
     [Header("AI Model")]
-    [Tooltip("ONNX 분류 모델 파일 (Speed-Aware)")]
+    [Tooltip("ONNX 분류 모델 파일 (Speed-Aware Single View)")]
     public ModelAsset modelAsset;
 
     [Header("UI References")]
-    public TextMeshProUGUI uiModeText;      // Header
-    public TextMeshProUGUI uiActionText;    // Main Info
-    public TextMeshProUGUI uiControlText;   // Control Info
-    public TextMeshProUGUI uiStatsText;     // Speed/Stats
-    public TextMeshProUGUI uiGuideText;     // Footer
+    public TextMeshProUGUI uiModeText;
+    public TextMeshProUGUI uiActionText;
+    public TextMeshProUGUI uiControlText;
+    public TextMeshProUGUI uiStatsText;
+    public TextMeshProUGUI uiGuideText;
 
     [Header("References")]
     [Tooltip("차량 컨트롤러")]
@@ -53,26 +50,12 @@ public class AutonomousDrivingController : MonoBehaviour
     [Tooltip("CameraPublisher (Front View 카메라)")]
     public CameraPublisher cameraPublisher;
 
-    [Tooltip("TopView 대상 오브젝트 (차량 base_link)")]
-    public Transform topViewTarget;
-
     [Tooltip("데이터 수집기 (DAgger 연동)")]
     public DrivingDataCollectorV2 dataCollector;
-
-    [Header("ROS Settings")]
-    public string rosEdgeTopic = "/lane_step/edges";
-    private ROSConnection ros;
-    private bool isMaskReceived = false;
-
 
     [Header("Image Settings")]
     public int frontImageWidth = 200;
     public int frontImageHeight = 66;
-
-    [Tooltip("마스크 이미지 크기 (학습 시 사용한 크기와 동일하게)")]
-    public int maskImageWidth = 200;
-    public int maskImageHeight = 66;
-
 
     [Header("Inference Settings")]
     [Tooltip("추론 주기 (초)")]
@@ -119,20 +102,11 @@ public class AutonomousDrivingController : MonoBehaviour
 
     // 카메라 및 렌더링
     private Camera frontCamera;
-    // TopView 관련 변수 제거됨
-    // private Camera topViewCamera;
-    // private GameObject topViewCameraObj;
-
     private RenderTexture frontRenderTexture;
     private Texture2D frontTexture;
 
-    // ROS로부터 받은 Mask 이미지용 텍스처
-    private Texture2D maskTexture;
-
-
     // 텐서
     private Tensor<float> frontInputTensor;
-    private Tensor<float> maskInputTensor;
     private Tensor<float> speedInputTensor;
 
     // 정규화 상수 (ImageNet)
@@ -145,17 +119,10 @@ public class AutonomousDrivingController : MonoBehaviour
     void Start()
     {
         AutoFindReferences();
-        AutoFindReferences();
         InitializeRenderTextures();
-        // CreateTopViewCamera(); // 제거됨
-
-        // ROS 구독 설정
-        ros = ROSConnection.GetOrCreateInstance();
-        ros.Subscribe<ImageMsg>(rosEdgeTopic, OnEdgeImageReceived);
-        
         LoadModel();
 
-        Debug.Log($"[AutonomousDriving] Speed-Aware DAgger Controller Initialized");
+        Debug.Log($"[AutonomousDriving] Speed-Aware Single View Controller Initialized");
         Debug.Log($"  '{toggleKey}' 키: 자율주행 모드 토글");
         Debug.Log($"  WASD: 자율주행 중 개입 (자동 수동 모드 전환)");
         Debug.Log($"  개입 후 {autoResumeDelay}초 뒤 자동 AI 모드 복귀");
@@ -163,8 +130,6 @@ public class AutonomousDrivingController : MonoBehaviour
 
     void AutoFindReferences()
     {
-        // ... (existing code, no change needed here actually)
-
         if (cameraPublisher == null)
             cameraPublisher = FindObjectOfType<CameraPublisher>();
 
@@ -176,9 +141,6 @@ public class AutonomousDrivingController : MonoBehaviour
             if (wheelController == null)
                 wheelController = FindObjectOfType<WheelTest>();
         }
-
-        if (topViewTarget == null && wheelController != null)
-            topViewTarget = wheelController.transform;
 
         if (dataCollector == null)
             dataCollector = FindObjectOfType<DrivingDataCollectorV2>();
@@ -193,13 +155,7 @@ public class AutonomousDrivingController : MonoBehaviour
     {
         frontRenderTexture = new RenderTexture(frontImageWidth, frontImageHeight, 24);
         frontTexture = new Texture2D(frontImageWidth, frontImageHeight, TextureFormat.RGB24, false);
-
-        // Mask 텍스처 초기화 (수신 데이터용 - 학습 시 mask 크기와 동일)
-        maskTexture = new Texture2D(maskImageWidth, maskImageHeight, TextureFormat.RGB24, false);
     }
-
-    // CreateTopViewCamera 제거됨
-
 
     void LoadModel()
     {
@@ -215,7 +171,7 @@ public class AutonomousDrivingController : MonoBehaviour
             worker = new Worker(runtimeModel, BackendType.GPUCompute);
 
             isModelLoaded = true;
-            Debug.Log("[AutonomousDriving] Speed-Aware 모델 로드 완료");
+            Debug.Log("[AutonomousDriving] Speed-Aware Single View 모델 로드 완료");
         }
         catch (System.Exception e)
         {
@@ -228,12 +184,6 @@ public class AutonomousDrivingController : MonoBehaviour
     {
         if (frontCamera == null && cameraPublisher != null)
             frontCamera = cameraPublisher.GetCamera();
-
-        if (frontCamera == null && cameraPublisher != null)
-            frontCamera = cameraPublisher.GetCamera();
-
-        // TopView 업데이트 제거됨
-
 
         // P키: 자율주행 모드 토글
         if (Input.GetKeyDown(toggleKey))
@@ -279,7 +229,7 @@ public class AutonomousDrivingController : MonoBehaviour
                 ApplyAIControl();
             }
         }
-        
+
         UpdateUI();
     }
 
@@ -346,69 +296,24 @@ public class AutonomousDrivingController : MonoBehaviour
         Debug.Log($"[AutonomousDriving] 🟢 개입 종료 - AI 모드 복귀");
     }
 
-    // UpdateTopViewCamera 제거됨
-    
-    /// <summary>
-    /// ROS2에서 엣지 이미지 수신 시 콜백
-    /// </summary>
-    void OnEdgeImageReceived(ImageMsg msg)
-    {
-        if (maskTexture == null) return;
-        
-        // 주의: 이 콜백은 메인 스레드가 아닐 수 있으므로 텍스처 업데이트는 메인 스레드에서 해야 할 수 있음.
-        // 하지만 ROSConnection은 기본적으로 메인 스레드에서 Invoke 해주는 것으로 알고 있음.
-        // 만약 에러나면 MainThreadDispatcher 사용 필요.
-        
-        // 이미지 데이터 처리 (BGR8 or RGB8 -> Texture2D)
-        // Unity Texture2D.LoadRawTextureData uses raw bytes.
-        // Assuming msg.data is raw pixel data.
-        
-        int expectedSize = maskImageWidth * maskImageHeight * 3;
-        if (msg.data.Length == expectedSize)
-        {
-             // RGB8 가정
-             maskTexture.LoadRawTextureData(msg.data);
-             maskTexture.Apply();
-             isMaskReceived = true;
-        }
-        else
-        {
-             Debug.LogWarning($"[AutonomousDriving] Mask size mismatch. Expected {expectedSize}, got {msg.data.Length}");
-        }
-    }
-
     void RunInference()
     {
         if (frontCamera == null) return;
-        if (!isMaskReceived) 
-        {
-            // Debug.LogWarning("[AutonomousDriving] Waiting for mask data...");
-            return; 
-        }
 
         // 1. 카메라 이미지 캡처 (Front)
         CaptureCamera(frontCamera, frontRenderTexture, frontTexture);
-        
+
         // 2. 텐서 생성
         frontInputTensor = TextureToTensor(frontTexture, frontImageHeight, frontImageWidth);
-        
-        // Mask 텐서 (이미 OnEdgeImageReceived에서 텍스처로 로드됨)
-        // 주의: ROS 이미지는 이미 RGB (또는 BGR) 형태. 정규화만 수행.
-        maskInputTensor = TextureToTensor(maskTexture, maskImageHeight, maskImageWidth);
 
         // 3. 속도 텐서 생성 (정규화)
         float currentSpeed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
         float normalizedSpeed = currentSpeed / speedNormalize;
         speedInputTensor = new Tensor<float>(new TensorShape(1, 1), new float[] { normalizedSpeed });
 
-        // 4. 추론 실행 - ONNX 입력 이름과 매칭 (export_onnx.py에서 수정된 이름)
+        // 4. 추론 실행 - ONNX 입력 이름과 매칭
         worker.SetInput("front_image", frontInputTensor);
-        worker.SetInput("mask_image", maskInputTensor);
         worker.SetInput("speed", speedInputTensor);
-
-        // 디버그: 정규화된 텐서 첫 3개 값 출력
-        var frontData = frontInputTensor.DownloadToArray();
-        //Debug.Log($"[DEBUG] Normalized front tensor sample: R={frontData[0]:F3}, G={frontData[66*200]:F3}, B={frontData[2*66*200]:F3}");
 
         worker.Schedule();
 
@@ -423,7 +328,7 @@ public class AutonomousDrivingController : MonoBehaviour
                     string logitsStr = "";
                     for (int i = 0; i < 7; i++)
                         logitsStr += $"{cpuTensor[i]:F2}, ";
-                    Debug.Log($"[AI] Logits: [{logitsStr}]"); // ALWAYS LOG THIS NOW
+                    Debug.Log($"[AI] Logits: [{logitsStr}]");
 
                     // Softmax 적용하여 확률로 변환 + argmax
                     float maxVal = float.MinValue;
@@ -458,7 +363,6 @@ public class AutonomousDrivingController : MonoBehaviour
 
         // 텐서 정리
         frontInputTensor?.Dispose();
-        maskInputTensor?.Dispose();
         speedInputTensor?.Dispose();
     }
 
@@ -519,10 +423,6 @@ public class AutonomousDrivingController : MonoBehaviour
         Color[] pixels = texture.GetPixels();
         float[] tensorData = new float[3 * height * width];
 
-        // ImageNet 정규화 상수
-        float[] mean = { 0.485f, 0.456f, 0.406f };
-        float[] std = { 0.229f, 0.224f, 0.225f };
-
         // 픽셀 데이터를 텐서로 변환 (HWC → CHW, ImageNet 정규화)
         // Unity GetPixels()는 좌하단부터 읽으므로 y축 반전 필요
         for (int y = 0; y < height; y++)
@@ -568,16 +468,11 @@ public class AutonomousDrivingController : MonoBehaviour
     void OnDestroy()
     {
         frontInputTensor?.Dispose();
-        maskInputTensor?.Dispose();
         speedInputTensor?.Dispose();
         worker?.Dispose();
 
         if (frontRenderTexture != null) Destroy(frontRenderTexture);
-        // if (topRenderTexture != null) Destroy(topRenderTexture);
         if (frontTexture != null) Destroy(frontTexture);
-        if (maskTexture != null) Destroy(maskTexture);
-        // if (topTexture != null) Destroy(topTexture);
-        // if (topViewCameraObj != null) Destroy(topViewCameraObj);
     }
 
     void UpdateUI()
@@ -588,55 +483,44 @@ public class AutonomousDrivingController : MonoBehaviour
         {
             if (isInterventionActive)
             {
-                // 1. Mode Header (Yellow)
                 if (uiModeText != null)
                     uiModeText.text = $"<color=yellow> INTERVENTION (#{interventionCount})</color>";
 
-                // 2. Action / Main Info
                 if (uiActionText != null)
                 {
                     float remaining = autoResumeDelay - interventionTimer;
                     uiActionText.text = $"Return to AI in: {remaining:F1}s\nWASD Manual Control...";
                 }
 
-                // 3. Control Info (Empty or specific msg)
                 if (uiControlText != null)
                     uiControlText.text = "";
             }
             else
             {
-                // 1. Mode Header (Green)
                 if (uiModeText != null)
-                    uiModeText.text = "<color=#00FF00>● AUTONOMOUS (Speed-Aware)</color>";
+                    uiModeText.text = "<color=#00FF00>● AUTONOMOUS (Single View)</color>";
 
-                // 2. Action Info (Cyan)
                 if (uiActionText != null)
                     uiActionText.text = $"Action: <color=#00FFFF>{predictedAction}</color> ({confidence * 100:F1}%)";
 
-                // 3. Control Info (White)
                 if (uiControlText != null)
                     uiControlText.text = $"Steer: {appliedSteering:F2} | Throt: {appliedThrottle:F2}";
             }
 
-            // 4. Stats (Common)
             if (uiStatsText != null)
                 uiStatsText.text = $"Speed: {speed:F2} m/s | Interventions: {interventionCount}";
 
-            // 5. Guide (Footer)
             if (uiGuideText != null)
                 uiGuideText.text = "<color=grey>WASD: Intervention | P: Stop Auto</color>";
         }
         else
         {
-            // 1. Mode Header (Yellow)
             if (uiModeText != null)
                 uiModeText.text = "<color=yellow>○ MANUAL MODE</color>";
 
-            // 2. Action Info (White)
             if (uiActionText != null)
                 uiActionText.text = $"[{toggleKey}] Start Autonomous Mode";
 
-            // 3. Control Info (Cyan - Stats)
             if (uiControlText != null)
             {
                 if (interventionCount > 0)
@@ -645,7 +529,6 @@ public class AutonomousDrivingController : MonoBehaviour
                     uiControlText.text = "";
             }
 
-            // 4. Stats (Error Msg or empty)
             if (uiStatsText != null)
             {
                 if (!isModelLoaded)
@@ -654,7 +537,6 @@ public class AutonomousDrivingController : MonoBehaviour
                     uiStatsText.text = "";
             }
 
-            // 5. Guide
             if (uiGuideText != null)
                 uiGuideText.text = "";
         }

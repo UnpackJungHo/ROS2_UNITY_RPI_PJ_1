@@ -61,11 +61,9 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     public AutonomousDrivingController aiController;
 
     [Header("Image Settings")]
-    [Tooltip("Front View 이미지 너비")]
-    public int frontImageWidth = 200;
-
-    [Tooltip("Front View 이미지 높이 (PilotNet: 66)")]
-    public int frontImageHeight = 66;
+    [Tooltip("JPEG 품질 (front_1, front_2에 적용)")]
+    [Range(0, 100)]
+    public int jpegQuality = 85;
 
     [Header("Collection Settings")]
     public KeyCode recordKey = KeyCode.R;
@@ -80,9 +78,22 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     // Front View 카메라
     private Camera frontCamera;
 
-    // 렌더 텍스처
-    private RenderTexture frontRenderTexture;
-    private Texture2D frontCaptureTexture;
+    // ============================================================
+    // 4가지 이미지 조건용 렌더 텍스처
+    // front_1: 200x66 (JPEG 85)
+    // front_2: 320x120 (JPEG 85)
+    // front_3: 200x66 (PNG)
+    // front_4: 320x120 (PNG)
+    // ============================================================
+    private RenderTexture rt_small;      // 200x66
+    private RenderTexture rt_large;      // 320x120
+    private Texture2D tex_small;         // 200x66
+    private Texture2D tex_large;         // 320x120
+
+    private const int SMALL_WIDTH = 200;
+    private const int SMALL_HEIGHT = 66;
+    private const int LARGE_WIDTH = 320;
+    private const int LARGE_HEIGHT = 120;
 
     // 데이터 저장
     private string sessionFolder;
@@ -92,27 +103,49 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
     public class DrivingFrameV2
     {
+        // 분류 학습용
         public string frontImagePath;
         public int keyAction;           // KeyAction enum의 int 값
         public string keyActionName;    // 가독성을 위한 이름
         public float speed;             // m/s
         public float timestamp;
         public bool isIntervention;     // DAgger: 전문가 개입 프레임 여부
+
+        // 회귀 학습용 (조향/가속 연속값)
+        public float steeringInput;     // 조향 입력 [-1, 1]
+        public float throttleInput;     // 가속 입력 [-1, 1]
+        public float brakeInput;        // 브레이크 입력 [0, 1]
+        public float steeringAngle;     // 실제 조향각 (도)
+
+        // 추가 상태 정보 (고급 학습용)
+        public float acceleration;      // 현재 가속도 (m/s²)
+        public float motorRPM;          // 모터 RPM
+        public float slipRatio;         // 평균 슬립률
     }
 
     void Start()
     {
-        // 렌더 텍스처 초기화
-        frontRenderTexture = new RenderTexture(frontImageWidth, frontImageHeight, 24);
-        frontCaptureTexture = new Texture2D(frontImageWidth, frontImageHeight, TextureFormat.RGB24, false);
+        // ============================================================
+        // 4가지 조건용 렌더 텍스처 초기화
+        // ============================================================
+        // Small (200x66)
+        rt_small = new RenderTexture(SMALL_WIDTH, SMALL_HEIGHT, 24);
+        tex_small = new Texture2D(SMALL_WIDTH, SMALL_HEIGHT, TextureFormat.RGB24, false);
+        
+        // Large (320x120)
+        rt_large = new RenderTexture(LARGE_WIDTH, LARGE_HEIGHT, 24);
+        tex_large = new Texture2D(LARGE_WIDTH, LARGE_HEIGHT, TextureFormat.RGB24, false);
 
         AutoFindReferences();
         ValidateReferences();
 
-        Debug.Log($"[DataCollectorV2] Ready! (분류 기반)");
+        Debug.Log($"[DataCollectorV2] Ready! (분류 기반, 4가지 이미지 조건)");
+        Debug.Log($"  front_1: {SMALL_WIDTH}x{SMALL_HEIGHT} JPEG(Q{jpegQuality})");
+        Debug.Log($"  front_2: {LARGE_WIDTH}x{LARGE_HEIGHT} JPEG(Q{jpegQuality})");
+        Debug.Log($"  front_3: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG");
+        Debug.Log($"  front_4: {LARGE_WIDTH}x{LARGE_HEIGHT} PNG");
         Debug.Log($"  '{recordKey}' 키: 녹화 시작/중지");
         Debug.Log($"  '{saveKey}' 키: 데이터 저장");
-        Debug.Log($"  클래스: {string.Join(", ", KeyActionNames)}");
     }
 
     void AutoFindReferences()
@@ -213,7 +246,12 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         sessionFolder = Path.Combine(basePath, $"session_{DateTime.Now:yyyyMMdd_HHmmss}");
 
         Directory.CreateDirectory(sessionFolder);
-        Directory.CreateDirectory(Path.Combine(sessionFolder, "front"));
+        
+        // 4가지 이미지 조건별 폴더 생성
+        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_1"));  // 200x66 JPEG
+        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_2"));  // 320x120 JPEG
+        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_3"));  // 200x66 PNG
+        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_4"));  // 320x120 PNG
 
         frameBuffer.Clear();
         frameCount = 0;
@@ -222,6 +260,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         recordingStartTime = Time.time;
 
         Debug.Log($"[DataCollectorV2] ● 녹화 시작: {sessionFolder}");
+        Debug.Log($"  4가지 이미지 조건으로 동시 저장");
     }
 
     void StopRecording()
@@ -240,39 +279,97 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
 
         // NONE + 정지 상태는 스킵 (의미없는 데이터)
-        if (action == KeyAction.NONE && speed < 0.1f)
+        if (action == KeyAction.NONE && speed < 0.01f)
             return;
 
         string frameNum = $"{frameCount:D6}";
+        RenderTexture originalTarget = frontCamera.targetTexture;
 
-        // Front View 캡처
-        string frontImageName = $"frame_{frameNum}.jpg";
-        string frontImagePath = Path.Combine(sessionFolder, "front", frontImageName);
-        CaptureCamera(frontCamera, frontRenderTexture, frontCaptureTexture, frontImagePath);
+        // ============================================================
+        // front_1: 200x66 JPEG (Quality 85)
+        // ============================================================
+        string path1 = Path.Combine(sessionFolder, "front_1", $"frame_{frameNum}.jpg");
+        CaptureToTexture(frontCamera, rt_small, tex_small);
+        File.WriteAllBytes(path1, tex_small.EncodeToJPG(jpegQuality));
 
-        // 프레임 데이터 저장
-        // DAgger: AI 컨트롤러가 개입 상태인지 확인
+        // ============================================================
+        // front_2: 320x120 JPEG (Quality 85)
+        // ============================================================
+        string path2 = Path.Combine(sessionFolder, "front_2", $"frame_{frameNum}.jpg");
+        CaptureToTexture(frontCamera, rt_large, tex_large);
+        File.WriteAllBytes(path2, tex_large.EncodeToJPG(jpegQuality));
+
+        // ============================================================
+        // front_3: 200x66 PNG
+        // ============================================================
+        string path3 = Path.Combine(sessionFolder, "front_3", $"frame_{frameNum}.png");
+        // tex_small은 이미 캡처됨, 그대로 사용
+        File.WriteAllBytes(path3, tex_small.EncodeToPNG());
+
+        // ============================================================
+        // front_4: 320x120 PNG
+        // ============================================================
+        string path4 = Path.Combine(sessionFolder, "front_4", $"frame_{frameNum}.png");
+        // tex_large는 이미 캡처됨, 그대로 사용
+        File.WriteAllBytes(path4, tex_large.EncodeToPNG());
+
+        frontCamera.targetTexture = originalTarget;
+
+        // 프레임 데이터 저장 (front_1 기준으로 CSV 작성)
         bool isIntervening = (aiController != null && aiController.isAutonomousMode &&
                               (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) ||
                                Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D) ||
                                Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.LeftArrow) ||
                                Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.RightArrow)));
 
+        // WheelTest에서 회귀 학습용 데이터 추출
+        float steeringInput = wheelController != null ? wheelController.GetSteeringInput() : 0f;
+        float throttleInput = wheelController != null ? wheelController.GetThrottleInput() : 0f;
+        float brakeInput = wheelController != null ? wheelController.GetBrakeInput() : 0f;
+        float steeringAngle = wheelController != null ? wheelController.GetSteeringAngle() : 0f;
+        float acceleration = wheelController != null ? wheelController.GetAcceleration() : 0f;
+        float motorRPM = wheelController != null ? wheelController.GetMotorRPM() : 0f;
+
         DrivingFrameV2 frame = new DrivingFrameV2
         {
-            frontImagePath = $"front/{frontImageName}",
+            // 분류 학습용
+            frontImagePath = $"front_1/frame_{frameNum}.jpg",
             keyAction = (int)action,
             keyActionName = KeyActionNames[(int)action],
             speed = speed,
             timestamp = Time.time - recordingStartTime,
-            isIntervention = isIntervening
+            isIntervention = isIntervening,
+
+            // 회귀 학습용
+            steeringInput = steeringInput,
+            throttleInput = throttleInput,
+            brakeInput = brakeInput,
+            steeringAngle = steeringAngle,
+
+            // 추가 상태 정보
+            acceleration = acceleration,
+            motorRPM = motorRPM
         };
 
         frameBuffer.Add(frame);
         frameCount++;
 
         if (frameCount % 100 == 0)
-            Debug.Log($"[DataCollectorV2] {frameCount} frames captured");
+            Debug.Log($"[DataCollectorV2] {frameCount} frames captured (x4 formats)");
+    }
+
+    /// <summary>
+    /// 카메라 렌더링 결과를 텍스처로 캡처
+    /// </summary>
+    void CaptureToTexture(Camera cam, RenderTexture rt, Texture2D tex)
+    {
+        cam.targetTexture = rt;
+        cam.Render();
+
+        RenderTexture.active = rt;
+        tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+        tex.Apply();
+        RenderTexture.active = null;
     }
 
     void CaptureCamera(Camera cam, RenderTexture rt, Texture2D tex, string path)
@@ -289,7 +386,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
         cam.targetTexture = originalTarget;
 
-        byte[] bytes = tex.EncodeToJPG(85);
+        byte[] bytes = tex.EncodeToPNG();
         File.WriteAllBytes(path, bytes);
     }
 
@@ -301,46 +398,78 @@ public class DrivingDataCollectorV2 : MonoBehaviour
             return;
         }
 
-        // CSV 저장 (intervention 컴럼 추가)
+        // CSV 저장 (분류 + 회귀 + 상태 정보 포함)
         string csvPath = Path.Combine(sessionFolder, "driving_log.csv");
         using (StreamWriter writer = new StreamWriter(csvPath))
         {
-            // 헤더
-            writer.WriteLine("front_image,key_action,key_action_name,speed,timestamp,intervention");
+            // 헤더 (분류 + 회귀 + 추가 상태)
+            writer.WriteLine("front_image,key_action,key_action_name,speed,timestamp,intervention," +
+                           "steering_input,throttle_input,brake_input,steering_angle," +
+                           "acceleration,motor_rpm,slip_ratio");
 
             // 데이터
             foreach (var frame in frameBuffer)
             {
                 int intervention = frame.isIntervention ? 1 : 0;
-                writer.WriteLine($"{frame.frontImagePath},{frame.keyAction},{frame.keyActionName},{frame.speed:F6},{frame.timestamp:F6},{intervention}");
+                writer.WriteLine($"{frame.frontImagePath},{frame.keyAction},{frame.keyActionName}," +
+                               $"{frame.speed:F6},{frame.timestamp:F6},{intervention}," +
+                               $"{frame.steeringInput:F6},{frame.throttleInput:F6},{frame.brakeInput:F6},{frame.steeringAngle:F6}," +
+                               $"{frame.acceleration:F6},{frame.motorRPM:F2},{frame.slipRatio:F6}");
             }
         }
 
-        // 클래스 분포 계산
+        // 클래스 분포 및 통계 계산
         int[] classCounts = new int[7];
-        float totalSpeed = 0f;
-        float minSpeed = float.MaxValue;
-        float maxSpeed = float.MinValue;
+        float totalSpeed = 0f, minSpeed = float.MaxValue, maxSpeed = float.MinValue;
+        float totalSteering = 0f, minSteering = float.MaxValue, maxSteering = float.MinValue;
+        float totalThrottle = 0f, minThrottle = float.MaxValue, maxThrottle = float.MinValue;
+        float totalAccel = 0f, minAccel = float.MaxValue, maxAccel = float.MinValue;
 
         foreach (var frame in frameBuffer)
         {
             classCounts[frame.keyAction]++;
+
+            // 속도 통계
             totalSpeed += frame.speed;
             minSpeed = Mathf.Min(minSpeed, frame.speed);
             maxSpeed = Mathf.Max(maxSpeed, frame.speed);
+
+            // 조향 통계
+            totalSteering += frame.steeringInput;
+            minSteering = Mathf.Min(minSteering, frame.steeringInput);
+            maxSteering = Mathf.Max(maxSteering, frame.steeringInput);
+
+            // 가속 통계
+            totalThrottle += frame.throttleInput;
+            minThrottle = Mathf.Min(minThrottle, frame.throttleInput);
+            maxThrottle = Mathf.Max(maxThrottle, frame.throttleInput);
+
+            // 가속도 통계
+            totalAccel += frame.acceleration;
+            minAccel = Mathf.Min(minAccel, frame.acceleration);
+            maxAccel = Mathf.Max(maxAccel, frame.acceleration);
         }
 
         int total = frameBuffer.Count;
         float avgSpeed = totalSpeed / total;
+        float avgSteering = totalSteering / total;
+        float avgThrottle = totalThrottle / total;
+        float avgAccel = totalAccel / total;
 
         // 메타데이터 JSON 저장
         string metaPath = Path.Combine(sessionFolder, "metadata.json");
         string metaJson = $@"{{
-    ""version"": ""v2_classification"",
+    ""version"": ""v3_unified"",
+    ""description"": ""분류 + 회귀 통합 데이터셋"",
     ""total_frames"": {total},
     ""num_classes"": 7,
     ""class_names"": [""FORWARD"", ""FORWARD_LEFT"", ""FORWARD_RIGHT"", ""LEFT"", ""RIGHT"", ""BACKWARD"", ""NONE""],
-    ""front_image_size"": {{ ""width"": {frontImageWidth}, ""height"": {frontImageHeight} }},
+    ""image_conditions"": {{
+        ""front_1"": {{ ""width"": {SMALL_WIDTH}, ""height"": {SMALL_HEIGHT}, ""format"": ""JPEG"", ""quality"": {jpegQuality} }},
+        ""front_2"": {{ ""width"": {LARGE_WIDTH}, ""height"": {LARGE_HEIGHT}, ""format"": ""JPEG"", ""quality"": {jpegQuality} }},
+        ""front_3"": {{ ""width"": {SMALL_WIDTH}, ""height"": {SMALL_HEIGHT}, ""format"": ""PNG"" }},
+        ""front_4"": {{ ""width"": {LARGE_WIDTH}, ""height"": {LARGE_HEIGHT}, ""format"": ""PNG"" }}
+    }},
     ""capture_fps"": {1f / captureInterval:F1},
     ""created"": ""{DateTime.Now:yyyy-MM-dd HH:mm:ss}"",
     ""class_distribution"": {{
@@ -356,16 +485,31 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         ""min"": {minSpeed:F4},
         ""max"": {maxSpeed:F4},
         ""avg"": {avgSpeed:F4}
+    }},
+    ""steering_stats"": {{
+        ""min"": {minSteering:F4},
+        ""max"": {maxSteering:F4},
+        ""avg"": {avgSteering:F4}
+    }},
+    ""throttle_stats"": {{
+        ""min"": {minThrottle:F4},
+        ""max"": {maxThrottle:F4},
+        ""avg"": {avgThrottle:F4}
+    }},
+    ""acceleration_stats"": {{
+        ""min"": {minAccel:F4},
+        ""max"": {maxAccel:F4},
+        ""avg"": {avgAccel:F4}
     }}
 }}";
         File.WriteAllText(metaPath, metaJson);
 
         // 콘솔 출력
-        Debug.Log($"[DataCollectorV2] ✓ 저장 완료!");
+        Debug.Log($"[DataCollectorV3] ✓ 저장 완료! (분류 + 회귀 통합)");
         Debug.Log($"  경로: {csvPath}");
         Debug.Log($"  프레임: {total}");
         Debug.Log($"  ═══════════════════════════════════════");
-        Debug.Log($"  [클래스 분포]");
+        Debug.Log($"  [클래스 분포 - 분류 학습용]");
         for (int i = 0; i < 7; i++)
         {
             float ratio = (float)classCounts[i] / total * 100f;
@@ -373,13 +517,20 @@ public class DrivingDataCollectorV2 : MonoBehaviour
             Debug.Log($"    {KeyActionNames[i],-14}: {classCounts[i],5} ({ratio,5:F1}%) {bar}");
         }
         Debug.Log($"  ═══════════════════════════════════════");
-        Debug.Log($"  평균 속도: {avgSpeed:F2} m/s");
+        Debug.Log($"  [회귀 학습용 데이터 통계]");
+        Debug.Log($"    Steering: [{minSteering:F2}, {maxSteering:F2}] avg={avgSteering:F3}");
+        Debug.Log($"    Throttle: [{minThrottle:F2}, {maxThrottle:F2}] avg={avgThrottle:F3}");
+        Debug.Log($"    Speed:    [{minSpeed:F2}, {maxSpeed:F2}] avg={avgSpeed:F2} m/s");
+        Debug.Log($"    Accel:    [{minAccel:F2}, {maxAccel:F2}] avg={avgAccel:F2} m/s²");
+        Debug.Log($"  ═══════════════════════════════════════");
     }
 
     void OnDestroy()
     {
-        if (frontRenderTexture != null) Destroy(frontRenderTexture);
-        if (frontCaptureTexture != null) Destroy(frontCaptureTexture);
+        if (rt_small != null) Destroy(rt_small);
+        if (rt_large != null) Destroy(rt_large);
+        if (tex_small != null) Destroy(tex_small);
+        if (tex_large != null) Destroy(tex_large);
     }
 
     void UpdateUI()
