@@ -1,7 +1,7 @@
 {
-  "model_version": "speed_aware_v2",
+  "model_version": "speed_aware_single_view_v1",
   "backbone": "resnet18",
-  "speed_normalize": 5.0,
+  "speed_normalize": 3.0,
   "class_names": [
     "FORWARD",
     "FORWARD_LEFT",
@@ -12,10 +12,6 @@
     "NONE"
   ],
   "front_size": [
-    66,
-    200
-  ],
-  "mask_size": [
     66,
     200
   ]

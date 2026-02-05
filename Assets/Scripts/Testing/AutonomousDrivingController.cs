@@ -324,11 +324,13 @@ public class AutonomousDrivingController : MonoBehaviour
             {
                 using (Tensor<float> cpuTensor = outputTensor.ReadbackAndClone())
                 {
-                    // 디버그: 로짓 값 출력
+                    /* 
+                    //디버그: 로짓 값 출력
                     string logitsStr = "";
                     for (int i = 0; i < 7; i++)
                         logitsStr += $"{cpuTensor[i]:F2}, ";
                     Debug.Log($"[AI] Logits: [{logitsStr}]");
+                    */
 
                     // Softmax 적용하여 확률로 변환 + argmax
                     float maxVal = float.MinValue;

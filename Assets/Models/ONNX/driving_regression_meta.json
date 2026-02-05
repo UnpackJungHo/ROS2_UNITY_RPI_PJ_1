@@ -1,0 +1,25 @@
+{
+  "model_version": "speed_aware_regression_v1",
+  "model_type": "regression",
+  "backbone": "resnet18",
+  "speed_normalize": 3.0,
+  "steering_loss_weight": 5.0,
+  "output_names": [
+    "steering",
+    "throttle"
+  ],
+  "output_ranges": [
+    [
+      -1.0,
+      1.0
+    ],
+    [
+      0.0,
+      1.0
+    ]
+  ],
+  "front_size": [
+    66,
+    200
+  ]
+}

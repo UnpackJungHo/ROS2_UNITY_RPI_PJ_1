@@ -2,6 +2,8 @@ using UnityEngine;
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Threading;
 using TMPro;
 
 /// <summary>
@@ -69,6 +71,8 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     public KeyCode recordKey = KeyCode.R;
     public KeyCode saveKey = KeyCode.T;
     public float captureInterval = 0.05f;  // 20 FPS
+    [Tooltip("W 키를 누르면 자동으로 녹화 시작")]
+    public bool autoStartOnMove = true;
 
     [Header("Status (Read Only)")]
     public bool isRecording = false;
@@ -100,6 +104,19 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     private List<DrivingFrameV2> frameBuffer = new List<DrivingFrameV2>();
     private float lastCaptureTime;
     private float recordingStartTime;
+
+    // 비동기 파일 I/O
+    private struct WriteTask
+    {
+        public string path;
+        public byte[] data;
+    }
+    private ConcurrentQueue<WriteTask> writeQueue = new ConcurrentQueue<WriteTask>();
+    private Thread writeThread;
+    private volatile bool isWriteThreadRunning;
+
+    // 입력 캐싱 (Update → FixedUpdate 전달용)
+    private bool cachedIsIntervening;
 
     public class DrivingFrameV2
     {
@@ -138,6 +155,12 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
         AutoFindReferences();
         ValidateReferences();
+
+        // 비동기 파일 쓰기 스레드 시작
+        isWriteThreadRunning = true;
+        writeThread = new Thread(WriteThreadLoop);
+        writeThread.IsBackground = true;
+        writeThread.Start();
 
         Debug.Log($"[DataCollectorV2] Ready! (분류 기반, 4가지 이미지 조건)");
         Debug.Log($"  front_1: {SMALL_WIDTH}x{SMALL_HEIGHT} JPEG(Q{jpegQuality})");
@@ -188,21 +211,37 @@ public class DrivingDataCollectorV2 : MonoBehaviour
                 StopRecording();
         }
 
+        // W키 누를 시 자동 녹화 시작 (autoStartOnMove가 true이고 녹화 중이 아닐 때)
+        if (autoStartOnMove && !isRecording)
+        {
+            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                StartRecording();
+            }
+        }
+
         // 저장
         if (Input.GetKeyDown(saveKey))
             SaveDataset();
 
-        // Update currentAction for UI display (Record or not)
+        // 입력 상태 캐싱 (FixedUpdate에서 사용)
         currentAction = GetCurrentKeyAction();
-
-        // 녹화 중이면 캕처
-        if (isRecording && Time.time - lastCaptureTime >= captureInterval)
-        {
-            CaptureFrame();
-            lastCaptureTime = Time.time;
-        }
+        cachedIsIntervening = aiController != null && aiController.isAutonomousMode &&
+                              (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) ||
+                               Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D) ||
+                               Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.LeftArrow) ||
+                               Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.RightArrow));
 
         UpdateUI();
+    }
+
+    void FixedUpdate()
+    {
+        if (isRecording && Time.fixedTime - lastCaptureTime >= captureInterval)
+        {
+            CaptureFrame();
+            lastCaptureTime = Time.fixedTime;
+        }
     }
 
     /// <summary>
@@ -275,7 +314,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     {
         if (frontCamera == null) return;
 
-        KeyAction action = GetCurrentKeyAction();
+        KeyAction action = currentAction;  // Update()에서 캐싱된 입력 사용
         float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
 
         // NONE + 정지 상태는 스킵 (의미없는 데이터)
@@ -285,42 +324,23 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         string frameNum = $"{frameCount:D6}";
         RenderTexture originalTarget = frontCamera.targetTexture;
 
-        // ============================================================
-        // front_1: 200x66 JPEG (Quality 85)
-        // ============================================================
-        string path1 = Path.Combine(sessionFolder, "front_1", $"frame_{frameNum}.jpg");
+        // 텍스처 캡처 (메인 스레드에서 수행)
         CaptureToTexture(frontCamera, rt_small, tex_small);
-        File.WriteAllBytes(path1, tex_small.EncodeToJPG(jpegQuality));
-
-        // ============================================================
-        // front_2: 320x120 JPEG (Quality 85)
-        // ============================================================
-        string path2 = Path.Combine(sessionFolder, "front_2", $"frame_{frameNum}.jpg");
         CaptureToTexture(frontCamera, rt_large, tex_large);
-        File.WriteAllBytes(path2, tex_large.EncodeToJPG(jpegQuality));
 
-        // ============================================================
-        // front_3: 200x66 PNG
-        // ============================================================
-        string path3 = Path.Combine(sessionFolder, "front_3", $"frame_{frameNum}.png");
-        // tex_small은 이미 캡처됨, 그대로 사용
-        File.WriteAllBytes(path3, tex_small.EncodeToPNG());
-
-        // ============================================================
-        // front_4: 320x120 PNG
-        // ============================================================
-        string path4 = Path.Combine(sessionFolder, "front_4", $"frame_{frameNum}.png");
-        // tex_large는 이미 캡처됨, 그대로 사용
-        File.WriteAllBytes(path4, tex_large.EncodeToPNG());
+        // 인코딩 (메인 스레드에서 수행 - Unity API 제약)
+        byte[] jpgSmall = tex_small.EncodeToJPG(jpegQuality);
+        byte[] jpgLarge = tex_large.EncodeToJPG(jpegQuality);
+        byte[] pngSmall = tex_small.EncodeToPNG();
+        byte[] pngLarge = tex_large.EncodeToPNG();
 
         frontCamera.targetTexture = originalTarget;
 
-        // 프레임 데이터 저장 (front_1 기준으로 CSV 작성)
-        bool isIntervening = (aiController != null && aiController.isAutonomousMode &&
-                              (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) ||
-                               Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D) ||
-                               Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.LeftArrow) ||
-                               Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.RightArrow)));
+        // 비동기 파일 쓰기 큐에 추가 (백그라운드 스레드에서 처리)
+        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_1", $"frame_{frameNum}.jpg"), data = jpgSmall });
+        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_2", $"frame_{frameNum}.jpg"), data = jpgLarge });
+        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_3", $"frame_{frameNum}.png"), data = pngSmall });
+        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_4", $"frame_{frameNum}.png"), data = pngLarge });
 
         // WheelTest에서 회귀 학습용 데이터 추출
         float steeringInput = wheelController != null ? wheelController.GetSteeringInput() : 0f;
@@ -337,8 +357,8 @@ public class DrivingDataCollectorV2 : MonoBehaviour
             keyAction = (int)action,
             keyActionName = KeyActionNames[(int)action],
             speed = speed,
-            timestamp = Time.time - recordingStartTime,
-            isIntervention = isIntervening,
+            timestamp = Time.fixedTime - recordingStartTime,
+            isIntervention = cachedIsIntervening,
 
             // 회귀 학습용
             steeringInput = steeringInput,
@@ -397,6 +417,10 @@ public class DrivingDataCollectorV2 : MonoBehaviour
             Debug.LogWarning("[DataCollectorV2] 저장할 데이터가 없습니다!");
             return;
         }
+
+        // 남은 이미지 파일 쓰기 완료 대기
+        while (!writeQueue.IsEmpty)
+            Thread.Sleep(10);
 
         // CSV 저장 (분류 + 회귀 + 상태 정보 포함)
         string csvPath = Path.Combine(sessionFolder, "driving_log.csv");
@@ -527,10 +551,37 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
     void OnDestroy()
     {
+        // 쓰기 스레드 종료 및 잔여 큐 처리 대기
+        isWriteThreadRunning = false;
+        if (writeThread != null && writeThread.IsAlive)
+            writeThread.Join(3000);
+
         if (rt_small != null) Destroy(rt_small);
         if (rt_large != null) Destroy(rt_large);
         if (tex_small != null) Destroy(tex_small);
         if (tex_large != null) Destroy(tex_large);
+    }
+
+    void WriteThreadLoop()
+    {
+        while (isWriteThreadRunning || !writeQueue.IsEmpty)
+        {
+            if (writeQueue.TryDequeue(out WriteTask task))
+            {
+                try
+                {
+                    File.WriteAllBytes(task.path, task.data);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[DataCollectorV2] 파일 쓰기 실패: {task.path}\n{e.Message}");
+                }
+            }
+            else
+            {
+                Thread.Sleep(1);
+            }
+        }
     }
 
     void UpdateUI()
