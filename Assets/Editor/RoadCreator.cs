@@ -4,6 +4,18 @@ using System.Collections.Generic;
 
 
 /// <summary>
+/// 보상 구역 정보
+/// </summary>
+[System.Serializable]
+public class RewardZoneInfo
+{
+    public string zoneName = "Zone";
+    public float score = 0f;
+    public float startOffset = 0f;
+    public float endOffset = 1f;
+}
+
+/// <summary>
 /// 도로 데이터를 저장하는 컴포넌트
 /// </summary>
 public class RoadData : MonoBehaviour
@@ -22,6 +34,12 @@ public class RoadData : MonoBehaviour
     public float curbWidth = 0.5f;
     public float curbHeight = 0.2f;
     public Material curbMaterial;
+
+    // 보상 구역 설정
+    [Header("Reward Zones")]
+    public List<RewardZoneInfo> rewardZones = new List<RewardZoneInfo>();
+    // public string baseZoneName = "BaseZone"; // Deprecated
+    // public float baseZoneScore = 1f; // Deprecated
 }
 
 /// <summary>
@@ -48,6 +66,11 @@ public class RoadCreator : EditorWindow
     private float curbHeight = 0.2f;
     private Material curbMaterial;
     
+    // 보상 구역 설정
+    private List<RewardZoneInfo> rewardZones = new List<RewardZoneInfo>();
+    private Vector2 zoneListScrollPosition;
+    private bool showRewardZones = false;
+
     // 포인트 선택 (삽입 기능용)
     private List<int> selectedPointIndices = new List<int>();
     private const float POINT_SELECT_DISTANCE = 30f; // 포인트 선택 반경 (픽셀 단위)
@@ -105,9 +128,25 @@ public class RoadCreator : EditorWindow
         curbHeight = roadData.curbHeight;
         curbMaterial = roadData.curbMaterial;
         
+        // Reward Zone Data Load
+        rewardZones = new List<RewardZoneInfo>();
+        if (roadData.rewardZones != null)
+        {
+            foreach (var z in roadData.rewardZones)
+                rewardZones.Add(new RewardZoneInfo { 
+                    zoneName = z.zoneName, 
+                    score = z.score,
+                    startOffset = z.startOffset,
+                    endOffset = z.endOffset
+                });
+        }
+        
+        // 마이그레이션: 기존 데이터에 baseZoneName이 남아있거나 구형 구조일 경우 처리 로직이 필요할 수 있음
+        // 하지만 여기서는 단순 로드만 수행. 새로운 UI에서 조정하도록 유도.
+
         currentRoadObject = roadData.gameObject;
         selectedPointIndices.Clear();
-        
+
         Debug.Log($"Road Creator: '{roadData.name}' 로드 완료 ({controlPoints.Count} 포인트)");
         SceneView.RepaintAll();
         Repaint();
@@ -288,6 +327,9 @@ public class RoadCreator : EditorWindow
         {
             EditorGUILayout.HelpBox("도로가 루프로 연결되었습니다.", MessageType.Info);
         }
+
+        // 보상 구역 UI
+        DrawRewardZoneUI();
     }
     
     private void OnSceneGUI(SceneView sceneView)
@@ -345,6 +387,12 @@ public class RoadCreator : EditorWindow
             Handles.color = Color.green;
             List<Vector3> splinePoints = GenerateSplinePoints();
             Handles.DrawPolyLine(splinePoints.ToArray());
+        }
+
+        // 보상 구역 시각화
+        if (showRewardZones && controlPoints.Count >= 2)
+        {
+            DrawRewardZoneGizmos();
         }
     }
     
@@ -575,9 +623,22 @@ public class RoadCreator : EditorWindow
                 roadData.curbWidth = curbWidth;
                 roadData.curbHeight = curbHeight;
                 roadData.curbMaterial = curbMaterial;
+
+                // Reward Zone Data
+                roadData.rewardZones = new List<RewardZoneInfo>();
+                foreach (var z in rewardZones)
+                    roadData.rewardZones.Add(new RewardZoneInfo { 
+                        zoneName = z.zoneName, 
+                        score = z.score,
+                        startOffset = z.startOffset,
+                        endOffset = z.endOffset
+                    });
+                
+                // roadData.baseZoneName = baseZoneName; // Deprecated
+                // roadData.baseZoneScore = baseZoneScore; // Deprecated
             }
         }
-        
+
         UpdateRoadMesh();
     }
     
@@ -626,7 +687,10 @@ public class RoadCreator : EditorWindow
         
         // 2. 턱(Curb) 메쉬 업데이트
         UpdateCurbMeshes(updateCollider, logicCurveResolution);
-        
+
+        // 3. 보상 구역 업데이트
+        UpdateRewardZones(updateCollider, logicCurveResolution);
+
         SceneView.RepaintAll();
     }
 
@@ -1139,6 +1203,7 @@ public class RoadCreator : EditorWindow
     private void ClearAll()
     {
         controlPoints.Clear();
+        rewardZones.Clear();
         
         if (currentRoadObject != null)
         {
@@ -1152,6 +1217,15 @@ public class RoadCreator : EditorWindow
     private void StartNewRoad()
     {
         controlPoints.Clear();
+        controlPoints.Clear();
+        rewardZones.Clear();
+        // 기본값으로 전체 도로를 덮는 구역 하나 추가해줌
+        rewardZones.Add(new RewardZoneInfo {
+            zoneName = "BaseZone",
+            score = 1f,
+            startOffset = 0f,
+            endOffset = roadWidth
+        });
         currentRoadObject = null;
         isLooped = false;
         selectedPointIndices.Clear();
@@ -1193,10 +1267,25 @@ public class RoadCreator : EditorWindow
             curbWidth = roadData.curbWidth;
             curbHeight = roadData.curbHeight;
             curbMaterial = roadData.curbMaterial;
-            
+
+            // Reward Zone 로드
+            rewardZones = new List<RewardZoneInfo>();
+            if (roadData.rewardZones != null)
+            {
+                foreach (var z in roadData.rewardZones)
+                    rewardZones.Add(new RewardZoneInfo { 
+                        zoneName = z.zoneName, 
+                        score = z.score,
+                        startOffset = z.startOffset,
+                        endOffset = z.endOffset
+                    });
+            }
+            // baseZoneName = roadData.baseZoneName; // Deprecated
+            // baseZoneScore = roadData.baseZoneScore; // Deprecated
+
             currentRoadObject = selected;
             selectedPointIndices.Clear();
-            
+
             Debug.Log($"Road Creator: '{selected.name}'에서 {controlPoints.Count}개 포인트 로드됨");
         }
         else
@@ -1246,14 +1335,384 @@ public class RoadCreator : EditorWindow
         roadData.hasCurbs = hasCurbs;
         roadData.curbWidth = curbWidth;
         roadData.curbHeight = curbHeight;
-        roadData.curbHeight = curbHeight;
         roadData.curbMaterial = curbMaterial;
-        
+
+        // Reward Zone Data Save
+        roadData.rewardZones = new List<RewardZoneInfo>();
+        foreach (var z in rewardZones)
+            roadData.rewardZones.Add(new RewardZoneInfo { 
+                zoneName = z.zoneName, 
+                score = z.score,
+                startOffset = z.startOffset,
+                endOffset = z.endOffset
+            });
+        // roadData.baseZoneName = baseZoneName; // Deprecated
+        // roadData.baseZoneScore = baseZoneScore; // Deprecated
+
         EditorUtility.SetDirty(roadData);
         
         // 데이터 저장 후 메쉬 업데이트하여 변경사항 즉시 반영 (Fix 1)
         UpdateRoadMesh(true);
         
         Debug.Log($"Road Creator: 도로 데이터 저장됨 ({controlPoints.Count}개 포인트)");
+    }
+
+    // ========================================
+    // 보상 구역 (Reward Zone) 관련 메서드
+    // ========================================
+
+    private void DrawRewardZoneUI()
+    {
+        EditorGUILayout.Space(10);
+        showRewardZones = EditorGUILayout.Foldout(showRewardZones, "보상 구역 (Reward Zones)", true, EditorStyles.foldoutHeader);
+
+        if (!showRewardZones) return;
+
+        EditorGUI.indentLevel++;
+
+        EditorGUILayout.LabelField($"구역 목록 ({rewardZones.Count}개)", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox($"전체 도로 너비: 0 ~ {roadWidth}\n각 구역의 시작(Start)과 끝(End) 위치를 지정하세요.", MessageType.Info);
+
+        zoneListScrollPosition = EditorGUILayout.BeginScrollView(
+            zoneListScrollPosition,
+            GUILayout.Height(Mathf.Min(rewardZones.Count * 110 + 50, 300))); // 높이 약간 늘림
+
+        int removeIndex = -1;
+        for (int i = 0; i < rewardZones.Count; i++)
+        {
+            var zone = rewardZones[i];
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField($"구역 {i}", EditorStyles.boldLabel, GUILayout.Width(60));
+
+            GUI.backgroundColor = Color.red;
+            if (GUILayout.Button("X", GUILayout.Width(25)))
+            {
+                removeIndex = i;
+            }
+            GUI.backgroundColor = Color.white;
+            EditorGUILayout.EndHorizontal();
+
+            // 이름/점수
+            zone.zoneName = EditorGUILayout.TextField("이름", zone.zoneName);
+            zone.score = EditorGUILayout.FloatField("점수", zone.score);
+            
+            // 범위 설정 (Slider)
+            EditorGUILayout.LabelField($"범위: {zone.startOffset:F1} ~ {zone.endOffset:F1} (폭: {zone.endOffset - zone.startOffset:F1})");
+            EditorGUILayout.MinMaxSlider("범위 조절", ref zone.startOffset, ref zone.endOffset, 0f, roadWidth);
+            
+            // 정밀 조절용 FloatField
+            EditorGUILayout.BeginHorizontal();
+            float newStart = EditorGUILayout.FloatField("Start", zone.startOffset);
+            float newEnd = EditorGUILayout.FloatField("End", zone.endOffset);
+            EditorGUILayout.EndHorizontal();
+            
+            // 유효성 검사 및 Clamp
+            zone.startOffset = Mathf.Clamp(newStart, 0f, roadWidth);
+            zone.endOffset = Mathf.Clamp(newEnd, zone.startOffset, roadWidth); // End는 Start보다 작을 수 없음
+
+            EditorGUILayout.EndVertical();
+        }
+        EditorGUILayout.EndScrollView();
+
+        if (removeIndex >= 0)
+        {
+            rewardZones.RemoveAt(removeIndex);
+            UpdateRoadMesh(true);
+        }
+
+        if (GUILayout.Button("+ 새 구역 추가"))
+        {
+            // 기본적으로 남는 공간이나 끝부분에 추가하도록 스마트하게 할 수도 있지만, 
+            // 일단은 전체 범위 또는 0~1 정도로 기본 생성
+            rewardZones.Add(new RewardZoneInfo
+            {
+                zoneName = $"Zone{rewardZones.Count}",
+                startOffset = 0f,
+                endOffset = Mathf.Min(1f, roadWidth),
+                score = 0f
+            });
+            UpdateRoadMesh(true);
+        }
+
+        EditorGUI.indentLevel--;
+    }
+
+    private void UpdateRewardZones(bool updateCollider, int tempResolution)
+    {
+        if (currentRoadObject == null) return;
+
+        Transform zoneParent = currentRoadObject.transform.Find("RewardZones");
+
+        // 기존 구역 오브젝트 정리
+        if (zoneParent != null)
+        {
+            for (int i = zoneParent.childCount - 1; i >= 0; i--)
+            {
+                DestroyImmediate(zoneParent.GetChild(i).gameObject);
+            }
+        }
+
+
+
+        if (rewardZones.Count == 0) return;
+
+        // 부모 오브젝트 생성
+        if (zoneParent == null)
+        {
+            GameObject go = new GameObject("RewardZones");
+            go.transform.SetParent(currentRoadObject.transform, false);
+            zoneParent = go.transform;
+        }
+
+        // 임시 해상도 적용
+        int originalRes = curveResolution;
+        curveResolution = tempResolution;
+
+        // 구역들 생성 (Segmented)
+        List<Vector3> splinePoints = GenerateSplinePoints();
+        if (splinePoints.Count < 2) 
+        {
+            curveResolution = originalRes;
+            return;
+        }
+
+        // 최적화: 세그먼트 크기 조절
+        // "라인에 잘 맞게" -> 세그먼트를 잘게 쪼개야 함 (Convex Hull 오차를 줄임)
+        // 너무 잘게 쪼개면 성능 저하 -> 적절한 타협점 (여기선 2~4 포인트 정도 권장)
+        // curveResolution이 보통 10이면, 1/3 ~ 1/2 정도로 설정
+        int pointsPerSegment = Mathf.Max(2, curveResolution / 3); 
+
+        for (int i = 0; i < rewardZones.Count; i++)
+        {
+            var zone = rewardZones[i];
+            
+            float internalStart = -roadWidth / 2f + zone.startOffset;
+            float internalEnd = -roadWidth / 2f + zone.endOffset;
+            
+            if (internalEnd <= internalStart) continue;
+
+            // Zone 부모 오브젝트 생성 (빈 껍데기, 컴포넌트 없음)
+            GameObject zoneObj = new GameObject(zone.zoneName);
+            zoneObj.transform.SetParent(zoneParent, false);
+            
+            // 세그먼트 생성 루프
+            int totalSegments = (splinePoints.Count - 1) / pointsPerSegment;
+            if ((splinePoints.Count - 1) % pointsPerSegment != 0) totalSegments++;
+
+            for (int s = 0; s < totalSegments; s++)
+            {
+                int startIndex = s * pointsPerSegment;
+                int endIndex = Mathf.Min(startIndex + pointsPerSegment, splinePoints.Count - 1);
+                
+                // 루프인 경우 마지막 세그먼트 처리 주의
+                if (isLooped && s == totalSegments - 1)
+                {
+                    // 마지막 점 -> 첫 점 연결은 별도 처리가 필요하거나, 
+                    // GenerateSplinePoints()가 이미 루프를 돌아서 마지막 점 == 첫 점으로 처리되어 있으면 
+                    // 그냥 이어주면 됨. (현재 구현은 마지막 점 == 첫 점 아님, 마지막 점과 첫 점을 잇는 로직 필요)
+                    // 하지만 GenerateSplinePoints 로직상 루프면 마지막에 시작점을 추가함.
+                }
+
+                CreateZoneSegment(zoneObj.transform, zone.zoneName, s, zone.score, 
+                    internalStart, internalEnd, splinePoints, startIndex, endIndex, updateCollider);
+            }
+        }
+
+        curveResolution = originalRes;
+    }
+
+    private void CreateZoneSegment(Transform parent, string zoneName, int index, float score,
+        float leftOffset, float rightOffset, List<Vector3> allPoints, int startIndex, int endIndex, bool updateCollider)
+    {
+        // 포인트가 부족하면 패스
+        if (endIndex <= startIndex) return;
+
+        // 세그먼트용 포인트 리스트 추출
+        List<Vector3> segmentPoints = new List<Vector3>();
+        for (int i = startIndex; i <= endIndex; i++)
+        {
+            segmentPoints.Add(allPoints[i]);
+        }
+        
+        // 메쉬 생성
+        Mesh mesh = GenerateSegmentMesh(segmentPoints, leftOffset, rightOffset, startIndex, allPoints.Count);
+        if (mesh.vertexCount == 0) return;
+
+        GameObject go = new GameObject($"{zoneName}_Seg{index}");
+        go.transform.SetParent(parent, false);
+
+        // 디버깅용 렌더러 (끄기)
+        MeshFilter mf = go.AddComponent<MeshFilter>();
+        MeshRenderer mr = go.AddComponent<MeshRenderer>();
+        mr.enabled = false;
+        mf.sharedMesh = mesh;
+
+        // Collider (Convex Trigger)
+        if (updateCollider)
+        {
+            MeshCollider mc = go.AddComponent<MeshCollider>();
+            mc.sharedMesh = mesh;
+            mc.convex = true;     // 세그먼트는 단순하므로 Convex 사용 가능
+            mc.isTrigger = true;  // Trigger로 작동
+        }
+
+        // RewardZone 컴포넌트는 각 세그먼트에 붙여야 충돌 감지 가능
+        RewardZone rz = go.AddComponent<RewardZone>();
+        rz.zoneName = zoneName;
+        rz.score = score;
+    }
+
+    private Mesh GenerateSegmentMesh(List<Vector3> points, float leftOffset, float rightOffset, int globalStartIndex, int totalPoints)
+    {
+        if (points.Count < 2) return new Mesh();
+
+        Mesh mesh = new Mesh();
+        mesh.name = "SegmentMesh";
+
+        List<Vector3> vertices = new List<Vector3>();
+        List<int> triangles = new List<int>();
+
+        float heightTop = 1.0f;
+        float heightBottom = -1.0f;
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector3 point = points[i];
+            Vector3 forward;
+            
+            // Forward 계산 (전체 spline 컨텍스트 필요하지 않게 근사값 사용)
+            // 세그먼트 내부에서는 i, i+1 사용.
+            // 끝점에서는 이전 점 사용.
+            
+            // 더 정확하려면 전체 리스트를 참조해야 하지만, 
+            // 여기서는 세그먼트가 연속적이므로 단순화:
+            
+            if (i < points.Count - 1)
+            {
+                forward = (points[i+1] - point).normalized;
+            }
+            else
+            {
+                forward = (point - points[i-1]).normalized;
+            }
+
+            // 정확한 연결을 위해 Loop 처리나 인접 세그먼트 노말 일치가 필요할 수 있으나,
+            // Trigger 목적이므로 약간의 오차는 허용.
+            
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+
+            Vector3 pTopLeft = point + right * leftOffset + Vector3.up * heightTop;
+            Vector3 pTopRight = point + right * rightOffset + Vector3.up * heightTop;
+            Vector3 pBottomRight = point + right * rightOffset + Vector3.up * heightBottom;
+            Vector3 pBottomLeft = point + right * leftOffset + Vector3.up * heightBottom;
+
+            vertices.Add(pTopLeft);     // 0
+            vertices.Add(pTopRight);    // 1
+            vertices.Add(pBottomRight); // 2
+            vertices.Add(pBottomLeft);  // 3
+
+            if (i > 0)
+            {
+                int b = (i - 1) * 4;
+                AddQuad(triangles, b+0, b+1, b+5, b+4); // Top
+                AddQuad(triangles, b+1, b+2, b+6, b+5); // Right
+                AddQuad(triangles, b+2, b+3, b+7, b+6); // Bottom
+                AddQuad(triangles, b+3, b+0, b+4, b+7); // Left
+            }
+        }
+        
+        // 캡(Cap) 생성: 시작과 끝만 막음
+        // Convex Hull 생성을 돕기 위해 닫힌 메쉬 권장
+        AddQuad(triangles, 3, 2, 1, 0); // Start Cap
+        int last = (points.Count - 1) * 4;
+        AddQuad(triangles, last+0, last+1, last+2, last+3); // End Cap
+
+        mesh.vertices = vertices.ToArray();
+        mesh.triangles = triangles.ToArray();
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
+
+    private void DrawRewardZoneGizmos()
+    {
+        List<Vector3> splinePoints = GenerateSplinePoints();
+        if (splinePoints.Count < 2) return;
+
+        Color[] zoneColors = { Color.red, Color.blue, Color.yellow, Color.magenta, Color.cyan };
+
+        
+        // 구역들의 경계선과 라벨 그리기
+        for (int i = 0; i < rewardZones.Count; i++)
+        {
+            var zone = rewardZones[i];
+            
+            float internalStart = -roadWidth / 2f + zone.startOffset;
+            float internalEnd = -roadWidth / 2f + zone.endOffset;
+            
+            if (internalEnd <= internalStart) continue;
+
+            Color color = zoneColors[i % zoneColors.Length];
+            Handles.color = color;
+
+            // 시작/끝 경계선 (필요하면)
+            DrawZoneBoundaryLine(splinePoints, internalStart);
+            DrawZoneBoundaryLine(splinePoints, internalEnd);
+
+            // 구역 중앙에 라벨
+            string label = $"{zone.zoneName}\n({zone.score})\n{zone.startOffset:0.#}~{zone.endOffset:0.#}";
+            DrawZoneLabel(splinePoints, (internalStart + internalEnd) / 2f, label, color);
+        }
+    }
+
+    private void DrawZoneBoundaryLine(List<Vector3> splinePoints, float offset)
+    {
+        List<Vector3> linePoints = new List<Vector3>();
+
+        for (int i = 0; i < splinePoints.Count; i++)
+        {
+            Vector3 point = splinePoints[i];
+            Vector3 forward;
+
+            if (isLooped)
+            {
+                Vector3 prevPoint = (i == 0) ? splinePoints[splinePoints.Count - 2] : splinePoints[i - 1];
+                Vector3 nextPoint = (i == splinePoints.Count - 1) ? splinePoints[1] : splinePoints[i + 1];
+                forward = (nextPoint - prevPoint).normalized;
+            }
+            else
+            {
+                if (i == 0) forward = (splinePoints[i + 1] - point).normalized;
+                else if (i == splinePoints.Count - 1) forward = (point - splinePoints[i - 1]).normalized;
+                else forward = (splinePoints[i + 1] - splinePoints[i - 1]).normalized;
+            }
+
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+            linePoints.Add(point + right * offset + Vector3.up * 0.05f);
+        }
+
+        Handles.DrawPolyLine(linePoints.ToArray());
+    }
+
+    private void DrawZoneLabel(List<Vector3> splinePoints, float offset, string label, Color color)
+    {
+        int midIndex = splinePoints.Count / 2;
+        Vector3 point = splinePoints[midIndex];
+        Vector3 forward;
+
+        if (midIndex == 0) forward = (splinePoints[1] - point).normalized;
+        else if (midIndex == splinePoints.Count - 1) forward = (point - splinePoints[midIndex - 1]).normalized;
+        else forward = (splinePoints[midIndex + 1] - splinePoints[midIndex - 1]).normalized;
+
+        Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+        Vector3 labelPos = point + right * offset + Vector3.up * 0.3f;
+
+        GUIStyle style = new GUIStyle(EditorStyles.boldLabel);
+        style.normal.textColor = color;
+        style.alignment = TextAnchor.MiddleCenter;
+        Handles.Label(labelPos, label, style);
     }
 }
