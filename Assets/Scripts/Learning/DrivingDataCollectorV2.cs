@@ -59,8 +59,8 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     public WheelTest wheelController;
 
     [Header("DAgger Settings")]
-    [Tooltip("자율주행 컨트롤러 (AI 모드 및 개입 상태 확인)")]
-    public AutonomousDrivingController aiController;
+    [Tooltip("회귀 자율주행 컨트롤러 (AI 모드 및 개입 상태 확인)")]
+    public RegressionDrivingController aiController;
 
     [Header("Image Settings")]
     [Tooltip("JPEG 품질 (front_1, front_2에 적용)")]
@@ -254,12 +254,10 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         // 자율주행 모드 + 개입 아님 = AI가 제어 중
         if (aiController != null && aiController.isAutonomousMode && !aiController.IsInterventionActive())
         {
-            // AI의 예측된 클래스를 반환
-            int predictedClass = aiController.GetPredictedClass();
-            if (predictedClass >= 0 && predictedClass < 7)
-            {
-                return (KeyAction)predictedClass;
-            }
+            // 회귀 모델의 steering/throttle 연속값을 KeyAction으로 역변환
+            float steering = aiController.GetPredictedSteering();
+            float throttle = aiController.GetPredictedThrottle();
+            return SteeringThrottleToKeyAction(steering, throttle);
         }
 
         // 수동 모드 또는 개입 중 - 키보드 입력 확인
@@ -275,6 +273,26 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         if (s) return KeyAction.BACKWARD;
         if (a) return KeyAction.LEFT;
         if (d) return KeyAction.RIGHT;
+
+        return KeyAction.NONE;
+    }
+
+    /// <summary>
+    /// 회귀 모델의 steering/throttle 연속값을 KeyAction 클래스로 역변환
+    /// </summary>
+    KeyAction SteeringThrottleToKeyAction(float steering, float throttle, float steerThreshold = 0.3f, float throttleThreshold = 0.1f)
+    {
+        bool hasThrottle = throttle > throttleThreshold;
+        bool hasBackward = throttle < -throttleThreshold;
+        bool hasLeft = steering < -steerThreshold;
+        bool hasRight = steering > steerThreshold;
+
+        if (hasThrottle && hasLeft) return KeyAction.FORWARD_LEFT;
+        if (hasThrottle && hasRight) return KeyAction.FORWARD_RIGHT;
+        if (hasThrottle) return KeyAction.FORWARD;
+        if (hasBackward) return KeyAction.BACKWARD;
+        if (hasLeft) return KeyAction.LEFT;
+        if (hasRight) return KeyAction.RIGHT;
 
         return KeyAction.NONE;
     }

@@ -279,16 +279,16 @@
   <link name="lidar_mount">
     <visual>
       <geometry>
-        <cylinder radius="0.02" length="0.15"/>
+        <cylinder radius="0.02" length="0.3"/>
       </geometry>
-      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
       <material name="dark_gray"/>
     </visual>
     <collision>
       <geometry>
-        <cylinder radius="0.02" length="0.15"/>
+        <cylinder radius="0.02" length="0.3"/>
       </geometry>
-      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
     </collision>
     <inertial>
       <mass value="0.3"/>
@@ -334,7 +334,7 @@
     <parent link="lidar_mount"/>
     <child link="lidar_link"/>
     <!-- 기둥 위 -->
-    <origin xyz="0 0 0.175" rpy="0 0 0"/>
+    <origin xyz="0 0 0.325" rpy="0 0 0"/>
   </joint>
 
   <!-- ======================================== -->
@@ -343,16 +343,16 @@
   <link name="camera_mount">
     <visual>
       <geometry>
-        <cylinder radius="0.012" length="0.5"/>
+        <cylinder radius="0.012" length="0.2"/>
       </geometry>
-      <origin xyz="0 0 0.25" rpy="0 0 0"/>
+      <origin xyz="0 0 0.1" rpy="0 0 0"/>
       <material name="dark_gray"/>
     </visual>
     <collision>
       <geometry>
-        <cylinder radius="0.012" length="0.5"/>
+        <cylinder radius="0.012" length="0.2"/>
       </geometry>
-      <origin xyz="0 0 0.25" rpy="0 0 0"/>
+      <origin xyz="0 0 0.1" rpy="0 0 0"/>
     </collision>
     <inertial>
       <mass value="0.1"/>
@@ -398,7 +398,7 @@
     <parent link="camera_mount"/>
     <child link="camera_link"/>
     <!-- 기둥 위 -->
-    <origin xyz="0 0 0.52" rpy="0 0 0"/>
+    <origin xyz="0 0 0.22" rpy="0 0 0"/>
   </joint>
 
   <!-- Camera optical frame -->

@@ -2,6 +2,28 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 
+
+/// <summary>
+/// 도로 데이터를 저장하는 컴포넌트
+/// </summary>
+public class RoadData : MonoBehaviour
+{
+    [Header("Control Points")]
+    public List<Vector3> controlPoints = new List<Vector3>();
+    
+    [Header("Road Settings")]
+    public float roadWidth = 5f;
+    public int curveResolution = 10;
+    public Material roadMaterial;
+    public bool isLooped = false;
+    
+    // 턱(Curb) 설정
+    public bool hasCurbs = false;
+    public float curbWidth = 0.5f;
+    public float curbHeight = 0.2f;
+    public Material curbMaterial;
+}
+
 /// <summary>
 /// Road Creator Editor Tool
 /// Shift+클릭으로 포인트를 찍고, 포인트들을 연결하는 도로 메쉬를 생성합니다.
@@ -20,12 +42,27 @@ public class RoadCreator : EditorWindow
     private bool isCreating = false;
     private bool isLooped = false; // 루프 닫기 여부
     
+    // 턱(Curb) 설정
+    private bool hasCurbs = false;
+    private float curbWidth = 0.5f;
+    private float curbHeight = 0.2f;
+    private Material curbMaterial;
+    
     // 포인트 선택 (삽입 기능용)
     private List<int> selectedPointIndices = new List<int>();
-    private const float POINT_SELECT_RADIUS = 1.0f; // 포인트 선택 반경
+    private const float POINT_SELECT_DISTANCE = 30f; // 포인트 선택 반경 (픽셀 단위)
     
     // UI 스크롤
     private Vector2 scrollPosition;
+    
+    // 도로 목록 관리
+    private List<RoadData> sceneRoads = new List<RoadData>();
+    private Vector2 roadListScrollPosition;
+    
+
+    
+    // 최적화 변수
+    private bool isDraggingPoint = false;
     
     [MenuItem("Tools/Road Creator")]
     public static void ShowWindow()
@@ -37,17 +74,49 @@ public class RoadCreator : EditorWindow
     {
         SceneView.duringSceneGui += OnSceneGUI;
         LoadDefaultMaterial();
+        RefreshRoadList(); // 시작 시 목록 로드
     }
     
     private void OnDisable()
     {
         SceneView.duringSceneGui -= OnSceneGUI;
     }
+
+    private void RefreshRoadList()
+    {
+        sceneRoads.Clear();
+        // 씬 내의 모든 RoadData 컴포넌트 찾기
+        RoadData[] foundRoads = FindObjectsOfType<RoadData>();
+        sceneRoads.AddRange(foundRoads);
+    }
+    
+    private void LoadRoad(RoadData roadData)
+    {
+        if (roadData == null) return;
+        
+        controlPoints = new List<Vector3>(roadData.controlPoints);
+        roadWidth = roadData.roadWidth;
+        curveResolution = roadData.curveResolution;
+        isLooped = roadData.isLooped;
+        
+        // Curb Data Load
+        hasCurbs = roadData.hasCurbs;
+        curbWidth = roadData.curbWidth;
+        curbHeight = roadData.curbHeight;
+        curbMaterial = roadData.curbMaterial;
+        
+        currentRoadObject = roadData.gameObject;
+        selectedPointIndices.Clear();
+        
+        Debug.Log($"Road Creator: '{roadData.name}' 로드 완료 ({controlPoints.Count} 포인트)");
+        SceneView.RepaintAll();
+        Repaint();
+    }
     
     private void LoadDefaultMaterial()
     {
         // RoadMaterial 자동 로드
-        string[] guids = AssetDatabase.FindAssets("RoadMaterial t:Material");
+        string[] guids = AssetDatabase.FindAssets("one_lane_road_material t:Material");
         if (guids.Length > 0)
         {
             string path = AssetDatabase.GUIDToAssetPath(guids[0]);
@@ -59,12 +128,79 @@ public class RoadCreator : EditorWindow
     {
         GUILayout.Label("🛣️ Road Creator", EditorStyles.boldLabel);
         EditorGUILayout.Space(10);
+
+        // --- 도로 목록 섹션 (수정된 요구사항 1, 2) ---
+        EditorGUILayout.LabelField("📋 저장된 도로 목록", EditorStyles.boldLabel);
+        if (GUILayout.Button("🔄 목록 새로고침"))
+        {
+            RefreshRoadList();
+        }
+
+        roadListScrollPosition = EditorGUILayout.BeginScrollView(roadListScrollPosition, GUILayout.Height(120));
+        if (sceneRoads.Count == 0)
+        {
+            EditorGUILayout.LabelField("저장된 도로가 없습니다. (RoadData 컴포넌트 검색)", EditorStyles.miniLabel);
+        }
+        else
+        {
+            for (int i = 0; i < sceneRoads.Count; i++)
+            {
+                RoadData road = sceneRoads[i];
+                if (road == null) continue;
+
+                EditorGUILayout.BeginHorizontal();
+                string roadName = road.name;
+                if (road.gameObject == currentRoadObject) roadName += " (현재 편집 중)";
+                
+                if (GUILayout.Button(roadName, EditorStyles.miniButtonLeft))
+                {
+                    LoadRoad(road);
+                }
+                
+                GUI.backgroundColor = Color.red;
+                if (GUILayout.Button("X", EditorStyles.miniButtonRight, GUILayout.Width(25)))
+                {
+                    if (EditorUtility.DisplayDialog("도로 삭제", $"'{road.name}' 도로를 정말 삭제하시겠습니까?", "삭제", "취소"))
+                    {
+                        Undo.DestroyObjectImmediate(road.gameObject);
+                        RefreshRoadList();
+                        if (currentRoadObject == road.gameObject) ClearAll();
+                    }
+                }
+                GUI.backgroundColor = Color.white;
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+        EditorGUILayout.EndScrollView();
+        
+        if (GUILayout.Button("🚧 성능 최적화 (Collider 강제 업데이트)"))
+        {
+            UpdateRoadMesh(true);
+        }
+        
+        EditorGUILayout.Space(10);
+
+        // --- 기존 설정 UI ---
         
         // 도로 설정
         EditorGUILayout.LabelField("도로 설정", EditorStyles.boldLabel);
         roadWidth = EditorGUILayout.Slider("도로 너비", roadWidth, 1f, 20f);
         curveResolution = EditorGUILayout.IntSlider("곡선 해상도", curveResolution, 2, 30);
         roadMaterial = (Material)EditorGUILayout.ObjectField("도로 머테리얼", roadMaterial, typeof(Material), false);
+        
+        EditorGUILayout.Space(5);
+        
+        // 턱(Curbs) 설정 UI
+        EditorGUILayout.LabelField("턱(Curb) 설정", EditorStyles.boldLabel);
+        hasCurbs = EditorGUILayout.Toggle("턱 생성", hasCurbs);
+        if (hasCurbs)
+        {
+            EditorGUI.indentLevel++;
+            curbWidth = EditorGUILayout.Slider("턱 너비", curbWidth, 0.1f, 2.0f);
+            curbHeight = EditorGUILayout.Slider("턱 높이", curbHeight, 0.05f, 1.0f);
+            curbMaterial = (Material)EditorGUILayout.ObjectField("턱 머테리얼", curbMaterial, typeof(Material), false);
+            EditorGUI.indentLevel--;
+        }
         
         EditorGUILayout.Space(10);
         
@@ -78,7 +214,7 @@ public class RoadCreator : EditorWindow
         
         if (isCreating)
         {
-            EditorGUILayout.HelpBox("Shift + 좌클릭: 포인트 추가/선택\nShift + 우클릭: 마지막 포인트 삭제\nI 키: 선택된 두 포인트 사이에 삽입\nESC: 선택 해제", MessageType.Info);
+            EditorGUILayout.HelpBox("Shift + 좌클릭: 포인트 추가/선택\nShift + 우클릭 (마지막 포인트): 삭제\nI 키: 선택된 두 포인트 사이에 삽입\nESC: 선택 해제", MessageType.Info);
         }
         
         // 선택된 포인트 표시
@@ -101,8 +237,9 @@ public class RoadCreator : EditorWindow
             controlPoints[i] = EditorGUILayout.Vector3Field("", controlPoints[i]);
             if (GUILayout.Button("X", GUILayout.Width(25)))
             {
+                Undo.RecordObject(this, "Remove Point");
                 controlPoints.RemoveAt(i);
-                UpdateRoadMesh();
+                UpdateRoadMesh(true);
                 break;
             }
             EditorGUILayout.EndHorizontal();
@@ -111,44 +248,26 @@ public class RoadCreator : EditorWindow
         
         EditorGUILayout.Space(5);
         
-        // 기존 도로 불러오기 버튼
+        // 하단 버튼
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("📂 기존 도로 불러오기", GUILayout.Height(25)))
-        {
-            LoadExistingRoad();
-        }
-        
-        if (GUILayout.Button("💾 도로 저장", GUILayout.Height(25)))
+        if (GUILayout.Button(" 도로 저장/업데이트", GUILayout.Height(30)))
         {
             SaveRoadData();
+            RefreshRoadList(); // 저장 후 목록 갱신
         }
-        EditorGUILayout.EndHorizontal();
-        
-        EditorGUILayout.Space(10);
-        
-        // 버튼들
-        EditorGUILayout.BeginHorizontal();
-        
-        GUI.enabled = controlPoints.Count >= 2;
-        if (GUILayout.Button("도로 생성/업데이트", GUILayout.Height(35)))
-        {
-            CreateOrUpdateRoad();
-        }
-        GUI.enabled = true;
         
         GUI.backgroundColor = Color.red;
-        if (GUILayout.Button("모두 초기화", GUILayout.Height(35), GUILayout.Width(100)))
+        if (GUILayout.Button("초기화", GUILayout.Height(30), GUILayout.Width(80)))
         {
             ClearAll();
         }
         GUI.backgroundColor = Color.white;
-        
         EditorGUILayout.EndHorizontal();
         
         EditorGUILayout.Space(5);
         
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("새 도로 시작", GUILayout.Height(25)))
+        if (GUILayout.Button("새 도로 작업 시작", GUILayout.Height(25)))
         {
             StartNewRoad();
         }
@@ -156,10 +275,10 @@ public class RoadCreator : EditorWindow
         // 루프 닫기 버튼
         GUI.enabled = controlPoints.Count >= 3;
         GUI.backgroundColor = isLooped ? Color.green : Color.yellow;
-        if (GUILayout.Button(isLooped ? "✓ 루프 완성됨" : "🔗 루프 닫기 (완성)", GUILayout.Height(25)))
+        if (GUILayout.Button(isLooped ? "✓ 루프 완성됨" : "🔗 루프 닫기", GUILayout.Height(25)))
         {
             isLooped = !isLooped;
-            UpdateRoadMesh();
+            UpdateRoadMesh(true);
         }
         GUI.backgroundColor = Color.white;
         GUI.enabled = true;
@@ -167,26 +286,22 @@ public class RoadCreator : EditorWindow
         
         if (isLooped)
         {
-            EditorGUILayout.HelpBox("도로가 루프로 연결되었습니다. 처음과 끝이 자연스럽게 이어집니다.", MessageType.Info);
+            EditorGUILayout.HelpBox("도로가 루프로 연결되었습니다.", MessageType.Info);
         }
     }
     
     private void OnSceneGUI(SceneView sceneView)
     {
+        Event e = Event.current; // Event 변수 정의 추가
+        // 입력 처리 (우선 순위 높임)
+        if (isCreating)
+        {
+            HandleInput(sceneView);
+        }
+
         // 포인트 핸들 그리기
-        Handles.color = Color.yellow;
         for (int i = 0; i < controlPoints.Count; i++)
         {
-            // 드래그 가능한 핸들
-            EditorGUI.BeginChangeCheck();
-            Vector3 newPos = Handles.PositionHandle(controlPoints[i], Quaternion.identity);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObject(this, "Move Road Point");
-                controlPoints[i] = newPos;
-                UpdateRoadMesh();
-            }
-            
             // 포인트 번호 라벨
             Handles.Label(controlPoints[i] + Vector3.up * 0.5f, $"P{i}", EditorStyles.boldLabel);
             
@@ -201,6 +316,27 @@ public class RoadCreator : EditorWindow
                 Handles.color = Color.cyan;
                 Handles.SphereHandleCap(0, controlPoints[i], Quaternion.identity, 0.3f, EventType.Repaint);
             }
+
+            // 드래그 가능한 핸들 (입력 처리 후 그림)
+            EditorGUI.BeginChangeCheck();
+            Vector3 newPos = Handles.PositionHandle(controlPoints[i], Quaternion.identity);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(this, "Move Road Point");
+                controlPoints[i] = newPos;
+                isDraggingPoint = true;
+                UpdateRoadMesh(); // 드래그 중에는 Mesh만 업데이트 (Collider X)
+            }
+            
+            // 드래그 종료 감지 (Repaint 이벤트에서 확인)
+            if (e.type == EventType.MouseUp && e.button == 0)
+            {
+                if (isDraggingPoint)
+                {
+                    isDraggingPoint = false;
+                    UpdateRoadMesh(true); // 드래그 종료 시 Collider 포함 업데이트
+                }
+            }
         }
         
         // 연결선 그리기
@@ -209,12 +345,6 @@ public class RoadCreator : EditorWindow
             Handles.color = Color.green;
             List<Vector3> splinePoints = GenerateSplinePoints();
             Handles.DrawPolyLine(splinePoints.ToArray());
-        }
-        
-        // 생성 모드일 때 클릭 처리
-        if (isCreating)
-        {
-            HandleInput(sceneView);
         }
     }
     
@@ -240,26 +370,31 @@ public class RoadCreator : EditorWindow
             return;
         }
         
+
+        
         // Shift + 좌클릭: 포인트 선택 또는 추가
         if (e.type == EventType.MouseDown && e.button == 0 && e.shift)
         {
             Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
             
-            // 먼저 기존 포인트 근처 클릭인지 확인
-            int clickedPointIndex = GetPointIndexNearRay(ray);
+            // 먼저 기존 포인트 근처 클릭인지 확인 (수정된 로직)
+            int clickedPointIndex = GetPointIndexNearRay(e.mousePosition);
             
             if (clickedPointIndex >= 0)
             {
                 // 기존 포인트 선택/해제
                 TogglePointSelection(clickedPointIndex);
-                e.Use();
+                e.Use(); // 이벤트 소비하여 다른 핸들과 겹치지 않게 함
                 return;
             }
             
             // 새 포인트 추가
             if (Physics.Raycast(ray, out RaycastHit hit))
             {
-                AddPoint(hit.point);
+                // Y값은 항상 0으로 고정 (사용자 요구사항)
+                Vector3 newPoint = hit.point;
+                newPoint.y = 0f;
+                AddPoint(newPoint);
             }
             else
             {
@@ -267,6 +402,7 @@ public class RoadCreator : EditorWindow
                 if (plane.Raycast(ray, out float distance))
                 {
                     Vector3 point = ray.GetPoint(distance);
+                    point.y = 0f; // 명시적으로 0으로 설정
                     AddPoint(point);
                 }
             }
@@ -287,31 +423,33 @@ public class RoadCreator : EditorWindow
             }
         }
         
-        // 씨 뷰에 현재 모드 표시
-        Handles.BeginGUI();
-        string statusText = "🛣️ Road Creator: Shift+클릭=포인트 추가/선택, I=삽입, ESC=선택해제";
-        if (selectedPointIndices.Count == 2)
+        if (selectedPointIndices.Count > 0)
         {
-            statusText += $" | 선택: P{selectedPointIndices[0]}, P{selectedPointIndices[1]} (✨I키로 삽입✨)";
+            string selected = string.Join(", ", selectedPointIndices.ConvertAll(i => $"P{i}"));
+            EditorGUILayout.HelpBox($"선택된 포인트: {selected}\n(I: 삽입, Shift+Click: 추가/선택)", MessageType.Warning);
         }
-        GUI.Label(new Rect(10, 10, 600, 20), statusText, EditorStyles.whiteLargeLabel);
-        Handles.EndGUI();
+        // 씨 뷰 UI
+        Handles.BeginGUI();
+        string statusText = "🛣️ Road Creator: Shift+Click=Point, I=Insert";
     }
     
     /// <summary>
-    /// 레이 근처의 포인트 인덱스 반환 (-1이면 없음)
+    /// 마우스 위치 근처의 포인트 인덱스 반환 (화면 좌표 거리 기준)
     /// </summary>
-    private int GetPointIndexNearRay(Ray ray)
+    private int GetPointIndexNearRay(Vector2 mousePosition)
     {
-        float minDistance = float.MaxValue;
+        float minDistance = POINT_SELECT_DISTANCE;
         int closestIndex = -1;
         
         for (int i = 0; i < controlPoints.Count; i++)
         {
-            Vector3 point = controlPoints[i];
-            float distance = Vector3.Cross(ray.direction, point - ray.origin).magnitude;
+            // 월드 좌표를 화면(GUI) 좌표로 변환
+            Vector2 guiPoint = HandleUtility.WorldToGUIPoint(controlPoints[i]);
             
-            if (distance < POINT_SELECT_RADIUS && distance < minDistance)
+            // 화면상 거리 계산
+            float distance = Vector2.Distance(guiPoint, mousePosition);
+            
+            if (distance < minDistance)
             {
                 minDistance = distance;
                 closestIndex = i;
@@ -376,7 +514,6 @@ public class RoadCreator : EditorWindow
         
         Undo.RecordObject(this, "Insert Road Point");
         
-        // 루프이고 첫번째/마지막 사이일 때는 마지막에 추가
         if (isLooped && minIdx == 0 && maxIdx == controlPoints.Count - 1)
         {
             controlPoints.Add(midPoint);
@@ -387,12 +524,14 @@ public class RoadCreator : EditorWindow
         }
         
         selectedPointIndices.Clear();
-        UpdateRoadMesh();
+        UpdateRoadMesh(true);
         SceneView.RepaintAll();
         Repaint();
         
         Debug.Log($"Road Creator: P{minIdx}와 P{maxIdx} 사이에 새 포인트 삽입됨");
     }
+    
+
     
     private void AddPoint(Vector3 point)
     {
@@ -425,30 +564,46 @@ public class RoadCreator : EditorWindow
         {
             // 기존 도로 업데이트
             var roadData = currentRoadObject.GetComponent<RoadData>();
-            if (roadData != null)
+        if (roadData != null)
             {
                 roadData.controlPoints = new List<Vector3>(controlPoints);
                 roadData.roadWidth = roadWidth;
                 roadData.curveResolution = curveResolution;
                 roadData.isLooped = isLooped;
+                
+                roadData.hasCurbs = hasCurbs;
+                roadData.curbWidth = curbWidth;
+                roadData.curbHeight = curbHeight;
+                roadData.curbMaterial = curbMaterial;
             }
         }
         
         UpdateRoadMesh();
     }
     
-    private void UpdateRoadMesh()
+    private void UpdateRoadMesh(bool updateCollider = true)
     {
         if (currentRoadObject == null || controlPoints.Count < 2) return;
         
+        // 드래그 중일 때는 해상도 낮춤 (최적화)
+        int logicCurveResolution = isDraggingPoint ? Mathf.Max(2, curveResolution / 4) : curveResolution;
+        
+        // GenerateSplinePoints 최적화 버전 호출이 필요하나, 
+        // 기존 메서드 구조상 curveResolution 멤버를 임시로 바꿈
+        int originalRes = curveResolution;
+        curveResolution = logicCurveResolution;
+        
+        // 1. 도로 메쉬 업데이트
         Mesh mesh = GenerateRoadMesh();
         
+        curveResolution = originalRes; // 복구
+
         MeshFilter mf = currentRoadObject.GetComponent<MeshFilter>();
         MeshRenderer mr = currentRoadObject.GetComponent<MeshRenderer>();
         
         if (mf.sharedMesh != null)
         {
-            DestroyImmediate(mf.sharedMesh);
+            DestroyImmediate(mf.sharedMesh); // 메모리 누수 방지
         }
         
         mf.sharedMesh = mesh;
@@ -458,15 +613,277 @@ public class RoadCreator : EditorWindow
             mr.sharedMaterial = roadMaterial;
         }
         
-        // MeshCollider 자동 추가 (충돌 처리용)
-        MeshCollider mc = currentRoadObject.GetComponent<MeshCollider>();
-        if (mc == null)
+        // MeshCollider 업데이트 (최적화: 드래그 중에는 스킵)
+        if (updateCollider)
         {
-            mc = currentRoadObject.AddComponent<MeshCollider>();
+            MeshCollider mc = currentRoadObject.GetComponent<MeshCollider>();
+            if (mc == null)
+            {
+                mc = currentRoadObject.AddComponent<MeshCollider>();
+            }
+            mc.sharedMesh = mesh;
         }
-        mc.sharedMesh = mesh;
+        
+        // 2. 턱(Curb) 메쉬 업데이트
+        UpdateCurbMeshes(updateCollider, logicCurveResolution);
         
         SceneView.RepaintAll();
+    }
+
+    private void UpdateCurbMeshes(bool updateCollider, int tempResolution)
+    {
+        // 자식 오브젝트 찾기 또는 생성
+        Transform leftCurbTr = currentRoadObject.transform.Find("CurbLeft");
+        Transform rightCurbTr = currentRoadObject.transform.Find("CurbRight");
+        
+        if (!hasCurbs)
+        {
+            // 턱이 비활성화되었는데 오브젝트가 있으면 삭제
+            if (leftCurbTr != null) Undo.DestroyObjectImmediate(leftCurbTr.gameObject);
+            if (rightCurbTr != null) Undo.DestroyObjectImmediate(rightCurbTr.gameObject);
+            return;
+        }
+        
+        // Material 결정 (없으면 도로 재질 사용)
+        Material mat = curbMaterial != null ? curbMaterial : (roadMaterial != null ? roadMaterial : null);
+        
+        // 임시 해상도 적용
+        int originalRes = curveResolution;
+        curveResolution = tempResolution;
+        
+        // 왼쪽 턱 업데이트
+        UpdateSingleCurb(ref leftCurbTr, "CurbLeft", true, mat, updateCollider);
+        
+        // 오른쪽 턱 업데이트
+        UpdateSingleCurb(ref rightCurbTr, "CurbRight", false, mat, updateCollider);
+        
+        curveResolution = originalRes; // 복구
+    }
+
+    private void UpdateSingleCurb(ref Transform curbTr, string name, bool isLeft, Material mat, bool updateCollider)
+    {
+        if (curbTr == null)
+        {
+            GameObject go = new GameObject(name);
+            go.transform.SetParent(currentRoadObject.transform, false);
+            go.AddComponent<MeshFilter>();
+            go.AddComponent<MeshRenderer>();
+            go.AddComponent<MeshCollider>();
+            curbTr = go.transform;
+            Undo.RegisterCreatedObjectUndo(go, "Create Curb");
+        }
+        
+        MeshFilter mf = curbTr.GetComponent<MeshFilter>();
+        MeshRenderer mr = curbTr.GetComponent<MeshRenderer>();
+        MeshCollider mc = curbTr.GetComponent<MeshCollider>();
+        
+        mr.sharedMaterial = mat;
+        
+        Mesh mesh = GenerateCurbMesh(isLeft);
+        
+        if (mf.sharedMesh != null) DestroyImmediate(mf.sharedMesh);
+        mf.sharedMesh = mesh;
+        
+        if (updateCollider)
+        {
+            if (mc == null) mc = curbTr.gameObject.AddComponent<MeshCollider>();
+            mc.sharedMesh = mesh;
+        }
+    }
+    
+    private Mesh GenerateCurbMesh(bool isLeft)
+    {
+        List<Vector3> splinePoints = GenerateSplinePoints();
+        if (splinePoints.Count < 2) return new Mesh();
+        
+        Mesh mesh = new Mesh();
+        mesh.name = isLeft ? "CurbLeftMesh" : "CurbRightMesh";
+        
+        List<Vector3> vertices = new List<Vector3>();
+        List<Vector2> uvs = new List<Vector2>();
+        List<int> triangles = new List<int>();
+        
+        float currentLength = 0f;
+        
+        // 턱 오프셋 계산 (도로 중심에서 턱 중심까지가 아니라, 도로 끝에서 시작)
+        // 왼쪽: -roadWidth/2 에서 시작해서 -direction * curbWidth 만큼 확장
+        // 오른쪽: +roadWidth/2 에서 시작해서 +direction * curbWidth 만큼 확장
+        
+        for (int i = 0; i < splinePoints.Count; i++)
+        {
+            Vector3 point = splinePoints[i];
+            
+
+            
+            Vector3 forward;
+            
+            // Tangents 계산 (도로 생성과 동일 로직)
+            if (isLooped)
+            {
+                Vector3 prevPoint = (i == 0) ? splinePoints[splinePoints.Count - 2] : splinePoints[i - 1];
+                Vector3 nextPoint = (i == splinePoints.Count - 1) ? splinePoints[1] : splinePoints[i + 1];
+                forward = (nextPoint - prevPoint).normalized;
+            }
+            else
+            {
+                if (i == 0) forward = (splinePoints[i + 1] - point).normalized;
+                else if (i == splinePoints.Count - 1) forward = (point - splinePoints[i - 1]).normalized;
+                else forward = (splinePoints[i + 1] - splinePoints[i - 1]).normalized;
+            }
+            
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+            Vector3 up = Vector3.up;
+            
+            // 기준점: 도로의 가장자리
+            Vector3 roadEdge;
+            Vector3 outerEdge;
+            
+            if (isLeft)
+            {
+                // 왼쪽 가장자리 (-right)
+                roadEdge = point - right * (roadWidth / 2f);
+                outerEdge = roadEdge - right * curbWidth;
+            }
+            else
+            {
+                // 오른쪽 가장자리 (+right)
+                roadEdge = point + right * (roadWidth / 2f);
+                outerEdge = roadEdge + right * curbWidth;
+            }
+            
+            // 4개의 버텍스 생성 (단면: 사각형)
+            // 0: Inner Bottom (도로와 맞닿는 아래)
+            // 1: Inner Top (도로와 맞닿는 위 - 턱 높이)
+            // 2: Outer Top (바깥쪽 위)
+            // 3: Outer Bottom (바깥쪽 아래)
+            
+            // 실제로는 바닥면(Bottom)은 필요 없을 수도 있지만 Collider를 위해 닫힌 메쉬 생성
+            
+            Vector3 vIB = roadEdge;
+            Vector3 vIT = roadEdge + up * curbHeight;
+            Vector3 vOT = outerEdge + up * curbHeight;
+            Vector3 vOB = outerEdge;
+            
+            vertices.Add(vIB); // 0
+            vertices.Add(vIT); // 1
+            vertices.Add(vOT); // 2
+            vertices.Add(vOB); // 3
+            
+            // UVs
+            float v = currentLength / curbWidth; // 타일링
+            uvs.Add(new Vector2(0, v));
+            uvs.Add(new Vector2(0, v));
+            uvs.Add(new Vector2(1, v));
+            uvs.Add(new Vector2(1, v));
+            
+            // Triangles
+            if (i > 0)
+            {
+                int b = (i - 1) * 4; // base index
+                
+                // 각 면(Face)에 대해 삼각형 2개씩 생성
+                
+                // Top Face (1 -> 1', 2' -> 2)
+                // Left일 때는 Winding Reverse (1, 2, 6, 5) -> Normal Up
+                // Right일 때는 Standard (1, 5, 6, 2) -> Normal Up
+                if (isLeft) AddQuad(triangles, b+1, b+2, b+6, b+5);
+                else AddQuad(triangles, b+1, b+5, b+6, b+2);
+                
+                // Outer Face (2 -> 2', 3' -> 3)
+                // Left일 때는 Normal Left (2, 3, 7, 6)
+                // Right일 때는 Normal Right (2, 6, 7, 3)
+                if (isLeft) AddQuad(triangles, b+2, b+3, b+7, b+6);
+                else AddQuad(triangles, b+2, b+6, b+7, b+3);
+                
+                // Inner Face (Optional - 도로에 가려지지만 생성)
+                // Left: Normal Right (Towards Road) -> (1, 5, 4, 0)
+                // Right: Normal Left (Towards Road) -> (0, 4, 5, 1)
+                if (isLeft) AddQuad(triangles, b+1, b+5, b+4, b+0);
+                else AddQuad(triangles, b+0, b+4, b+5, b+1);
+                
+                // Back/Bottom Face (생략 가능하나 닫힌 메쉬를 위해)
+                // Bottom은 항상 Down.
+                // Left: (0, 4, 7, 3) -> Fwd, Left -> Cross = Down
+                // Right: (3, 7, 4, 0) -> Fwd, Right -> Cross = Down
+                if (isLeft) AddQuad(triangles, b+0, b+4, b+7, b+3);
+                else AddQuad(triangles, b+3, b+7, b+4, b+0);
+            }
+            
+            // Start Cap (Loop가 아닐 때)
+            if (i == 0 && !isLooped)
+            {
+                // 0, 1, 2, 3
+                // Normal Back (Towards -Forward)
+                // Left: (0, 1, 2, 3) -> Up, Left -> Back? NO.
+                // 0->1(Up), 0->3(Left). Cross(Up, Left) = Fwd.
+                // We want Back. So (0, 3, 2, 1) or (1, 2, 3, 0).
+                // 0->3 (Left), 0->1 (Up). Cross(Left, Up) = Fwd.
+                // Wait. 0->1 is Up. 1->2 is Left.
+                // Draw 0,1,2,3 loop. 0->1->2->3. CCW. Normal Fwd.
+                // We want Back. So 0->3->2->1.
+                // Note: isLeft toggle might affect position but local indices 0,1,2,3 relative.
+                // Left Curb: 0(IB), 1(IT), 2(OT), 3(OB).
+                // 0 is Right of 3.
+                // 0->1 Up. 1->2 Left.
+                // Face pointing Back (Reverse spline direction).
+                // 0->1->2->3 is FWD.
+                // So we want 0->3->2->1 for Start Cap (Look at it from back).
+                
+                // Right Curb: 0(IB), 1(IT), 2(OT), 3(OB).
+                // 0 is Left of 3.
+                // 0->1 Up. 1->2 Right.
+                // 0->1->2->3 is Back?
+                // 0->1 (Up). 1->2 (Right). Cross(Up, Right) = Fwd? No.
+                // (0,1,0) x (1,0,0) = (0,0,-1) = Back.
+                // So for Right Curb, 0->1->2->3 points Back.
+                // Since this is Start Cap, we want Normal pointing Back (away from road start).
+                
+                if (isLeft) AddQuad(triangles, 0, 3, 2, 1);
+                else AddQuad(triangles, 0, 1, 2, 3);
+            }
+            
+            // End Cap (Loop가 아닐 때)
+            if (i == splinePoints.Count - 2 && !isLooped) // Last segment
+            {
+                // Last 4 vertices indices
+                int b = (i) * 4;
+                // indices: b, b+1, b+2, b+3
+                
+                // Normal Forward (Towards +Forward)
+                // Left: 0->1->2->3 is Fwd.
+                // Right: 0->3->2->1 is Fwd.
+                
+                if (isLeft) AddQuad(triangles, b+0, b+1, b+2, b+3);
+                else AddQuad(triangles, b+0, b+3, b+2, b+1);
+            }
+
+            
+            if (i < splinePoints.Count - 1)
+            {
+                currentLength += Vector3.Distance(splinePoints[i], splinePoints[i + 1]);
+            }
+        }
+        
+        mesh.vertices = vertices.ToArray();
+        mesh.uv = uvs.ToArray();
+        mesh.triangles = triangles.ToArray();
+        mesh.RecalculateNormals();
+        
+        if (isLooped) WeldNormals(mesh, 4);
+        
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private void AddQuad(List<int> triangles, int v0, int v1, int v2, int v3)
+    {
+        triangles.Add(v0);
+        triangles.Add(v1);
+        triangles.Add(v2);
+        
+        triangles.Add(v0);
+        triangles.Add(v2);
+        triangles.Add(v3);
     }
     
     /// <summary>
@@ -673,7 +1090,7 @@ public class RoadCreator : EditorWindow
         // 루프일 때 시작점과 끝점의 노말을 일치시킴 (심 제거)
         if (isLooped)
         {
-            WeldNormals(mesh);
+            WeldNormals(mesh, 2);
         }
         
         mesh.RecalculateBounds();
@@ -681,23 +1098,30 @@ public class RoadCreator : EditorWindow
         return mesh;
     }
 
-    private void WeldNormals(Mesh mesh)
+    private void WeldNormals(Mesh mesh, int verticesPerSegment)
     {
         Vector3[] normals = mesh.normals;
         int vertexCount = normals.Length;
         
-        // 시작점 (0, 1)과 끝점 (count-2, count-1)은 같은 위치임
+        // 시작점의 버텍스들과 끝점의 버텍스들은 같은 위치임
         // 각각의 평균 노말을 계산하여 적용
         
-        // 왼쪽 버텍스
-        Vector3 leftNormal = (normals[0] + normals[vertexCount - 2]).normalized;
-        normals[0] = leftNormal;
-        normals[vertexCount - 2] = leftNormal;
-        
-        // 오른쪽 버텍스
-        Vector3 rightNormal = (normals[1] + normals[vertexCount - 1]).normalized;
-        normals[1] = rightNormal;
-        normals[vertexCount - 1] = rightNormal;
+        // verticesPerSegment 만큼 반복 (Road=2, Curb=4)
+        for (int i = 0; i < verticesPerSegment; i++)
+        {
+            // 시작점의 i번째 버텍스 인덱스: i
+            // 끝점의 i번째 버텍스 인덱스: vertexCount - verticesPerSegment + i
+            
+            int idxStart = i;
+            int idxEnd = vertexCount - verticesPerSegment + i;
+            
+            if (idxEnd >= vertexCount) continue; // 안전장치
+            
+            Vector3 avgNormal = (normals[idxStart] + normals[idxEnd]).normalized;
+            
+            normals[idxStart] = avgNormal;
+            normals[idxEnd] = avgNormal;
+        }
         
         mesh.normals = normals;
     }
@@ -763,6 +1187,13 @@ public class RoadCreator : EditorWindow
             roadWidth = roadData.roadWidth;
             curveResolution = roadData.curveResolution;
             isLooped = roadData.isLooped;
+            
+            // Curb 데이터 로드
+            hasCurbs = roadData.hasCurbs;
+            curbWidth = roadData.curbWidth;
+            curbHeight = roadData.curbHeight;
+            curbMaterial = roadData.curbMaterial;
+            
             currentRoadObject = selected;
             selectedPointIndices.Clear();
             
@@ -812,22 +1243,17 @@ public class RoadCreator : EditorWindow
         roadData.curveResolution = curveResolution;
         roadData.isLooped = isLooped;
         
+        roadData.hasCurbs = hasCurbs;
+        roadData.curbWidth = curbWidth;
+        roadData.curbHeight = curbHeight;
+        roadData.curbHeight = curbHeight;
+        roadData.curbMaterial = curbMaterial;
+        
         EditorUtility.SetDirty(roadData);
+        
+        // 데이터 저장 후 메쉬 업데이트하여 변경사항 즉시 반영 (Fix 1)
+        UpdateRoadMesh(true);
         
         Debug.Log($"Road Creator: 도로 데이터 저장됨 ({controlPoints.Count}개 포인트)");
     }
-}
-
-/// <summary>
-/// 도로 데이터를 저장하는 컴포넌트
-/// </summary>
-public class RoadData : MonoBehaviour
-{
-    [Header("Control Points")]
-    public List<Vector3> controlPoints = new List<Vector3>();
-    
-    [Header("Road Settings")]
-    public float roadWidth = 4f;
-    public int curveResolution = 10;
-    public bool isLooped = false;
 }
