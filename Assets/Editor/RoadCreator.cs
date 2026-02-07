@@ -478,7 +478,6 @@ public class RoadCreator : EditorWindow
         }
         // 씨 뷰 UI
         Handles.BeginGUI();
-        string statusText = "🛣️ Road Creator: Shift+Click=Point, I=Insert";
     }
     
     /// <summary>

@@ -300,7 +300,7 @@ GameObject:
   - component: {fileID: 1654666}
   - component: {fileID: 1654665}
   - component: {fileID: 1654664}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg49
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -582,9 +582,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7652798}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c
-  m_TagString: Zone
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -668,7 +668,7 @@ GameObject:
   - component: {fileID: 8528758}
   - component: {fileID: 8528757}
   - component: {fileID: 8528756}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg38
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -872,7 +872,7 @@ GameObject:
   - component: {fileID: 15594231}
   - component: {fileID: 15594230}
   - component: {fileID: 15594229}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -993,7 +993,7 @@ GameObject:
   - component: {fileID: 16037916}
   - component: {fileID: 16037915}
   - component: {fileID: 16037914}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg39
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1114,7 +1114,7 @@ GameObject:
   - component: {fileID: 17307502}
   - component: {fileID: 17307501}
   - component: {fileID: 17307500}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg44
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1776,7 +1776,7 @@ GameObject:
   - component: {fileID: 23784611}
   - component: {fileID: 23784610}
   - component: {fileID: 23784609}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2062,7 +2062,7 @@ GameObject:
   - component: {fileID: 25715437}
   - component: {fileID: 25715436}
   - component: {fileID: 25715435}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2348,7 +2348,7 @@ GameObject:
   - component: {fileID: 29048549}
   - component: {fileID: 29048548}
   - component: {fileID: 29048547}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2469,7 +2469,7 @@ GameObject:
   - component: {fileID: 29522736}
   - component: {fileID: 29522735}
   - component: {fileID: 29522734}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg32
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2590,7 +2590,7 @@ GameObject:
   - component: {fileID: 32907614}
   - component: {fileID: 32907613}
   - component: {fileID: 32907612}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2711,7 +2711,7 @@ GameObject:
   - component: {fileID: 36393970}
   - component: {fileID: 36393969}
   - component: {fileID: 36393968}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg24
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -2832,7 +2832,7 @@ GameObject:
   - component: {fileID: 36916546}
   - component: {fileID: 36916545}
   - component: {fileID: 36916544}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3118,7 +3118,7 @@ GameObject:
   - component: {fileID: 45355534}
   - component: {fileID: 45355533}
   - component: {fileID: 45355532}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg50
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3404,7 +3404,7 @@ GameObject:
   - component: {fileID: 48039659}
   - component: {fileID: 48039658}
   - component: {fileID: 48039657}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg27
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3570,7 +3570,7 @@ GameObject:
   - component: {fileID: 54601862}
   - component: {fileID: 54601861}
   - component: {fileID: 54601860}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3691,7 +3691,7 @@ GameObject:
   - component: {fileID: 54971017}
   - component: {fileID: 54971016}
   - component: {fileID: 54971015}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4060,7 +4060,7 @@ GameObject:
   - component: {fileID: 58777748}
   - component: {fileID: 58777747}
   - component: {fileID: 58777746}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4346,7 +4346,7 @@ GameObject:
   - component: {fileID: 66137459}
   - component: {fileID: 66137458}
   - component: {fileID: 66137457}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5181,7 +5181,7 @@ GameObject:
   - component: {fileID: 72775956}
   - component: {fileID: 72775955}
   - component: {fileID: 72775954}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5302,7 +5302,7 @@ GameObject:
   - component: {fileID: 73478983}
   - component: {fileID: 73478982}
   - component: {fileID: 73478981}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5423,7 +5423,7 @@ GameObject:
   - component: {fileID: 73652015}
   - component: {fileID: 73652014}
   - component: {fileID: 73652013}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg28
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5754,7 +5754,7 @@ GameObject:
   - component: {fileID: 86464722}
   - component: {fileID: 86464721}
   - component: {fileID: 86464720}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6040,7 +6040,7 @@ GameObject:
   - component: {fileID: 88019570}
   - component: {fileID: 88019569}
   - component: {fileID: 88019568}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg36
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6622,7 +6622,7 @@ GameObject:
   - component: {fileID: 91729783}
   - component: {fileID: 91729782}
   - component: {fileID: 91729781}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg49
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6991,7 +6991,7 @@ GameObject:
   - component: {fileID: 116671064}
   - component: {fileID: 116671063}
   - component: {fileID: 116671062}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg27
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7112,7 +7112,7 @@ GameObject:
   - component: {fileID: 121837573}
   - component: {fileID: 121837572}
   - component: {fileID: 121837571}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -7269,11 +7269,11 @@ MeshCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!23 &124657981
@@ -9211,7 +9211,7 @@ GameObject:
   - component: {fileID: 171702414}
   - component: {fileID: 171702413}
   - component: {fileID: 171702412}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg37
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9332,7 +9332,7 @@ GameObject:
   - component: {fileID: 173009910}
   - component: {fileID: 173009909}
   - component: {fileID: 173009908}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9543,7 +9543,7 @@ GameObject:
   - component: {fileID: 183019857}
   - component: {fileID: 183019856}
   - component: {fileID: 183019855}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg36
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10737,7 +10737,7 @@ GameObject:
   - component: {fileID: 224128450}
   - component: {fileID: 224128449}
   - component: {fileID: 224128448}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg45
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10858,7 +10858,7 @@ GameObject:
   - component: {fileID: 230504649}
   - component: {fileID: 230504648}
   - component: {fileID: 230504647}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -10979,7 +10979,7 @@ GameObject:
   - component: {fileID: 230902063}
   - component: {fileID: 230902062}
   - component: {fileID: 230902061}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg25
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11100,7 +11100,7 @@ GameObject:
   - component: {fileID: 233094925}
   - component: {fileID: 233094924}
   - component: {fileID: 233094923}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg28
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11572,11 +11572,11 @@ MeshCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!23 &244031662
@@ -11827,9 +11827,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 255697980}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1
-  m_TagString: Zone
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -12462,7 +12462,7 @@ GameObject:
   - component: {fileID: 280721319}
   - component: {fileID: 280721318}
   - component: {fileID: 280721317}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12583,7 +12583,7 @@ GameObject:
   - component: {fileID: 284830695}
   - component: {fileID: 284830694}
   - component: {fileID: 284830693}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg37
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -12704,7 +12704,7 @@ GameObject:
   - component: {fileID: 289712958}
   - component: {fileID: 289712957}
   - component: {fileID: 289712956}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13119,7 +13119,7 @@ GameObject:
   - component: {fileID: 296994407}
   - component: {fileID: 296994406}
   - component: {fileID: 296994405}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg49
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13944,7 +13944,7 @@ GameObject:
   - component: {fileID: 313696321}
   - component: {fileID: 313696320}
   - component: {fileID: 313696319}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg40
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14230,7 +14230,7 @@ GameObject:
   - component: {fileID: 317929023}
   - component: {fileID: 317929022}
   - component: {fileID: 317929021}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg29
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14622,7 +14622,7 @@ GameObject:
   - component: {fileID: 345804987}
   - component: {fileID: 345804986}
   - component: {fileID: 345804985}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14743,6 +14743,7 @@ GameObject:
   - component: {fileID: 347423429}
   - component: {fileID: 347423428}
   - component: {fileID: 347423427}
+  - component: {fileID: 347423432}
   m_Layer: 0
   m_Name: factory_amr
   m_TagString: robot
@@ -14868,6 +14869,21 @@ Transform:
   - {fileID: 1105295764}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &347423432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 347423426}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4016eff672d7f342aab2f10b2f02411, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  topicName: /traffic_light/state
+  currentState: none
+  previousState: none
 --- !u!43 &348618960
 Mesh:
   m_ObjectHideFlags: 0
@@ -15211,7 +15227,7 @@ GameObject:
   - component: {fileID: 355745381}
   - component: {fileID: 355745380}
   - component: {fileID: 355745379}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg27
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15842,7 +15858,7 @@ GameObject:
   - component: {fileID: 367660613}
   - component: {fileID: 367660612}
   - component: {fileID: 367660611}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg29
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16420,7 +16436,7 @@ GameObject:
   - component: {fileID: 378630450}
   - component: {fileID: 378630449}
   - component: {fileID: 378630448}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16632,7 +16648,7 @@ GameObject:
   - component: {fileID: 396643099}
   - component: {fileID: 396643098}
   - component: {fileID: 396643097}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16753,7 +16769,7 @@ GameObject:
   - component: {fileID: 399795165}
   - component: {fileID: 399795164}
   - component: {fileID: 399795163}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg45
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16874,7 +16890,7 @@ GameObject:
   - component: {fileID: 404927338}
   - component: {fileID: 404927337}
   - component: {fileID: 404927336}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg24
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17160,7 +17176,7 @@ GameObject:
   - component: {fileID: 413552688}
   - component: {fileID: 413552687}
   - component: {fileID: 413552686}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg45
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17747,7 +17763,7 @@ GameObject:
   - component: {fileID: 434805678}
   - component: {fileID: 434805677}
   - component: {fileID: 434805676}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg33
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -17868,7 +17884,7 @@ GameObject:
   - component: {fileID: 446251174}
   - component: {fileID: 446251173}
   - component: {fileID: 446251172}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -18198,7 +18214,7 @@ GameObject:
   - component: {fileID: 453844117}
   - component: {fileID: 453844116}
   - component: {fileID: 453844115}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -18590,7 +18606,7 @@ GameObject:
   - component: {fileID: 461568576}
   - component: {fileID: 461568575}
   - component: {fileID: 461568574}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg47
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19212,9 +19228,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 468984969}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: RewardZones
-  m_TagString: Zone
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -19248,9 +19264,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 470217106}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2
-  m_TagString: Zone
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -19379,7 +19395,7 @@ GameObject:
   - component: {fileID: 474962142}
   - component: {fileID: 474962141}
   - component: {fileID: 474962140}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg42
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19711,7 +19727,7 @@ GameObject:
   - component: {fileID: 480701949}
   - component: {fileID: 480701948}
   - component: {fileID: 480701947}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg33
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19832,7 +19848,7 @@ GameObject:
   - component: {fileID: 481721590}
   - component: {fileID: 481721589}
   - component: {fileID: 481721588}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg30
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -19953,7 +19969,7 @@ GameObject:
   - component: {fileID: 483202911}
   - component: {fileID: 483202910}
   - component: {fileID: 483202909}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20118,7 +20134,7 @@ GameObject:
   - component: {fileID: 486657461}
   - component: {fileID: 486657460}
   - component: {fileID: 486657459}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg31
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -20779,7 +20795,7 @@ GameObject:
   - component: {fileID: 501886276}
   - component: {fileID: 501886275}
   - component: {fileID: 501886274}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21304,7 +21320,7 @@ GameObject:
   - component: {fileID: 510786825}
   - component: {fileID: 510786824}
   - component: {fileID: 510786823}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg25
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21468,7 +21484,7 @@ GameObject:
   - component: {fileID: 514204028}
   - component: {fileID: 514204027}
   m_Layer: 0
-  m_Name: layer 2_2
+  m_Name: Green
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -21762,7 +21778,7 @@ GameObject:
   - component: {fileID: 519023880}
   - component: {fileID: 519023879}
   - component: {fileID: 519023878}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -21883,7 +21899,7 @@ GameObject:
   - component: {fileID: 519142508}
   - component: {fileID: 519142507}
   - component: {fileID: 519142506}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg39
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -22422,7 +22438,7 @@ GameObject:
   - component: {fileID: 522474363}
   - component: {fileID: 522474362}
   - component: {fileID: 522474361}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23647,7 +23663,7 @@ GameObject:
   - component: {fileID: 559535425}
   - component: {fileID: 559535424}
   - component: {fileID: 559535423}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg31
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23896,7 +23912,7 @@ GameObject:
   - component: {fileID: 569488842}
   - component: {fileID: 569488841}
   - component: {fileID: 569488840}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -24380,7 +24396,7 @@ GameObject:
   - component: {fileID: 585200233}
   - component: {fileID: 585200232}
   - component: {fileID: 585200231}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg37
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -24831,7 +24847,7 @@ GameObject:
   - component: {fileID: 586845454}
   - component: {fileID: 586845453}
   - component: {fileID: 586845452}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg49
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25282,7 +25298,7 @@ GameObject:
   - component: {fileID: 591284082}
   - component: {fileID: 591284081}
   - component: {fileID: 591284080}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg46
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25720,7 +25736,7 @@ GameObject:
   - component: {fileID: 608873664}
   - component: {fileID: 608873663}
   - component: {fileID: 608873662}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg26
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25841,7 +25857,7 @@ GameObject:
   - component: {fileID: 609265934}
   - component: {fileID: 609265933}
   - component: {fileID: 609265932}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg30
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -25995,7 +26011,7 @@ GameObject:
   - component: {fileID: 610702668}
   - component: {fileID: 610702667}
   - component: {fileID: 610702666}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg48
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -26820,7 +26836,7 @@ GameObject:
   - component: {fileID: 628315003}
   - component: {fileID: 628315002}
   - component: {fileID: 628315001}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27271,7 +27287,7 @@ GameObject:
   - component: {fileID: 635957511}
   - component: {fileID: 635957510}
   - component: {fileID: 635957509}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg47
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27392,7 +27408,7 @@ GameObject:
   - component: {fileID: 644078061}
   - component: {fileID: 644078060}
   - component: {fileID: 644078059}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27724,7 +27740,7 @@ GameObject:
   - component: {fileID: 647253092}
   - component: {fileID: 647253091}
   - component: {fileID: 647253090}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27845,7 +27861,7 @@ GameObject:
   - component: {fileID: 648031464}
   - component: {fileID: 648031463}
   - component: {fileID: 648031462}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg38
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27966,7 +27982,7 @@ GameObject:
   - component: {fileID: 648574655}
   - component: {fileID: 648574654}
   - component: {fileID: 648574653}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28252,7 +28268,7 @@ GameObject:
   - component: {fileID: 653822554}
   - component: {fileID: 653822553}
   - component: {fileID: 653822552}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28703,7 +28719,7 @@ GameObject:
   - component: {fileID: 657540496}
   - component: {fileID: 657540495}
   - component: {fileID: 657540494}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -28824,7 +28840,7 @@ GameObject:
   - component: {fileID: 662142485}
   - component: {fileID: 662142484}
   - component: {fileID: 662142483}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg31
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29449,7 +29465,7 @@ GameObject:
   - component: {fileID: 684171562}
   - component: {fileID: 684171561}
   - component: {fileID: 684171560}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg50
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29570,7 +29586,7 @@ GameObject:
   - component: {fileID: 692903820}
   - component: {fileID: 692903819}
   - component: {fileID: 692903818}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29691,7 +29707,7 @@ GameObject:
   - component: {fileID: 694356440}
   - component: {fileID: 694356439}
   - component: {fileID: 694356438}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30069,7 +30085,7 @@ GameObject:
   - component: {fileID: 700312666}
   - component: {fileID: 700312665}
   - component: {fileID: 700312664}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg26
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30279,7 +30295,7 @@ GameObject:
   - component: {fileID: 705231149}
   - component: {fileID: 705231148}
   - component: {fileID: 705231147}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg25
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30400,7 +30416,7 @@ GameObject:
   - component: {fileID: 708157216}
   - component: {fileID: 708157215}
   - component: {fileID: 708157214}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30521,7 +30537,7 @@ GameObject:
   - component: {fileID: 716275158}
   - component: {fileID: 716275157}
   - component: {fileID: 716275156}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg37
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -31843,7 +31859,7 @@ GameObject:
   - component: {fileID: 758688771}
   - component: {fileID: 758688770}
   - component: {fileID: 758688769}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32609,7 +32625,7 @@ GameObject:
   - component: {fileID: 773860562}
   - component: {fileID: 773860561}
   - component: {fileID: 773860560}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32730,7 +32746,7 @@ GameObject:
   - component: {fileID: 774895909}
   - component: {fileID: 774895908}
   - component: {fileID: 774895907}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg47
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33181,7 +33197,7 @@ GameObject:
   - component: {fileID: 795010605}
   - component: {fileID: 795010604}
   - component: {fileID: 795010603}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg41
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33408,7 +33424,7 @@ GameObject:
   - component: {fileID: 796419314}
   - component: {fileID: 796419313}
   - component: {fileID: 796419312}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg28
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33529,7 +33545,7 @@ GameObject:
   - component: {fileID: 802373504}
   - component: {fileID: 802373503}
   - component: {fileID: 802373502}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33741,7 +33757,7 @@ GameObject:
   - component: {fileID: 819873796}
   - component: {fileID: 819873795}
   - component: {fileID: 819873794}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg46
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33996,7 +34012,7 @@ GameObject:
   - component: {fileID: 827133045}
   - component: {fileID: 827133044}
   - component: {fileID: 827133043}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg34
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -34777,7 +34793,7 @@ GameObject:
   - component: {fileID: 843434148}
   - component: {fileID: 843434147}
   - component: {fileID: 843434146}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -35063,7 +35079,7 @@ GameObject:
   - component: {fileID: 848930287}
   - component: {fileID: 848930286}
   - component: {fileID: 848930285}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg44
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -35184,7 +35200,7 @@ GameObject:
   - component: {fileID: 849445251}
   - component: {fileID: 849445250}
   - component: {fileID: 849445249}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg32
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -35470,7 +35486,7 @@ GameObject:
   - component: {fileID: 857606065}
   - component: {fileID: 857606064}
   - component: {fileID: 857606063}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg24
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -36251,7 +36267,7 @@ GameObject:
   - component: {fileID: 870280789}
   - component: {fileID: 870280788}
   - component: {fileID: 870280787}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -36372,7 +36388,7 @@ GameObject:
   - component: {fileID: 871375009}
   - component: {fileID: 871375008}
   - component: {fileID: 871375007}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg34
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -36493,7 +36509,7 @@ GameObject:
   - component: {fileID: 872167848}
   - component: {fileID: 872167847}
   - component: {fileID: 872167846}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -36779,7 +36795,7 @@ GameObject:
   - component: {fileID: 879526134}
   - component: {fileID: 879526133}
   - component: {fileID: 879526132}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -36900,7 +36916,7 @@ GameObject:
   - component: {fileID: 883164026}
   - component: {fileID: 883164025}
   - component: {fileID: 883164024}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg46
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37021,7 +37037,7 @@ GameObject:
   - component: {fileID: 886556007}
   - component: {fileID: 886556006}
   - component: {fileID: 886556005}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg36
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37142,7 +37158,7 @@ GameObject:
   - component: {fileID: 893796087}
   - component: {fileID: 893796086}
   - component: {fileID: 893796085}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg49
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37263,7 +37279,7 @@ GameObject:
   - component: {fileID: 896862549}
   - component: {fileID: 896862548}
   - component: {fileID: 896862547}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37384,7 +37400,7 @@ GameObject:
   - component: {fileID: 900744871}
   - component: {fileID: 900744870}
   - component: {fileID: 900744869}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg44
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37505,7 +37521,7 @@ GameObject:
   - component: {fileID: 902986863}
   - component: {fileID: 902986862}
   - component: {fileID: 902986861}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37626,7 +37642,7 @@ GameObject:
   - component: {fileID: 907811905}
   - component: {fileID: 907811904}
   - component: {fileID: 907811903}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg33
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37747,7 +37763,7 @@ GameObject:
   - component: {fileID: 918261590}
   - component: {fileID: 918261589}
   - component: {fileID: 918261588}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -37868,7 +37884,7 @@ GameObject:
   - component: {fileID: 921205348}
   - component: {fileID: 921205347}
   - component: {fileID: 921205346}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -38319,7 +38335,7 @@ GameObject:
   - component: {fileID: 925927843}
   - component: {fileID: 925927842}
   - component: {fileID: 925927841}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -38440,7 +38456,7 @@ GameObject:
   - component: {fileID: 927284493}
   - component: {fileID: 927284492}
   - component: {fileID: 927284491}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -38891,7 +38907,7 @@ GameObject:
   - component: {fileID: 929875541}
   - component: {fileID: 929875540}
   - component: {fileID: 929875539}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg26
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -39058,7 +39074,7 @@ GameObject:
   - component: {fileID: 931054295}
   - component: {fileID: 931054294}
   - component: {fileID: 931054293}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg43
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -39674,7 +39690,7 @@ GameObject:
   - component: {fileID: 956042619}
   - component: {fileID: 956042618}
   - component: {fileID: 956042617}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -39795,7 +39811,7 @@ GameObject:
   - component: {fileID: 958110367}
   - component: {fileID: 958110366}
   - component: {fileID: 958110365}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -40246,7 +40262,7 @@ GameObject:
   - component: {fileID: 964698442}
   - component: {fileID: 964698441}
   - component: {fileID: 964698440}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg41
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -40367,7 +40383,7 @@ GameObject:
   - component: {fileID: 965575335}
   - component: {fileID: 965575334}
   - component: {fileID: 965575333}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg44
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -40622,7 +40638,7 @@ GameObject:
   - component: {fileID: 976722480}
   - component: {fileID: 976722479}
   - component: {fileID: 976722478}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg31
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -40743,7 +40759,7 @@ GameObject:
   - component: {fileID: 977466713}
   - component: {fileID: 977466712}
   - component: {fileID: 977466711}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg33
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -41404,7 +41420,7 @@ GameObject:
   - component: {fileID: 988709182}
   - component: {fileID: 988709181}
   - component: {fileID: 988709180}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -41525,7 +41541,7 @@ GameObject:
   - component: {fileID: 990703831}
   - component: {fileID: 990703830}
   - component: {fileID: 990703829}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg38
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -42021,7 +42037,7 @@ GameObject:
   - component: {fileID: 1008942001}
   - component: {fileID: 1008942000}
   - component: {fileID: 1008941999}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -42142,7 +42158,7 @@ GameObject:
   - component: {fileID: 1010924281}
   - component: {fileID: 1010924280}
   - component: {fileID: 1010924279}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -42428,7 +42444,7 @@ GameObject:
   - component: {fileID: 1028162957}
   - component: {fileID: 1028162956}
   - component: {fileID: 1028162955}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg43
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -42725,7 +42741,7 @@ GameObject:
   - component: {fileID: 1035815054}
   - component: {fileID: 1035815053}
   - component: {fileID: 1035815052}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg32
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -43329,7 +43345,7 @@ GameObject:
   - component: {fileID: 1054869353}
   - component: {fileID: 1054869352}
   - component: {fileID: 1054869351}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg41
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -43450,7 +43466,7 @@ GameObject:
   - component: {fileID: 1063503726}
   - component: {fileID: 1063503725}
   - component: {fileID: 1063503724}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg38
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -43783,7 +43799,7 @@ GameObject:
   - component: {fileID: 1078805348}
   - component: {fileID: 1078805347}
   - component: {fileID: 1078805346}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -44234,7 +44250,7 @@ GameObject:
   - component: {fileID: 1086216825}
   - component: {fileID: 1086216824}
   - component: {fileID: 1086216823}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -44906,7 +44922,7 @@ GameObject:
   - component: {fileID: 1106575179}
   - component: {fileID: 1106575178}
   - component: {fileID: 1106575177}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg40
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -45027,7 +45043,7 @@ GameObject:
   - component: {fileID: 1110811052}
   - component: {fileID: 1110811051}
   - component: {fileID: 1110811050}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg38
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -45148,7 +45164,7 @@ GameObject:
   - component: {fileID: 1115192413}
   - component: {fileID: 1115192412}
   - component: {fileID: 1115192411}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -45598,7 +45614,7 @@ GameObject:
   - component: {fileID: 1125045774}
   - component: {fileID: 1125045773}
   m_Layer: 0
-  m_Name: layer 2
+  m_Name: Red
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -45682,7 +45698,7 @@ GameObject:
   - component: {fileID: 1125121484}
   - component: {fileID: 1125121483}
   - component: {fileID: 1125121482}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg46
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -46351,7 +46367,7 @@ GameObject:
   - component: {fileID: 1134345000}
   - component: {fileID: 1134344999}
   - component: {fileID: 1134344998}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -46802,7 +46818,7 @@ GameObject:
   - component: {fileID: 1149302551}
   - component: {fileID: 1149302550}
   - component: {fileID: 1149302549}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg48
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -47088,7 +47104,7 @@ GameObject:
   - component: {fileID: 1160210544}
   - component: {fileID: 1160210543}
   - component: {fileID: 1160210542}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -47209,7 +47225,7 @@ GameObject:
   - component: {fileID: 1163082487}
   - component: {fileID: 1163082486}
   - component: {fileID: 1163082485}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -47330,7 +47346,7 @@ GameObject:
   - component: {fileID: 1165002140}
   - component: {fileID: 1165002139}
   - component: {fileID: 1165002138}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg45
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -47812,7 +47828,7 @@ GameObject:
   - component: {fileID: 1176914899}
   - component: {fileID: 1176914898}
   - component: {fileID: 1176914897}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -48098,7 +48114,7 @@ GameObject:
   - component: {fileID: 1179062804}
   - component: {fileID: 1179062803}
   - component: {fileID: 1179062802}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -48421,19 +48437,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7721ef38e29d760ba98258d501be19cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  topicName: /scan
+  topicName: /velodyne_points
   frameId: lidar_link
   publishRate: 10
   rangeMin: 0.1
-  rangeMax: 12
-  numRays: 360
-  angleMin: -3.1415927
-  angleMax: 3.1415927
+  rangeMax: 3
+  numHorizontalRays: 360
+  horizontalAngleMin: -3.1415927
+  horizontalAngleMax: 3.1415927
+  numVerticalRays: 16
+  verticalAngleMin: -0.2617994
+  verticalAngleMax: 0.2617994
   detectionLayer:
     serializedVersion: 2
     m_Bits: 4294967295
   lidarTransform: {fileID: 1194420574}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 0, g: 1, b: 0, a: 1}
 --- !u!114 &1194420576
@@ -48562,7 +48581,7 @@ GameObject:
   - component: {fileID: 1194608187}
   - component: {fileID: 1194608186}
   - component: {fileID: 1194608185}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -49655,7 +49674,7 @@ GameObject:
   - component: {fileID: 1216771057}
   - component: {fileID: 1216771056}
   - component: {fileID: 1216771055}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -49776,7 +49795,7 @@ GameObject:
   - component: {fileID: 1224616747}
   - component: {fileID: 1224616746}
   - component: {fileID: 1224616745}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -49897,7 +49916,7 @@ GameObject:
   - component: {fileID: 1226749580}
   - component: {fileID: 1226749579}
   - component: {fileID: 1226749578}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -50560,7 +50579,7 @@ GameObject:
   - component: {fileID: 1239862687}
   - component: {fileID: 1239862686}
   - component: {fileID: 1239862685}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -50681,7 +50700,7 @@ GameObject:
   - component: {fileID: 1239862981}
   - component: {fileID: 1239862980}
   - component: {fileID: 1239862979}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg26
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -51132,7 +51151,7 @@ GameObject:
   - component: {fileID: 1244223739}
   - component: {fileID: 1244223738}
   - component: {fileID: 1244223737}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg43
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -51299,7 +51318,7 @@ GameObject:
   - component: {fileID: 1247967979}
   - component: {fileID: 1247967978}
   - component: {fileID: 1247967977}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -51420,7 +51439,7 @@ GameObject:
   - component: {fileID: 1251625938}
   - component: {fileID: 1251625937}
   - component: {fileID: 1251625936}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg34
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -51706,7 +51725,7 @@ GameObject:
   - component: {fileID: 1253968556}
   - component: {fileID: 1253968555}
   - component: {fileID: 1253968554}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg27
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -52322,7 +52341,7 @@ GameObject:
   - component: {fileID: 1258662239}
   - component: {fileID: 1258662238}
   - component: {fileID: 1258662237}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg29
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -52564,7 +52583,7 @@ GameObject:
   - component: {fileID: 1284488277}
   - component: {fileID: 1284488276}
   - component: {fileID: 1284488275}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -53015,7 +53034,7 @@ GameObject:
   - component: {fileID: 1288930906}
   - component: {fileID: 1288930905}
   - component: {fileID: 1288930904}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg24
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -53136,7 +53155,7 @@ GameObject:
   - component: {fileID: 1289285650}
   - component: {fileID: 1289285649}
   - component: {fileID: 1289285648}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -53311,7 +53330,7 @@ GameObject:
   - component: {fileID: 1290990681}
   - component: {fileID: 1290990680}
   - component: {fileID: 1290990679}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg29
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -53597,7 +53616,7 @@ GameObject:
   - component: {fileID: 1296418534}
   - component: {fileID: 1296418533}
   - component: {fileID: 1296418532}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg42
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -53718,7 +53737,7 @@ GameObject:
   - component: {fileID: 1297514449}
   - component: {fileID: 1297514448}
   - component: {fileID: 1297514447}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg34
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -53839,7 +53858,7 @@ GameObject:
   - component: {fileID: 1297657122}
   - component: {fileID: 1297657121}
   - component: {fileID: 1297657120}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg45
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -54538,7 +54557,7 @@ GameObject:
   - component: {fileID: 1311019249}
   - component: {fileID: 1311019248}
   - component: {fileID: 1311019247}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -54869,9 +54888,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1322135241}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2
-  m_TagString: Zone
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -54955,7 +54974,7 @@ GameObject:
   - component: {fileID: 1322944616}
   - component: {fileID: 1322944615}
   - component: {fileID: 1322944614}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -55406,7 +55425,7 @@ GameObject:
   - component: {fileID: 1328327579}
   - component: {fileID: 1328327578}
   - component: {fileID: 1328327577}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg43
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -55527,7 +55546,7 @@ GameObject:
   - component: {fileID: 1331471405}
   - component: {fileID: 1331471404}
   - component: {fileID: 1331471403}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -55813,7 +55832,7 @@ GameObject:
   - component: {fileID: 1337812933}
   - component: {fileID: 1337812932}
   - component: {fileID: 1337812931}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -56099,7 +56118,7 @@ GameObject:
   - component: {fileID: 1339448956}
   - component: {fileID: 1339448955}
   - component: {fileID: 1339448954}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -56220,7 +56239,7 @@ GameObject:
   - component: {fileID: 1340035123}
   - component: {fileID: 1340035122}
   - component: {fileID: 1340035121}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg36
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -56517,7 +56536,7 @@ GameObject:
   - component: {fileID: 1343510424}
   - component: {fileID: 1343510423}
   - component: {fileID: 1343510422}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg50
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -56638,7 +56657,7 @@ GameObject:
   - component: {fileID: 1345736102}
   - component: {fileID: 1345736101}
   - component: {fileID: 1345736100}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -57135,7 +57154,7 @@ GameObject:
   - component: {fileID: 1360961151}
   - component: {fileID: 1360961150}
   - component: {fileID: 1360961149}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg41
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -57690,7 +57709,7 @@ GameObject:
   - component: {fileID: 1376007672}
   - component: {fileID: 1376007671}
   m_Layer: 0
-  m_Name: layer 2_1
+  m_Name: Yellow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -57774,7 +57793,7 @@ GameObject:
   - component: {fileID: 1378109288}
   - component: {fileID: 1378109287}
   - component: {fileID: 1378109286}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -58375,7 +58394,7 @@ GameObject:
   - component: {fileID: 1403401076}
   - component: {fileID: 1403401075}
   - component: {fileID: 1403401074}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -58496,7 +58515,7 @@ GameObject:
   - component: {fileID: 1410045865}
   - component: {fileID: 1410045864}
   - component: {fileID: 1410045863}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg25
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -58617,7 +58636,7 @@ GameObject:
   - component: {fileID: 1410129318}
   - component: {fileID: 1410129317}
   - component: {fileID: 1410129316}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg46
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -59037,7 +59056,7 @@ GameObject:
   - component: {fileID: 1433437133}
   - component: {fileID: 1433437132}
   - component: {fileID: 1433437131}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg39
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -59158,7 +59177,7 @@ GameObject:
   - component: {fileID: 1453435548}
   - component: {fileID: 1453435547}
   - component: {fileID: 1453435546}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg30
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -59565,7 +59584,7 @@ GameObject:
   - component: {fileID: 1472352400}
   - component: {fileID: 1472352399}
   - component: {fileID: 1472352398}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -59815,7 +59834,7 @@ GameObject:
   - component: {fileID: 1477532543}
   - component: {fileID: 1477532542}
   - component: {fileID: 1477532541}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg26
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -60146,7 +60165,7 @@ GameObject:
   - component: {fileID: 1479355324}
   - component: {fileID: 1479355323}
   - component: {fileID: 1479355322}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg32
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -60267,7 +60286,7 @@ GameObject:
   - component: {fileID: 1481684400}
   - component: {fileID: 1481684399}
   - component: {fileID: 1481684398}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg37
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -60974,7 +60993,7 @@ GameObject:
   - component: {fileID: 1498814410}
   - component: {fileID: 1498814409}
   - component: {fileID: 1498814408}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg48
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -61095,7 +61114,7 @@ GameObject:
   - component: {fileID: 1501090214}
   - component: {fileID: 1501090213}
   - component: {fileID: 1501090212}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -61216,7 +61235,7 @@ GameObject:
   - component: {fileID: 1504387445}
   - component: {fileID: 1504387444}
   - component: {fileID: 1504387443}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -61502,7 +61521,7 @@ GameObject:
   - component: {fileID: 1513115977}
   - component: {fileID: 1513115976}
   - component: {fileID: 1513115975}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -62045,7 +62064,7 @@ GameObject:
   - component: {fileID: 1520848152}
   - component: {fileID: 1520848151}
   - component: {fileID: 1520848150}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg50
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -62166,7 +62185,7 @@ GameObject:
   - component: {fileID: 1522853512}
   - component: {fileID: 1522853511}
   - component: {fileID: 1522853510}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -62394,7 +62413,7 @@ GameObject:
   - component: {fileID: 1526982060}
   - component: {fileID: 1526982059}
   - component: {fileID: 1526982058}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg41
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -63206,7 +63225,7 @@ GameObject:
   - component: {fileID: 1547706039}
   - component: {fileID: 1547706038}
   - component: {fileID: 1547706037}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -63711,7 +63730,7 @@ GameObject:
   - component: {fileID: 1556384679}
   - component: {fileID: 1556384678}
   - component: {fileID: 1556384677}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg43
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -63832,7 +63851,7 @@ GameObject:
   - component: {fileID: 1558902135}
   - component: {fileID: 1558902134}
   - component: {fileID: 1558902133}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -64598,7 +64617,7 @@ GameObject:
   - component: {fileID: 1578909202}
   - component: {fileID: 1578909201}
   - component: {fileID: 1578909200}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg30
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -64719,7 +64738,7 @@ GameObject:
   - component: {fileID: 1585262106}
   - component: {fileID: 1585262105}
   - component: {fileID: 1585262104}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg29
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -64840,7 +64859,7 @@ GameObject:
   - component: {fileID: 1587777204}
   - component: {fileID: 1587777203}
   - component: {fileID: 1587777202}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -64961,7 +64980,7 @@ GameObject:
   - component: {fileID: 1588405190}
   - component: {fileID: 1588405189}
   - component: {fileID: 1588405188}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -65292,7 +65311,7 @@ GameObject:
   - component: {fileID: 1593101747}
   - component: {fileID: 1593101746}
   - component: {fileID: 1593101745}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -67158,7 +67177,7 @@ GameObject:
   - component: {fileID: 1641688476}
   - component: {fileID: 1641688475}
   - component: {fileID: 1641688474}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -67279,7 +67298,7 @@ GameObject:
   - component: {fileID: 1644771957}
   - component: {fileID: 1644771956}
   - component: {fileID: 1644771955}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -67400,7 +67419,7 @@ GameObject:
   - component: {fileID: 1646693738}
   - component: {fileID: 1646693737}
   - component: {fileID: 1646693736}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -67686,7 +67705,7 @@ GameObject:
   - component: {fileID: 1661606424}
   - component: {fileID: 1661606423}
   - component: {fileID: 1661606422}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg47
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -67972,7 +67991,7 @@ GameObject:
   - component: {fileID: 1669033543}
   - component: {fileID: 1669033542}
   - component: {fileID: 1669033541}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -68093,7 +68112,7 @@ GameObject:
   - component: {fileID: 1669230788}
   - component: {fileID: 1669230787}
   - component: {fileID: 1669230786}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -69414,7 +69433,7 @@ GameObject:
   - component: {fileID: 1690075865}
   - component: {fileID: 1690075864}
   - component: {fileID: 1690075863}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg42
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -69700,7 +69719,7 @@ GameObject:
   - component: {fileID: 1707995819}
   - component: {fileID: 1707995818}
   - component: {fileID: 1707995817}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg50
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -69821,7 +69840,7 @@ GameObject:
   - component: {fileID: 1711795137}
   - component: {fileID: 1711795136}
   - component: {fileID: 1711795135}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg25
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -70316,7 +70335,7 @@ GameObject:
   - component: {fileID: 1724830306}
   - component: {fileID: 1724830305}
   - component: {fileID: 1724830304}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -70437,7 +70456,7 @@ GameObject:
   - component: {fileID: 1724995307}
   - component: {fileID: 1724995306}
   - component: {fileID: 1724995305}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -70888,7 +70907,7 @@ GameObject:
   - component: {fileID: 1735543371}
   - component: {fileID: 1735543370}
   - component: {fileID: 1735543369}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg39
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -71348,7 +71367,7 @@ GameObject:
   - component: {fileID: 1742845526}
   - component: {fileID: 1742845525}
   - component: {fileID: 1742845524}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -71634,7 +71653,7 @@ GameObject:
   - component: {fileID: 1752248158}
   - component: {fileID: 1752248157}
   - component: {fileID: 1752248156}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -71920,7 +71939,7 @@ GameObject:
   - component: {fileID: 1759452244}
   - component: {fileID: 1759452243}
   - component: {fileID: 1759452242}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg24
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -72041,7 +72060,7 @@ GameObject:
   - component: {fileID: 1768042765}
   - component: {fileID: 1768042764}
   - component: {fileID: 1768042763}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -72381,7 +72400,7 @@ GameObject:
   - component: {fileID: 1774539156}
   - component: {fileID: 1774539155}
   - component: {fileID: 1774539154}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -72678,7 +72697,7 @@ GameObject:
   - component: {fileID: 1778956722}
   - component: {fileID: 1778956721}
   - component: {fileID: 1778956720}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg44
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -72799,7 +72818,7 @@ GameObject:
   - component: {fileID: 1782236425}
   - component: {fileID: 1782236424}
   - component: {fileID: 1782236423}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -73085,7 +73104,7 @@ GameObject:
   - component: {fileID: 1791674358}
   - component: {fileID: 1791674357}
   - component: {fileID: 1791674356}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -73371,7 +73390,7 @@ GameObject:
   - component: {fileID: 1794762801}
   - component: {fileID: 1794762800}
   - component: {fileID: 1794762799}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -73492,7 +73511,7 @@ GameObject:
   - component: {fileID: 1804075091}
   - component: {fileID: 1804075090}
   - component: {fileID: 1804075089}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg39
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -73912,7 +73931,7 @@ GameObject:
   - component: {fileID: 1819353470}
   - component: {fileID: 1819353469}
   - component: {fileID: 1819353468}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg28
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -74198,7 +74217,7 @@ GameObject:
   - component: {fileID: 1830401261}
   - component: {fileID: 1830401260}
   - component: {fileID: 1830401259}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -74529,7 +74548,7 @@ GameObject:
   - component: {fileID: 1835725093}
   - component: {fileID: 1835725092}
   - component: {fileID: 1835725091}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -74815,7 +74834,7 @@ GameObject:
   - component: {fileID: 1840989491}
   - component: {fileID: 1840989490}
   - component: {fileID: 1840989489}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -75101,7 +75120,7 @@ GameObject:
   - component: {fileID: 1850010320}
   - component: {fileID: 1850010319}
   - component: {fileID: 1850010318}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg40
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -75387,7 +75406,7 @@ GameObject:
   - component: {fileID: 1858365770}
   - component: {fileID: 1858365769}
   - component: {fileID: 1858365768}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -76333,7 +76352,7 @@ GameObject:
   - component: {fileID: 1867203311}
   - component: {fileID: 1867203310}
   - component: {fileID: 1867203309}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -76454,7 +76473,7 @@ GameObject:
   - component: {fileID: 1867432534}
   - component: {fileID: 1867432533}
   - component: {fileID: 1867432532}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg33
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -76740,7 +76759,7 @@ GameObject:
   - component: {fileID: 1869661799}
   - component: {fileID: 1869661798}
   - component: {fileID: 1869661797}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg32
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -77026,7 +77045,7 @@ GameObject:
   - component: {fileID: 1874274689}
   - component: {fileID: 1874274688}
   - component: {fileID: 1874274687}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -77147,7 +77166,7 @@ GameObject:
   - component: {fileID: 1874809869}
   - component: {fileID: 1874809868}
   - component: {fileID: 1874809867}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg40
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -77389,7 +77408,7 @@ GameObject:
   - component: {fileID: 1882658419}
   - component: {fileID: 1882658418}
   - component: {fileID: 1882658417}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -77809,7 +77828,7 @@ GameObject:
   - component: {fileID: 1889389640}
   - component: {fileID: 1889389639}
   - component: {fileID: 1889389638}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg40
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -77930,7 +77949,7 @@ GameObject:
   - component: {fileID: 1890353505}
   - component: {fileID: 1890353504}
   - component: {fileID: 1890353503}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg27
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -78051,7 +78070,7 @@ GameObject:
   - component: {fileID: 1893307326}
   - component: {fileID: 1893307325}
   - component: {fileID: 1893307324}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -78337,7 +78356,7 @@ GameObject:
   - component: {fileID: 1902090751}
   - component: {fileID: 1902090750}
   - component: {fileID: 1902090749}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -78653,7 +78672,7 @@ GameObject:
   - component: {fileID: 1918016720}
   - component: {fileID: 1918016719}
   - component: {fileID: 1918016718}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg48
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -78774,7 +78793,7 @@ GameObject:
   - component: {fileID: 1923510968}
   - component: {fileID: 1923510967}
   - component: {fileID: 1923510966}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -79390,7 +79409,7 @@ GameObject:
   - component: {fileID: 1936507056}
   - component: {fileID: 1936507055}
   - component: {fileID: 1936507054}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -79672,9 +79691,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1940129511}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1
-  m_TagString: Zone
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -80218,6 +80237,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1949702613}
+  - component: {fileID: 1949702614}
   m_Layer: 0
   m_Name: TrafficLight-1
   m_TagString: Untagged
@@ -80248,6 +80268,24 @@ Transform:
   - {fileID: 292771297}
   m_Father: {fileID: 579421117}
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
+--- !u!114 &1949702614
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1949702612}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01d8e606842e88c94a7d6944356c017e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  redObject: {fileID: 1125045771}
+  yellowObject: {fileID: 5189498702999269896}
+  greenObject: {fileID: 8670671198962503970}
+  redDuration: 10
+  greenDuration: 10
+  yellowDuration: 2
 --- !u!43 &1953849717
 Mesh:
   m_ObjectHideFlags: 0
@@ -81336,8 +81374,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1971914002}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.17800993, y: 0.33155495, z: -0.0639394, w: -0.9242812}
-  m_LocalPosition: {x: -16.617466, y: 2.869404, z: -15.975225}
+  m_LocalRotation: {x: 0.035948142, y: 0.700864, z: -0.03571767, w: 0.7114926}
+  m_LocalPosition: {x: 1.9221553, y: 2.0773778, z: 32.30999}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -81916,7 +81954,7 @@ GameObject:
   - component: {fileID: 1986069490}
   - component: {fileID: 1986069489}
   - component: {fileID: 1986069488}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg28
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -82247,7 +82285,7 @@ GameObject:
   - component: {fileID: 1994371626}
   - component: {fileID: 1994371625}
   - component: {fileID: 1994371624}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg48
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -82368,7 +82406,7 @@ GameObject:
   - component: {fileID: 2007823678}
   - component: {fileID: 2007823677}
   - component: {fileID: 2007823676}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg30
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -82865,7 +82903,7 @@ GameObject:
   - component: {fileID: 2015884906}
   - component: {fileID: 2015884905}
   - component: {fileID: 2015884904}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg36
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -82986,7 +83024,7 @@ GameObject:
   - component: {fileID: 2017038138}
   - component: {fileID: 2017038137}
   - component: {fileID: 2017038136}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -83152,7 +83190,7 @@ GameObject:
   - component: {fileID: 2018119302}
   - component: {fileID: 2018119301}
   - component: {fileID: 2018119300}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -83532,7 +83570,7 @@ GameObject:
   - component: {fileID: 2027178598}
   - component: {fileID: 2027178597}
   - component: {fileID: 2027178596}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -83653,7 +83691,7 @@ GameObject:
   - component: {fileID: 2029231578}
   - component: {fileID: 2029231577}
   - component: {fileID: 2029231576}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg31
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -83774,7 +83812,7 @@ GameObject:
   - component: {fileID: 2029641755}
   - component: {fileID: 2029641754}
   - component: {fileID: 2029641753}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg42
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -83895,7 +83933,7 @@ GameObject:
   - component: {fileID: 2030329386}
   - component: {fileID: 2030329385}
   - component: {fileID: 2030329384}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -84016,7 +84054,7 @@ GameObject:
   - component: {fileID: 2038023742}
   - component: {fileID: 2038023741}
   - component: {fileID: 2038023740}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg34
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -84302,7 +84340,7 @@ GameObject:
   - component: {fileID: 2048335350}
   - component: {fileID: 2048335349}
   - component: {fileID: 2048335348}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L2_Seg9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -84620,7 +84658,7 @@ GameObject:
   - component: {fileID: 2061328985}
   - component: {fileID: 2061328984}
   - component: {fileID: 2061328983}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -84741,7 +84779,7 @@ GameObject:
   - component: {fileID: 2061357025}
   - component: {fileID: 2061357024}
   - component: {fileID: 2061357023}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -84862,7 +84900,7 @@ GameObject:
   - component: {fileID: 2062533682}
   - component: {fileID: 2062533681}
   - component: {fileID: 2062533680}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R2_Seg47
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -84983,7 +85021,7 @@ GameObject:
   - component: {fileID: 2063030873}
   - component: {fileID: 2063030872}
   - component: {fileID: 2063030871}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -85480,7 +85518,7 @@ GameObject:
   - component: {fileID: 2075669368}
   - component: {fileID: 2075669367}
   - component: {fileID: 2075669366}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -85601,7 +85639,7 @@ GameObject:
   - component: {fileID: 2078973196}
   - component: {fileID: 2078973195}
   - component: {fileID: 2078973194}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_c_Seg42
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -87139,7 +87177,7 @@ GameObject:
   - component: {fileID: 2116817753}
   - component: {fileID: 2116817752}
   - component: {fileID: 2116817751}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_R1_Seg17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -87260,7 +87298,7 @@ GameObject:
   - component: {fileID: 2117485427}
   - component: {fileID: 2117485426}
   - component: {fileID: 2117485425}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Zone_L1_Seg0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -88358,6 +88396,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1598151123104742663}
+  - component: {fileID: 2118404134854780862}
   m_Layer: 0
   m_Name: TrafficLight-1
   m_TagString: Untagged
@@ -88365,6 +88404,24 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &2118404134854780862
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2118404134854780861}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01d8e606842e88c94a7d6944356c017e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  redObject: {fileID: 1125045771}
+  yellowObject: {fileID: 5189498702999269896}
+  greenObject: {fileID: 8670671198962503970}
+  redDuration: 10
+  greenDuration: 10
+  yellowDuration: 2
 --- !u!1 &2358080785976408128
 GameObject:
   m_ObjectHideFlags: 0
@@ -88800,7 +88857,7 @@ GameObject:
   - component: {fileID: 6074868367692270354}
   - component: {fileID: 7851872863256174031}
   m_Layer: 0
-  m_Name: layer 2
+  m_Name: Red
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -88884,7 +88941,7 @@ GameObject:
   - component: {fileID: 6859299796632573802}
   - component: {fileID: 3620422103505035533}
   m_Layer: 0
-  m_Name: layer 2_1
+  m_Name: Yellow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -89214,7 +89271,7 @@ GameObject:
   - component: {fileID: 7278888608729585798}
   - component: {fileID: 5444362095941510580}
   m_Layer: 0
-  m_Name: layer 2_2
+  m_Name: Green
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -53,3 +53,7 @@ Thumbs.db
 sysinfo.txt
 crashlytics-build.properties
 python/checkpoints/*
+python/datasets/*
+python/runs/*
+yolo26n.pt
+yolov8n.pt
