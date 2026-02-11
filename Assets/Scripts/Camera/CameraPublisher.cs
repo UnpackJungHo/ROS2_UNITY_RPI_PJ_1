@@ -154,10 +154,20 @@ public class CameraPublisher : MonoBehaviour
     {
         if (cam == null || renderTexture == null) return;
 
+        // 현재 targetTexture 상태 보존 (RenderToScreen 모드일 수 있음)
+        RenderTexture prevTarget = cam.targetTexture;
+
+        // 일시적으로 RT에 렌더링 → 캡처 → 원래 상태 복원
+        cam.targetTexture = renderTexture;
+        cam.Render();
+
         RenderTexture.active = renderTexture;
         texture2D.ReadPixels(new Rect(0, 0, imageWidth, imageHeight), 0, 0);
         texture2D.Apply();
         RenderTexture.active = null;
+
+        // 원래 상태 복원 (null이면 화면 직접 렌더링 유지)
+        cam.targetTexture = prevTarget;
 
         byte[] imageData = texture2D.GetRawTextureData();
         byte[] rgbData = ConvertToRGB(imageData);

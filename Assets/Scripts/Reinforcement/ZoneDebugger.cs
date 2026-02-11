@@ -42,7 +42,7 @@ public class ZoneDebugger : MonoBehaviour
             currentZoneName = "None";
             if (showDebugLog)
             {
-                Debug.Log($"[ZoneDebugger] Exited Zone: {zone.zoneName}");
+                //Debug.Log($"[ZoneDebugger] Exited Zone: {zone.zoneName}");
             }
         }
     }
@@ -57,7 +57,7 @@ public class ZoneDebugger : MonoBehaviour
                 currentZoneName = zone.zoneName;
                 if (showDebugLog)
                 {
-                    Debug.Log($"[ZoneDebugger] Entered/In Zone: {currentZoneName} (Score: {zone.score})");
+                    //Debug.Log($"[ZoneDebugger] Entered/In Zone: {currentZoneName} (Score: {zone.score})");
                 }
             }
         }

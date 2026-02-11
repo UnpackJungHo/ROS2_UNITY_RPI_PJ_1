@@ -1,41 +1,33 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class TrafficLight : MonoBehaviour
 {
-    [Header("Traffic Light Objects")]
-    public GameObject redObject;
-    public GameObject yellowObject;
-    public GameObject greenObject;
+    [Header("Traffic Light Image")]
+    public SpriteRenderer signalImage;
+
+    [Header("Sprite Lists")]
+    public List<Sprite> redSprites;
+    public List<Sprite> yellowSprites;
+    public List<Sprite> greenSprites;
+
+    [Header("Auto-Fit Settings")]
+    public Renderer fitTargetRenderer; // Assign 'layer 8' here
+    public float zOffset = 3f; // Default to 3, can be negative if needed
+    public Vector3 manualScaleAdjustment = Vector3.one; // Fine-tune if auto-fit is slightly off
 
     [Header("Durations")]
     public float redDuration = 10f;
     public float greenDuration = 10f;
     public float yellowDuration = 2f;
 
-    private Renderer redRenderer;
-    private Renderer yellowRenderer;
-    private Renderer greenRenderer;
-    
-    // Use MaterialPropertyBlock for efficient and correct color updates on instances (even static ones)
-    private MaterialPropertyBlock propBlock;
-    private static readonly int ColorId = Shader.PropertyToID("_Color");
+    [Header("Current State (Read Only)")]
+    [SerializeField] private string _currentColor = "red";
+    public string currentColor => _currentColor;
 
     private void Start()
     {
-        // Cache Renderers instead of Material instances
-        if (redObject != null) redRenderer = redObject.GetComponent<Renderer>();
-        if (yellowObject != null) yellowRenderer = yellowObject.GetComponent<Renderer>();
-        if (greenObject != null) greenRenderer = greenObject.GetComponent<Renderer>();
-
-        // Initialize Property Block
-        propBlock = new MaterialPropertyBlock();
-
-        // Initialize all lights to black (off)
-        SetColor(redRenderer, Color.black);
-        SetColor(yellowRenderer, Color.black);
-        SetColor(greenRenderer, Color.black);
-
         // Start the traffic light cycle
         StartCoroutine(TrafficCycle());
     }
@@ -45,37 +37,105 @@ public class TrafficLight : MonoBehaviour
         while (true)
         {
             // 1. Red Light ON
-            SetColor(redRenderer, Color.red);
+            _currentColor = "red";
+            SetRandomSprite(redSprites);
             yield return new WaitForSeconds(redDuration);
-            SetColor(redRenderer, Color.black);
 
             // 2. Yellow Light ON (Transition: Red -> Green)
-            SetColor(yellowRenderer, Color.yellow);
+            _currentColor = "yellow";
+            SetRandomSprite(yellowSprites);
             yield return new WaitForSeconds(yellowDuration);
-            SetColor(yellowRenderer, Color.black);
 
             // 3. Green Light ON
-            SetColor(greenRenderer, Color.green);
+            _currentColor = "green";
+            SetRandomSprite(greenSprites);
             yield return new WaitForSeconds(greenDuration);
-            SetColor(greenRenderer, Color.black);
 
             // 4. Yellow Light ON (Transition: Green -> Red)
-            SetColor(yellowRenderer, Color.yellow);
+            _currentColor = "yellow";
+            SetRandomSprite(yellowSprites);
             yield return new WaitForSeconds(yellowDuration);
-            SetColor(yellowRenderer, Color.black);
         }
     }
 
-    private void SetColor(Renderer rend, Color color)
+    private void SetRandomSprite(List<Sprite> sprites)
     {
-        if (rend != null)
+        if (signalImage != null && sprites != null && sprites.Count > 0)
         {
-            // Get the current property block
-            rend.GetPropertyBlock(propBlock);
-            // Set the color property
-            propBlock.SetColor(ColorId, color);
-            // Apply the property block back to the renderer
-            rend.SetPropertyBlock(propBlock);
+            int randomIndex = Random.Range(0, sprites.Count);
+            signalImage.sprite = sprites[randomIndex];
+            
+            // Auto-fit the new sprite to the target boundary
+            if (fitTargetRenderer != null)
+            {
+                FitSpriteToBoundary();
+            }
+        }
+    }
+
+    private void FitSpriteToBoundary()
+    {
+        if (signalImage == null || fitTargetRenderer == null || signalImage.sprite == null) return;
+
+        // Try to get mesh bounds for local size (works best for rotated objects)
+        Vector3 targetLocalSize;
+        MeshFilter targetMeshFilter = fitTargetRenderer.GetComponent<MeshFilter>();
+        
+        if (targetMeshFilter != null && targetMeshFilter.sharedMesh != null)
+        {
+            targetLocalSize = targetMeshFilter.sharedMesh.bounds.size;
+        }
+        else
+        {
+            // Fallback to renderer bounds in world space if no mesh (e.g. SkinnedMesh or other)
+            // But we convert world bounds size to local space approx by dividing by lossyScale
+            // This handles rotation poorly but is a fallback.
+            Vector3 worldSize = fitTargetRenderer.bounds.size;
+            Vector3 parentScale = fitTargetRenderer.transform.lossyScale;
+            targetLocalSize = new Vector3(
+                (parentScale.x != 0) ? worldSize.x / parentScale.x : worldSize.x,
+                (parentScale.y != 0) ? worldSize.y / parentScale.y : worldSize.y,
+                (parentScale.z != 0) ? worldSize.z / parentScale.z : worldSize.z
+            );
+        }
+
+        Vector3 spriteLocalSize = signalImage.sprite.bounds.size;
+
+        // Calculate scale factor: Target Local Size / Sprite Local Size
+        // We assume the signalImage is a child, so it inherits parent scale. 
+        // Thus we only need to match the LOCAL size of the sprite to the LOCAL size of the mesh.
+        
+        float xScale = (spriteLocalSize.x != 0) ? targetLocalSize.x / spriteLocalSize.x : 1f;
+        float yScale = (spriteLocalSize.y != 0) ? targetLocalSize.y / spriteLocalSize.y : 1f;
+
+        // Apply manual adjustment
+        xScale *= manualScaleAdjustment.x;
+        yScale *= manualScaleAdjustment.y;
+
+        // Apply new scale (preserve z as 1 or match target if needed, usually 1 for 2D sprites)
+        signalImage.transform.localScale = new Vector3(xScale, yScale, 1f);
+
+        // Position Logic:
+        // Place at the center of the target mesh (local space 0,0,0 usually, but bounds.center might be offset)
+        // If fitTargetRenderer is the parent, we can just use localPosition.
+        // If not parent, we must use world position. Let's assume parent/child relationship per user description.
+        
+        if (signalImage.transform.parent == fitTargetRenderer.transform)
+        {
+             Vector3 centerOffset = (targetMeshFilter != null) ? targetMeshFilter.sharedMesh.bounds.center : Vector3.zero;
+             // Move forward by zOffset (Forward is usually +Z or -Z depending on model. We assume -Z is "Front" per user request or +Z)
+             // User tried +3 and it worked somewhat? Or maybe -3? 
+             // We'll use local Z offset directly.
+             signalImage.transform.localPosition = centerOffset + new Vector3(0, 0, -zOffset); 
+             // Note: If the mesh faces -Z, moving -Z moves it "out".
+             
+             // Reset local rotation to identity to match parent face (or keep user's if they rotated it manually?)
+             // User said "Rotation should not change". So we don't touch localRotation.
+        }
+        else
+        {
+             // World space fallback
+             signalImage.transform.position = fitTargetRenderer.bounds.center + fitTargetRenderer.transform.forward * -zOffset;
         }
     }
 }
