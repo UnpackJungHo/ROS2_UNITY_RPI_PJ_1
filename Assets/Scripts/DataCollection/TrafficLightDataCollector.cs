@@ -208,9 +208,12 @@ public class TrafficLightDataCollector : MonoBehaviour
 
         // ★ RT를 먼저 설정해야 뷰포트 좌표가 RT 비율(4:3)과 일치함
         RenderTexture prevTarget = cam.targetTexture;
-        cam.targetTexture = rt;
+        Rect prevRect = cam.rect; // 기존 레터박스 Rect 저장
 
-        // 라벨 생성 (이제 뷰포트 계산이 RT 비율 기준)
+        cam.targetTexture = rt;
+        cam.rect = new Rect(0, 0, 1, 1); // 캡처할 때는 전체 화면(1:1) 비율로 복원
+
+        // 라벨 생성 (이제 뷰포트 계산이 RT 비율 기준 + 전체 화면 Rect 기준)
         List<string> labels = new List<string>();
         foreach (var tl in trafficLights)
         {
@@ -237,6 +240,7 @@ public class TrafficLightDataCollector : MonoBehaviour
         if (labels.Count == 0 && !saveEmptyFrames)
         {
             cam.targetTexture = prevTarget;
+            cam.rect = prevRect; // 복원
             return;
         }
 
@@ -263,6 +267,7 @@ public class TrafficLightDataCollector : MonoBehaviour
 
         // 원래 상태 복원
         cam.targetTexture = prevTarget;
+        cam.rect = prevRect;
 
         Destroy(tex);
 
@@ -299,21 +304,40 @@ public class TrafficLightDataCollector : MonoBehaviour
                 $"● REC  |  {imageCount} images  ({labeledCount} labeled)", recStyle);
         }
 
-        if (!showDebugBoxes || debugBoxes.Count == 0) return;
+        if (!showDebugBoxes || debugBoxes.Count == 0 || cam == null) return;
+        
+        // Front View 모드 확인: targetTexture가 null일 때만 화면에 그리는 중임
+        // (TopView나 BackView는 RT에만 그리고 있으므로 여기서는 안 보이게 해야 함)
+        if (cam.targetTexture != null) return;
 
         // 디버그 박스 정보 표시
         GUI.color = Color.white;
         GUI.Label(new Rect(10, isCollecting ? 40 : 10, 300, 20),
             $"[Debug] Visible TLs: {debugBoxes.Count}");
 
+        Rect camRect = cam.rect; // 현재 카메라의 Viewport Rect (0.71 등 레터박스 영역)
+
         foreach (var box in debugBoxes)
         {
             // Viewport → GUI 좌표 변환
-            // Viewport: (0,0)=좌하단  GUI: (0,0)=좌상단
-            float guiX = box.viewportRect.x * Screen.width;
-            float guiY = (1f - box.viewportRect.y - box.viewportRect.height) * Screen.height;
-            float guiW = box.viewportRect.width * Screen.width;
-            float guiH = box.viewportRect.height * Screen.height;
+            
+            // 1. 박스의 실제 화면상 Viewport X 좌표
+            // camRect.x (카메라 시작점) + box.x (카메라 내부 상대좌표) * camRect.width (카메라 너비 비율)
+            float screenVpX = camRect.x + (box.viewportRect.x * camRect.width);
+            
+            // 2. 박스의 실제 화면상 Viewport Y 좌표 (Bottom-Left 기준)
+            float screenVpY = camRect.y + (box.viewportRect.y * camRect.height);
+            
+            // 3. 박스의 실제 화면상 너비와 높이 비율
+            float screenVpW = box.viewportRect.width * camRect.width;
+            float screenVpH = box.viewportRect.height * camRect.height;
+
+            // 4. GUI 좌표계로 변환 (Top-Left 기준, 픽셀 단위)
+            float guiX = screenVpX * Screen.width;
+            float guiY = (1f - (screenVpY + screenVpH)) * Screen.height; // Y축 반전 주의 (Top 기준 좌표 = 전체 1 - (Bottom 기준 Y + H))
+            float guiW = screenVpW * Screen.width;
+            float guiH = screenVpH * Screen.height;
+
             Rect guiRect = new Rect(guiX, guiY, guiW, guiH);
 
             // 박스 외곽선
