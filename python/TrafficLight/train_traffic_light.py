@@ -103,10 +103,10 @@ def train(args):
         lrf=0.01,
         warmup_epochs=3,
         warmup_momentum=0.8,
-        # 데이터 증강
-        hsv_h=0.015,
-        hsv_s=0.7,
-        hsv_v=0.4,
+        # 데이터 증강 (신호등 색상 보존 - hsv_h=0 필수)
+        hsv_h=0.0,
+        hsv_s=0.2,
+        hsv_v=0.3,
         degrees=5.0,
         translate=0.1,
         scale=0.5,

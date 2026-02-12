@@ -4,10 +4,19 @@ using System.Collections.Generic;
 
 public class TrafficLight : MonoBehaviour
 {
+    public enum DatasetType
+    {
+        Train,
+        Test
+    }
+
+    [Header("Dataset Settings")]
+    public DatasetType datasetType = DatasetType.Train;
+
     [Header("Traffic Light Image")]
     public SpriteRenderer signalImage;
 
-    [Header("Sprite Lists")]
+    [Header("Sprite Lists (Auto-Loaded)")]
     public List<Sprite> redSprites;
     public List<Sprite> yellowSprites;
     public List<Sprite> greenSprites;
@@ -28,8 +37,29 @@ public class TrafficLight : MonoBehaviour
 
     private void Start()
     {
+        // Auto-load sprites based on dataset type
+        LoadSprites();
+
         // Start the traffic light cycle
         StartCoroutine(TrafficCycle());
+    }
+
+    [ContextMenu("Load Sprites")]
+    public void LoadSprites()
+    {
+        string typeFolder = datasetType.ToString().ToLower(); // "train" or "test"
+        string basePath = $"CrossWalkImage/{typeFolder}";
+
+        // Load Red
+        redSprites = new List<Sprite>(Resources.LoadAll<Sprite>($"{basePath}/Red"));
+        
+        // Load Yellow
+        yellowSprites = new List<Sprite>(Resources.LoadAll<Sprite>($"{basePath}/Yellow"));
+        
+        // Load Green
+        greenSprites = new List<Sprite>(Resources.LoadAll<Sprite>($"{basePath}/Green"));
+
+        Debug.Log($"[TrafficLight] Loaded {datasetType} sprites: R={redSprites.Count}, Y={yellowSprites.Count}, G={greenSprites.Count}");
     }
 
     private IEnumerator TrafficCycle()

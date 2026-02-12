@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/kjhz/miniconda3/envs/driving/bin/python
 """
 Traffic Light Detector - YOLOv8n 기반 신호등 색상 인지 ROS2 노드
 
