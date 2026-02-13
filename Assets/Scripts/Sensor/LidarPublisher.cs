@@ -19,7 +19,7 @@ public class LidarPublisher : MonoBehaviour
     [Tooltip("최소 감지 거리 (m)")]
     public float rangeMin = 0.1f;
     [Tooltip("최대 감지 거리 (m)")]
-    public float rangeMax = 100f; // 3D 라이다는 보통 더 긴 범위를 가짐
+    public float rangeMax = 3f; // 3D 라이다는 보통 더 긴 범위를 가짐
 
     [Tooltip("수평 스캔 레이 개수 (360도 기준)")]
     public int numHorizontalRays = 360;
@@ -72,7 +72,7 @@ public class LidarPublisher : MonoBehaviour
 
         // Layer 9 (Zone) 제외
         // 기존 detectionLayer에서 9번 비트를 0으로 만듦
-        detectionLayer &= ~(1 << 9);
+        // detectionLayer &= ~(1 << 9);
 
         InitializeLidar();
     }
@@ -196,13 +196,10 @@ public class LidarPublisher : MonoBehaviour
         // 데이터 바이트 변환
         // Buffer.BlockCopy is faster for arrays, but we have a List<float>.
         // Using BitConverter loop for clarity and safety.
-        int byteIndex = 0;
-        for (int i = 0; i < pointCloudData.Count; i++)
-        {
-            byte[] bytes = BitConverter.GetBytes(pointCloudData[i]);
-            Array.Copy(bytes, 0, data, byteIndex, 4);
-            byteIndex += 4;
-        }
+        // 데이터 바이트 변환 (Buffer.BlockCopy 사용으로 최적화)
+        // float[]로 변환 후 복사
+        float[] floatArray = pointCloudData.ToArray();
+        Buffer.BlockCopy(floatArray, 0, data, 0, data.Length);
 
         PointCloud2Msg msg = new PointCloud2Msg
         {
@@ -218,7 +215,7 @@ public class LidarPublisher : MonoBehaviour
             height = 1, // Unordered point cloud
             width = (uint)numPoints,
             fields = fields,
-            is_bigendian = false,
+            is_bigendian = false, // C# uses Little Endian on most platforms
             point_step = (uint)pointStep,
             row_step = (uint)(numPoints * pointStep),
             data = data,

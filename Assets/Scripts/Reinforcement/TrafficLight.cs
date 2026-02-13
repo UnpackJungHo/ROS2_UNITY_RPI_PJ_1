@@ -35,6 +35,11 @@ public class TrafficLight : MonoBehaviour
     [SerializeField] private string _currentColor = "red";
     public string currentColor => _currentColor;
 
+    [Header("Available Sprites (Runtime)")]
+    private List<Sprite> _availableRedSprites = new List<Sprite>();
+    private List<Sprite> _availableYellowSprites = new List<Sprite>();
+    private List<Sprite> _availableGreenSprites = new List<Sprite>();
+
     private void Start()
     {
         // Auto-load sprites based on dataset type
@@ -52,12 +57,15 @@ public class TrafficLight : MonoBehaviour
 
         // Load Red
         redSprites = new List<Sprite>(Resources.LoadAll<Sprite>($"{basePath}/Red"));
+        _availableRedSprites = new List<Sprite>(redSprites);
         
         // Load Yellow
         yellowSprites = new List<Sprite>(Resources.LoadAll<Sprite>($"{basePath}/Yellow"));
+        _availableYellowSprites = new List<Sprite>(yellowSprites);
         
         // Load Green
         greenSprites = new List<Sprite>(Resources.LoadAll<Sprite>($"{basePath}/Green"));
+        _availableGreenSprites = new List<Sprite>(greenSprites);
 
         Debug.Log($"[TrafficLight] Loaded {datasetType} sprites: R={redSprites.Count}, Y={yellowSprites.Count}, G={greenSprites.Count}");
     }
@@ -68,32 +76,44 @@ public class TrafficLight : MonoBehaviour
         {
             // 1. Red Light ON
             _currentColor = "red";
-            SetRandomSprite(redSprites);
+            SetRandomSprite(redSprites, _availableRedSprites);
             yield return new WaitForSeconds(redDuration);
 
             // 2. Yellow Light ON (Transition: Red -> Green)
             _currentColor = "yellow";
-            SetRandomSprite(yellowSprites);
+            SetRandomSprite(yellowSprites, _availableYellowSprites);
             yield return new WaitForSeconds(yellowDuration);
 
             // 3. Green Light ON
             _currentColor = "green";
-            SetRandomSprite(greenSprites);
+            SetRandomSprite(greenSprites, _availableGreenSprites);
             yield return new WaitForSeconds(greenDuration);
 
             // 4. Yellow Light ON (Transition: Green -> Red)
             _currentColor = "yellow";
-            SetRandomSprite(yellowSprites);
+            SetRandomSprite(yellowSprites, _availableYellowSprites);
             yield return new WaitForSeconds(yellowDuration);
         }
     }
 
-    private void SetRandomSprite(List<Sprite> sprites)
+    private void SetRandomSprite(List<Sprite> originalSprites, List<Sprite> availableSprites)
     {
-        if (signalImage != null && sprites != null && sprites.Count > 0)
+        if (signalImage != null && originalSprites != null && originalSprites.Count > 0)
         {
-            int randomIndex = Random.Range(0, sprites.Count);
-            signalImage.sprite = sprites[randomIndex];
+            // Refill if empty
+            if (availableSprites.Count == 0)
+            {
+                availableSprites.AddRange(originalSprites);
+            }
+
+            // Pick a random sprite from the available list
+            int randomIndex = Random.Range(0, availableSprites.Count);
+            Sprite selectedSprite = availableSprites[randomIndex];
+            
+            // Remove it so it doesn't repeat until refill
+            availableSprites.RemoveAt(randomIndex);
+
+            signalImage.sprite = selectedSprite;
             
             // Auto-fit the new sprite to the target boundary
             if (fitTargetRenderer != null)

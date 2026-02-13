@@ -9,7 +9,7 @@ public class CameraPublisher : MonoBehaviour
     [Header("ROS Settings")]
     public string topicName = "/camera/image_raw";
     public string frameId = "camera_link";
-    public float publishRate = 10f;
+    public float publishRate = 30f;
 
     [Header("Camera Settings")]
     public int imageWidth = 640;

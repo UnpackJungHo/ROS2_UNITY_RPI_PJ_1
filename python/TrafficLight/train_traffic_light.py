@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-YOLOv8n 전이학습 - 신호등 색상 탐지 (Green / Red / Yellow)
+YOLOv8s 전이학습 - 신호등 색상 탐지 (Green / Red / Yellow)
 
 === 데이터셋 (Roboflow) ===
-Roboflow에서 YOLOv8 포맷으로 다운로드한 데이터셋을 그대로 사용합니다.
+Roboflow에서 수집한 실제 신호등 이미지 데이터 사용.
+(9,710장: train 8,493 / valid 811 / test 406)
 
 datasets/traffic_light/
-├── data.yaml           ← Roboflow 제공 YAML (경로 자동 보정)
+├── data.yaml
 ├── train/
 │   ├── images/
 │   └── labels/
@@ -17,10 +18,10 @@ datasets/traffic_light/
     ├── images/
     └── labels/
 
-=== 클래스 (Roboflow 순서) ===
-0: Green
-1: Red
-2: Yellow
+=== 클래스 ===
+0: green
+1: red
+2: yellow
 
 === 실행 ===
 conda activate driving
@@ -36,9 +37,13 @@ import yaml
 import os
 
 
+# 프로젝트 루트 (ros2_unity_autoDriver/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
 def prepare_dataset_yaml(dataset_path: str) -> str:
     """
-    Roboflow data.yaml의 상대경로를 절대경로로 보정한 YAML 생성
+    data.yaml의 상대경로를 절대경로로 보정한 YAML 생성
     원본 data.yaml은 수정하지 않음
     """
     original_yaml = os.path.join(dataset_path, 'data.yaml')
@@ -50,7 +55,6 @@ def prepare_dataset_yaml(dataset_path: str) -> str:
     with open(original_yaml, 'r') as f:
         config = yaml.safe_load(f)
 
-    # Roboflow 상대경로 → 절대경로 변환
     abs_dataset = os.path.abspath(dataset_path)
     config['path'] = abs_dataset
     config['train'] = 'train/images'
@@ -60,7 +64,6 @@ def prepare_dataset_yaml(dataset_path: str) -> str:
     with open(fixed_yaml, 'w') as f:
         yaml.dump(config, f, default_flow_style=False)
 
-    print(f"[Dataset] Original YAML: {original_yaml}")
     print(f"[Dataset] Fixed YAML:    {fixed_yaml}")
     print(f"[Dataset] Path:          {abs_dataset}")
     print(f"[Dataset] Classes:       {config['names']}")
@@ -72,27 +75,29 @@ def prepare_dataset_yaml(dataset_path: str) -> str:
 
 
 def train(args):
-    """YOLOv8n 전이학습 실행"""
+    """YOLOv8s 전이학습 실행"""
     print("=" * 60)
-    print("YOLOv8n Traffic Light Detection - Transfer Learning")
+    print("YOLOv8s Traffic Light Detection - Transfer Learning")
+    print("  Dataset: Roboflow real-world traffic light images")
     print("=" * 60)
 
-    # 데이터셋 YAML 준비 (상대경로 → 절대경로 보정)
     yaml_path = prepare_dataset_yaml(args.dataset_path)
 
-    # YOLOv8n pretrained 모델 로드
     model = YOLO('yolov8n.pt')
     print(f"\n[Model] YOLOv8n loaded (pretrained on COCO)")
-    print(f"[Model] Parameters: ~3.2M, GFLOPs: ~8.7")
+    print(f"[Model] Parameters: ~11.2M, GFLOPs: ~28.6")
 
-    # 전이학습 실행
+    # 결과 저장 경로: {PROJECT_ROOT}/runs/detect/
+    output_project = str(PROJECT_ROOT / 'runs' / 'detect')
+
     results = model.train(
         data=yaml_path,
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch_size,
         device=args.device,
-        name='traffic_light_yolov8n',
+        project=output_project,
+        name='traffic_light_yolov8s',
         patience=args.patience,
         save=True,
         save_period=10,
@@ -103,27 +108,26 @@ def train(args):
         lrf=0.01,
         warmup_epochs=3,
         warmup_momentum=0.8,
-        # 데이터 증강 (신호등 색상 보존 - hsv_h=0 필수)
-        hsv_h=0.0,
-        hsv_s=0.2,
-        hsv_v=0.3,
+        # 데이터 증강 (대규모 데이터 → 표준 증강, 색상 보존)
+        hsv_h=0.0,       # 색상 변환 없음 (신호등 색상 보존 필수)
+        hsv_s=0.3,
+        hsv_v=0.4,
         degrees=5.0,
         translate=0.1,
         scale=0.5,
-        flipud=0.0,  # 상하 반전 비활성화 (신호등은 위아래가 중요)
+        flipud=0.0,
         fliplr=0.5,
         mosaic=1.0,
         mixup=0.1,
+        copy_paste=0.0,
     )
 
-    # 결과 출력
+    best_weights = os.path.join(output_project, 'traffic_light_yolov8s', 'weights', 'best.pt')
     print("\n" + "=" * 60)
     print("Training Complete!")
-    print(f"  Best weights: runs/detect/traffic_light_yolov8n/weights/best.pt")
-    print(f"  Last weights: runs/detect/traffic_light_yolov8n/weights/last.pt")
+    print(f"  Best weights: {best_weights}")
     print("=" * 60)
 
-    # 검증
     print("\n[Validation] Running final validation...")
     val_results = model.val()
     print(f"  mAP50: {val_results.box.map50:.4f}")
@@ -133,7 +137,7 @@ def train(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="YOLOv8n Traffic Light Training")
+    parser = argparse.ArgumentParser(description="YOLOv8s Traffic Light Training")
     parser.add_argument("--dataset_path", type=str,
                         default=str(Path(__file__).parent.parent / "datasets" / "traffic_light"),
                         help="데이터셋 경로")

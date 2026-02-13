@@ -34,6 +34,7 @@ import numpy as np
 from ultralytics import YOLO
 import argparse
 from pathlib import Path
+from collections import deque, Counter
 import threading
 
 
@@ -78,13 +79,11 @@ class CameraThread:
 
 
 class TrafficLightDetector(Node):
-    # ========== 비대칭 디바운싱 상수 ==========
-    # none → 색상: 빠르게 감지 (실시간성)
-    CONFIRM_COLOR = 2
-    # 색상 → 다른 색상: 신중하게 (오탐 방지)
-    CONFIRM_COLOR_CHANGE = 3
-    # 색상 → none: 매우 느리게 (깜빡임 방지, ~1초)
-    CONFIRM_NONE = 10
+    # ========== 슬라이딩 윈도우 디바운싱 상수 ==========
+    WINDOW_SIZE = 15          # 최근 15프레임 기록 (30fps 기준 0.5초)
+    THRESHOLD_COLOR = 0.4     # none → 색상: 40% 이상이면 전환 (빠른 감지)
+    THRESHOLD_CHANGE = 0.5    # 색상 → 다른 색상: 50% 이상 (신중한 전환)
+    THRESHOLD_NONE = 0.8      # 색상 → none: 80% 이상 (깜빡임 방지)
 
     def __init__(self, mode='simulation', model_path=None, camera_device=0):
         super().__init__('traffic_light_detector')
@@ -105,7 +104,7 @@ class TrafficLightDetector(Node):
         self.infer_imgsz = 640 if mode == 'simulation' else 480
 
         # ========== 파라미터 선언 ==========
-        self.declare_parameter('confidence_threshold', 0.3,
+        self.declare_parameter('confidence_threshold', 0.15,
             ParameterDescriptor(
                 description='YOLO 탐지 신뢰도 임계값',
                 floating_point_range=[FloatingPointRange(
@@ -132,10 +131,9 @@ class TrafficLightDetector(Node):
         self.state_pub = self.create_publisher(String, '/traffic_light/state', 10)
         self.debug_pub = self.create_publisher(Image, '/traffic_light/debug', 10)
 
-        # ========== 비대칭 디바운싱 상태 ==========
+        # ========== 슬라이딩 윈도우 디바운싱 상태 ==========
         self.current_state = 'none'
-        self.pending_state = 'none'   # 전환 대기 중인 상태
-        self.pending_count = 0        # 연속 카운트
+        self.history = deque(maxlen=self.WINDOW_SIZE)
 
         # ========== 모드별 입력 소스 설정 ==========
         self.camera_thread = None
@@ -234,44 +232,44 @@ class TrafficLightDetector(Node):
 
     def update_debounce(self, detected_state: str) -> str:
         """
-        비대칭 디바운싱: 전환 방향에 따라 다른 확인 프레임 수 요구
+        슬라이딩 윈도우 디바운싱: 최근 N프레임에서 비율 기반 판단
 
-        - none → 색상:       2프레임 (빠른 감지)
-        - 색상 → 다른 색상:  3프레임 (신중한 전환)
-        - 색상 → none:      10프레임 (깜빡임 방지)
+        - none → 색상:       40% 이상 (빠른 감지, ~6/15프레임)
+        - 색상 → 다른 색상:  50% 이상 (신중한 전환, ~8/15프레임)
+        - 색상 → none:       80% 이상 (깜빡임 방지, ~12/15프레임)
+
+        1프레임 미스에도 카운트가 리셋되지 않아 안정적
         """
-        if detected_state == self.current_state:
-            # 현재 상태와 동일 → 안정, 대기 초기화
-            self.pending_state = self.current_state
-            self.pending_count = 0
+        self.history.append(detected_state)
+
+        if len(self.history) < 3:
             return self.current_state
 
-        # 새로운 상태가 감지됨
-        if detected_state == self.pending_state:
-            # 같은 새 상태가 연속 감지
-            self.pending_count += 1
-        else:
-            # 다른 상태로 바뀜 → 대기 리셋
-            self.pending_state = detected_state
-            self.pending_count = 1
+        # 윈도우 내 각 상태 비율 계산
+        counts = Counter(self.history)
+        window_len = len(self.history)
 
-        # 필요한 확인 프레임 수 결정
-        if detected_state == 'none':
-            # 색상 → none: 높은 임계값 (깜빡임 방지)
-            required = self.CONFIRM_NONE
+        # 현재 상태 유지 비율 확인
+        current_ratio = counts.get(self.current_state, 0) / window_len
+        if current_ratio >= 0.4:
+            return self.current_state
+
+        # 가장 많이 감지된 상태 찾기
+        best_state, best_count = counts.most_common(1)[0]
+        best_ratio = best_count / window_len
+
+        # 전환 방향에 따른 임계값 결정
+        if best_state == 'none':
+            threshold = self.THRESHOLD_NONE
         elif self.current_state == 'none':
-            # none → 색상: 낮은 임계값 (빠른 감지)
-            required = self.CONFIRM_COLOR
+            threshold = self.THRESHOLD_COLOR
         else:
-            # 색상 → 다른 색상: 중간 임계값
-            required = self.CONFIRM_COLOR_CHANGE
+            threshold = self.THRESHOLD_CHANGE
 
-        if self.pending_count >= required:
-            # 확인 완료 → 상태 전환
-            self.pending_count = 0
-            return detected_state
+        if best_ratio >= threshold:
+            self.history.clear()
+            return best_state
 
-        # 아직 미확인 → 현재 상태 유지
         return self.current_state
 
     def draw_debug(self, frame: np.ndarray, detected_state: str,
@@ -303,7 +301,10 @@ class TrafficLightDetector(Node):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, state_color, 2)
         cv2.putText(debug, f"Raw: {detected_state} ({confidence:.2f})", (15, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
-        cv2.putText(debug, f"Pending: {self.pending_state} ({self.pending_count})", (15, 67),
+        # 슬라이딩 윈도우 현황
+        counts = Counter(self.history)
+        window_str = " ".join(f"{s[0].upper()}:{c}" for s, c in counts.most_common())
+        cv2.putText(debug, f"Window[{len(self.history)}]: {window_str}", (15, 67),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1)
 
         return debug
