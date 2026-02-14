@@ -15,6 +15,7 @@ public class OdometryPublisher : MonoBehaviour
 {
     [Header("ROS Settings")]
     public string odomTopic = "/odom";
+    public string tfTopic = "/tf";
     public string childFrameId = "base_link";
     public string odomFrameId = "odom";
     public float publishRate = 20f; // Hz
@@ -33,7 +34,7 @@ public class OdometryPublisher : MonoBehaviour
     {
         ros = ROSConnection.GetOrCreateInstance();
         ros.RegisterPublisher<OdometryMsg>(odomTopic);
-        ros.RegisterPublisher<TFMessageMsg>("/tf");
+        ros.RegisterPublisher<TFMessageMsg>(tfTopic);
 
         publishInterval = 1.0f / publishRate;
 
@@ -139,7 +140,7 @@ public class OdometryPublisher : MonoBehaviour
             transforms = new TransformStampedMsg[] { tfStamped }
         };
 
-        ros.Publish("/tf", tfMsg);
+        ros.Publish(tfTopic, tfMsg);
     }
     
     private TimeMsg ConvertToRosTime(float time)

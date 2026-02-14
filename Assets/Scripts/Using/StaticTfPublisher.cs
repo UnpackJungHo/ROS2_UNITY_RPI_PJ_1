@@ -14,6 +14,7 @@ public class StaticTfPublisher : MonoBehaviour
 {
     [Header("ROS Settings")]
     public string tfStaticTopic = "/tf"; // ROS 2 QoS issues with /tf_static, sending to /tf (Volatile) is safer for Unity
+    public float publishRate = 1.0f; // Hz
 
     [System.Serializable]
     public struct StaticLink
@@ -61,7 +62,7 @@ public class StaticTfPublisher : MonoBehaviour
     {
         // ROS 2에서 static TF는 latch되지만, 늦게 접속한 노드(RViz2 등)가 못 받는 경우가 있음.
         // 따라서 주기적으로(예: 1초마다) 다시 보내주는 것이 안전함.
-        if (Time.time - lastPublishTime > 1.0f)
+        if (Time.time - lastPublishTime > publishRate)
         {
             PublishStaticTF();
             lastPublishTime = Time.time;
