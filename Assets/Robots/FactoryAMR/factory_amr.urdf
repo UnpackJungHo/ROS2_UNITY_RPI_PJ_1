@@ -539,6 +539,38 @@
   </joint>
 
   <!-- ======================================== -->
+  <!-- ULTRASONIC FRONT CENTER (전방 중앙 초음파) -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_fc_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_fc_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_fc_link"/>
+    <!-- 전방 중앙 -->
+    <origin xyz="0.41 0 0.1" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ======================================== -->
   <!-- ULTRASONIC REAR LEFT (후방 좌측 초음파)   -->
   <!-- ======================================== -->
   <link name="ultrasonic_rl_link">
@@ -600,6 +632,38 @@
     <child link="ultrasonic_rr_link"/>
     <!-- 후방 우측 코너 (-135도 방향) -->
     <origin xyz="-0.38 -0.23 0.1" rpy="0 0 -2.3562"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- ULTRASONIC REAR CENTER (후방 중앙 초음파)  -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_rc_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_rc_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_rc_link"/>
+    <!-- 후방 중앙 -->
+    <origin xyz="-0.41 0 0.1" rpy="0 0 3.1416"/>
   </joint>
 
   <!-- ==================== -->

@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Std;
 
@@ -9,8 +10,12 @@ public class RadarSensorPublisher : MonoBehaviour
     [Header("ROS Settings")]
     // ROS 토픽 이름 - 레이더 데이터가 발행될 토픽 경로
     public string topicName = "/radar";
+    // 멀티 타깃 상세 데이터 토픽
+    public string targetsTopicName = "/radar/targets";
     // 초당 발행 횟수 (Hz) - 20이면 초당 20번 데이터 발행
     public float publishRate = 20f;
+    // 발행할 최대 타깃 수 (전방+후방 합산)
+    public int maxPublishedTargets = 32;
 
     // ========== 센서 참조 ==========
     [Header("Sensor References (각 센서 오브젝트에서 할당)")]
@@ -55,6 +60,7 @@ public class RadarSensorPublisher : MonoBehaviour
     private float publishInterval;
     // 마지막으로 데이터를 발행한 시간
     private float lastPublishTime;
+    private const int TARGET_FIELD_COUNT = 8;
 
     void Start()
     {
@@ -62,6 +68,7 @@ public class RadarSensorPublisher : MonoBehaviour
         ros = ROSConnection.GetOrCreateInstance();
         // 이 스크립트를 Float32MultiArrayMsg 타입의 퍼블리셔로 등록
         ros.RegisterPublisher<Float32MultiArrayMsg>(topicName);
+        ros.RegisterPublisher<Float32MultiArrayMsg>(targetsTopicName);
 
         // 센서가 제대로 할당되었는지 검증
         ValidateSensors();
@@ -129,6 +136,7 @@ public class RadarSensorPublisher : MonoBehaviour
             UpdateClosestSensor();
             // 레이더 데이터를 ROS 토픽으로 발행
             PublishData();
+            PublishTargetsData();
             // 마지막 발행 시간을 현재 시간으로 업데이트
             lastPublishTime = Time.time;
 
@@ -216,6 +224,49 @@ public class RadarSensorPublisher : MonoBehaviour
 
         // ROS 토픽으로 메시지 발행
         ros.Publish(topicName, msg);
+    }
+
+    // 멀티 타깃 상세 데이터 발행
+    // 필드: sensor_id, distance, angle, radial_velocity, rcs, confidence, is_ghost, is_clutter
+    void PublishTargetsData()
+    {
+        List<float> packed = new List<float>(maxPublishedTargets * TARGET_FIELD_COUNT);
+
+        AppendSensorTargets(sensorFront, 0f, packed);
+        AppendSensorTargets(sensorRear, 1f, packed);
+
+        Float32MultiArrayMsg msg = new Float32MultiArrayMsg
+        {
+            layout = new MultiArrayLayoutMsg
+            {
+                dim = new MultiArrayDimensionMsg[0],
+                data_offset = 0
+            },
+            data = packed.ToArray()
+        };
+
+        ros.Publish(targetsTopicName, msg);
+    }
+
+    void AppendSensorTargets(SingleRadarSensor sensor, float sensorId, List<float> packed)
+    {
+        if (sensor == null || packed.Count / TARGET_FIELD_COUNT >= maxPublishedTargets) return;
+
+        SingleRadarSensor.RadarDetection[] detections = sensor.GetDetectionsSnapshot();
+        for (int i = 0; i < detections.Length; i++)
+        {
+            if (packed.Count / TARGET_FIELD_COUNT >= maxPublishedTargets) break;
+
+            var d = detections[i];
+            packed.Add(sensorId);                      // 0: sensor_id (front=0, rear=1)
+            packed.Add(d.distance);                    // 1: distance (m)
+            packed.Add(d.angle);                       // 2: angle (deg)
+            packed.Add(d.radialVelocity);              // 3: radial velocity (m/s)
+            packed.Add(d.rcs);                         // 4: approx rcs
+            packed.Add(d.confidence);                  // 5: confidence
+            packed.Add(d.isGhost ? 1f : 0f);          // 6: ghost flag
+            packed.Add(d.isClutter ? 1f : 0f);        // 7: clutter flag
+        }
     }
 
     // 레이더 센서 데이터를 콘솔에 출력하는 디버그 함수

@@ -10,14 +10,16 @@ public class SingleUltrasonicSensor : MonoBehaviour
     // 센서가 장착된 위치를 정의하는 열거형
     public enum SensorPosition
     {
-        FrontLeft,  // 전방 좌측
-        FrontRight, // 전방 우측
-        RearLeft,   // 후방 좌측
-        RearRight   // 후방 우측
+        FrontLeft = 0,  // 전방 좌측
+        FrontRight = 1, // 전방 우측
+        RearLeft = 2,   // 후방 좌측
+        RearRight = 3,  // 후방 우측
+        FrontCenter = 4, // 전방 중앙
+        RearCenter = 5  // 후방 중앙
     }
 
     [Header("Sensor Identity")]
-    [Tooltip("센서 위치 (FL, FR, RL, RR) - 이 설정에 따라 센서 이름과 역할이 결정됨")]
+    [Tooltip("센서 위치 (FL, FR, FC, RL, RR, RC) - 이 설정에 따라 센서 이름과 역할이 결정됨")]
     public SensorPosition sensorPosition = SensorPosition.FrontLeft;
 
     [Header("Ultrasonic Specifications (초음파 센서 사양)")]
@@ -29,6 +31,21 @@ public class SingleUltrasonicSensor : MonoBehaviour
     public float fieldOfView = 30f;
     [Tooltip("레이(Ray) 개수 - 감지 해상도를 결정 (많을수록 정밀하지만 연산 부하 증가)")]
     public int rayCount = 5;
+
+    [Header("Measurement Reliability (측정 신뢰도)")]
+    [Tooltip("신뢰 가능한 최소 거리 (m) - 이보다 가까우면 신뢰도 감소")]
+    public float reliableRangeMin = 0.05f;
+    [Tooltip("신뢰 가능한 최대 거리 (m) - 이보다 멀면 신뢰도 감소")]
+    public float reliableRangeMax = 2.5f;
+    [Tooltip("근거리에서 드롭아웃(미검출) 확률")]
+    [Range(0f, 0.5f)]
+    public float dropoutProbabilityNear = 0.02f;
+    [Tooltip("원거리에서 드롭아웃(미검출) 확률")]
+    [Range(0f, 0.5f)]
+    public float dropoutProbabilityFar = 0.12f;
+    [Tooltip("신뢰 감지로 인정하는 최소 confidence")]
+    [Range(0f, 1f)]
+    public float reliableConfidenceThreshold = 0.45f;
 
     [Header("Collision Detection Layer (감지할 레이어)")]
     public LayerMask detectionLayer = ~0; // 기본값: 모든 레이어 감지
@@ -48,26 +65,34 @@ public class SingleUltrasonicSensor : MonoBehaviour
     
     // 감지된 물체의 월드 좌표
     public Vector3 DetectedPoint { get; private set; } = Vector3.zero;
+
+    // 감지 confidence (0~1)
+    public float Confidence { get; private set; } = 0f;
     
     // 유효한 감지가 있는지 여부 확인
     public bool HasDetection => !float.IsInfinity(Distance);
+    public bool IsReliableDetection => HasDetection && Confidence >= reliableConfidenceThreshold;
 
     // 센서 이름을 약어로 반환하는 헬퍼 속성 (로그 출력 등에 사용)
     public string SensorName => sensorPosition switch
     {
         SensorPosition.FrontLeft => "FL",
         SensorPosition.FrontRight => "FR",
+        SensorPosition.FrontCenter => "FC",
         SensorPosition.RearLeft => "RL",
         SensorPosition.RearRight => "RR",
+        SensorPosition.RearCenter => "RC",
         _ => "Unknown"
     };
 
     // 센서의 위치/방향 확인을 위한 헬퍼 속성들
     public bool IsFrontSensor => sensorPosition == SensorPosition.FrontLeft ||
-                                  sensorPosition == SensorPosition.FrontRight;
+                                  sensorPosition == SensorPosition.FrontRight ||
+                                  sensorPosition == SensorPosition.FrontCenter;
 
     public bool IsRearSensor => sensorPosition == SensorPosition.RearLeft ||
-                                 sensorPosition == SensorPosition.RearRight;
+                                 sensorPosition == SensorPosition.RearRight ||
+                                 sensorPosition == SensorPosition.RearCenter;
 
     public bool IsLeftSensor => sensorPosition == SensorPosition.FrontLeft ||
                                  sensorPosition == SensorPosition.RearLeft;
@@ -81,6 +106,9 @@ public class SingleUltrasonicSensor : MonoBehaviour
 
     void Start()
     {
+        reliableRangeMin = Mathf.Clamp(reliableRangeMin, rangeMin, rangeMax);
+        reliableRangeMax = Mathf.Clamp(reliableRangeMax, reliableRangeMin, rangeMax);
+
         lastScanTime = Time.time;
         Debug.Log($"[Ultrasonic-{SensorName}] Initialized - Range: {rangeMin}-{rangeMax}m, FOV: {fieldOfView}°");
     }
@@ -110,6 +138,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
         Distance = float.PositiveInfinity;
         DetectedAngle = 0f;
         DetectedPoint = Vector3.zero;
+        Confidence = 0f;
 
         // 설정된 레이 개수만큼 반복
         for (int i = 0; i < rayCount; i++)
@@ -129,11 +158,23 @@ public class SingleUltrasonicSensor : MonoBehaviour
             if (Physics.Raycast(origin, direction, out hit, rangeMax, detectionLayer))
             {
                 // 최소 거리 이상이고, 기존 최단 거리보다 가까우면 갱신
-                if (hit.distance >= rangeMin && hit.distance < Distance)
+                if (hit.distance >= rangeMin && hit.distance < rangeMax)
                 {
-                    Distance = hit.distance;
-                    DetectedAngle = angle;
-                    DetectedPoint = hit.point;
+                    float confidence = CalculateDetectionConfidence(hit.distance, direction, hit.normal);
+                    if (confidence > 0f)
+                    {
+                        bool isCloser = hit.distance < Distance;
+                        bool isSameDistanceButMoreReliable =
+                            Mathf.Abs(hit.distance - Distance) < 0.02f && confidence > Confidence;
+
+                        if (isCloser || isSameDistanceButMoreReliable)
+                        {
+                            Distance = hit.distance;
+                            DetectedAngle = angle;
+                            DetectedPoint = hit.point;
+                            Confidence = confidence;
+                        }
+                    }
                 }
 
                 // 디버그 레이 (감지됨: Cyan)
@@ -153,6 +194,42 @@ public class SingleUltrasonicSensor : MonoBehaviour
         }
     }
 
+    float CalculateDetectionConfidence(float distance, Vector3 rayDirection, Vector3 hitNormal)
+    {
+        float rangeConfidence = CalculateRangeConfidence(distance);
+
+        // 초음파는 정면 반사(법선 정렬)가 유리, 사각 입사에서 신뢰도 감소
+        float incidenceAngle = Vector3.Angle(-rayDirection, hitNormal); // 0deg=정면, 90deg=사각
+        float incidenceConfidence = Mathf.Clamp01((75f - incidenceAngle) / 75f);
+
+        float distanceRatio = Mathf.InverseLerp(reliableRangeMin, rangeMax, distance);
+        float dropoutProbability = Mathf.Lerp(dropoutProbabilityNear, dropoutProbabilityFar, distanceRatio);
+        dropoutProbability += (1f - incidenceConfidence) * 0.2f;
+        dropoutProbability = Mathf.Clamp(dropoutProbability, 0f, 0.95f);
+
+        if (Random.value < dropoutProbability)
+        {
+            return 0f;
+        }
+
+        return rangeConfidence * incidenceConfidence;
+    }
+
+    float CalculateRangeConfidence(float distance)
+    {
+        if (distance < reliableRangeMin)
+        {
+            return Mathf.Lerp(0.25f, 1f, Mathf.InverseLerp(rangeMin, reliableRangeMin, distance));
+        }
+
+        if (distance <= reliableRangeMax)
+        {
+            return 1f;
+        }
+
+        return Mathf.Lerp(1f, 0.35f, Mathf.InverseLerp(reliableRangeMax, rangeMax, distance));
+    }
+
     // 외부에서 스캔 주기를 변경할 때 사용
     public void SetScanInterval(float interval)
     {
@@ -166,4 +243,3 @@ public class SingleUltrasonicSensor : MonoBehaviour
         return (Distance, DetectedAngle, DetectedPoint);
     }
 }
-
