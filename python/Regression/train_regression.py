@@ -117,6 +117,7 @@ class RegressionDrivingDataset(Dataset):
         self.speed_normalize = speed_normalize
         self.image_type = image_type
         self.data = []
+        self.intervention_count = 0
 
         print(f"[Dataset] Image Source: {image_type}")
 
@@ -153,11 +154,14 @@ class RegressionDrivingDataset(Dataset):
                     'front_path': str(data_dir / final_path),
                     'steering': float(row['steering_input']),
                     'throttle': float(row['throttle_input']),
-                    'speed': float(row['speed'])
+                    'speed': float(row['speed']),
+                    'intervention': float(row['intervention']) if 'intervention' in df.columns else 0.0
                 })
 
         if len(self.data) == 0:
             raise ValueError("No valid data found!")
+
+        self.intervention_count = int(sum(1 for d in self.data if d['intervention'] > 0.5))
 
         # 정규화 transform (ImageNet)
         self.normalize = A.Compose([
@@ -178,6 +182,7 @@ class RegressionDrivingDataset(Dataset):
         steerings = [d['steering'] for d in self.data]
         throttles = [d['throttle'] for d in self.data]
         speeds = [d['speed'] for d in self.data]
+        intervention_ratio = (self.intervention_count / len(self.data)) * 100.0
         print(f"[Dataset] Loaded {len(self.data)} samples")
         print(f"[Dataset] steering: min={min(steerings):.3f}, max={max(steerings):.3f}, "
               f"mean={np.mean(steerings):.3f}, std={np.std(steerings):.3f}")
@@ -185,6 +190,7 @@ class RegressionDrivingDataset(Dataset):
               f"mean={np.mean(throttles):.3f}, std={np.std(throttles):.3f}")
         print(f"[Dataset] speed:    min={min(speeds):.3f}, max={max(speeds):.3f}, "
               f"mean={np.mean(speeds):.3f}")
+        print(f"[Dataset] intervention: {self.intervention_count}/{len(self.data)} ({intervention_ratio:.2f}%)")
 
     def __len__(self):
         return len(self.data)
@@ -202,6 +208,7 @@ class RegressionDrivingDataset(Dataset):
         steering = item['steering']
         throttle = item['throttle']
         speed = item['speed'] / self.speed_normalize
+        intervention = item['intervention']
 
         # 좌우 반전 augmentation (50% 확률)
         if self.augment and np.random.random() < 0.5:
@@ -215,8 +222,9 @@ class RegressionDrivingDataset(Dataset):
 
         target = torch.tensor([steering, throttle], dtype=torch.float32)
         speed_tensor = torch.tensor([speed], dtype=torch.float32)
+        intervention_tensor = torch.tensor(intervention, dtype=torch.float32)
 
-        return front_image, speed_tensor, target
+        return front_image, speed_tensor, target, intervention_tensor
 
 
 class EarlyStopping:
@@ -289,6 +297,8 @@ def train_regression(
     speed_normalize: float = 5.0,
     freeze_backbone: bool = False,
     steering_loss_weight: float = 5.0,
+    intervention_loss_weight: float = 2.0,
+    use_intervention_weighting: bool = True,
     device: str = "cuda",
     graph_save_dir: str = None,
     image_type: str = "front_1"
@@ -305,6 +315,8 @@ def train_regression(
     print("Speed-Aware Single View Regression Training")
     print(f"Image Source: {image_type}")
     print(f"Steering loss weight: {steering_loss_weight}")
+    print(f"Intervention weighting: {'ON' if use_intervention_weighting else 'OFF'} "
+          f"(intervention loss weight={intervention_loss_weight:.2f})")
     print("=" * 60)
 
     # 세션 단위 Train/Val 분할
@@ -329,6 +341,10 @@ def train_regression(
     )
 
     print(f"\n[Dataset] Train: {len(train_dataset)}, Val: {len(val_dataset)}")
+    train_intervention_ratio = (train_dataset.intervention_count / len(train_dataset)) * 100.0
+    val_intervention_ratio = (val_dataset.intervention_count / len(val_dataset)) * 100.0
+    print(f"[Dataset] Train intervention ratio: {train_intervention_ratio:.2f}%")
+    print(f"[Dataset] Val intervention ratio:   {val_intervention_ratio:.2f}%")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
                               num_workers=4, pin_memory=True)
@@ -349,8 +365,8 @@ def train_regression(
     print(f"[Model] Total params: {total_params:,}")
     print(f"[Model] Trainable params: {trainable_params:,}")
 
-    # 손실 함수: Weighted MSE (steering 중시)
-    mse_loss = nn.MSELoss()
+    # 손실 함수: steering 가중 + (선택) intervention 샘플 가중
+    intervention_loss_weight = max(1.0, float(intervention_loss_weight))
 
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5,
@@ -368,30 +384,41 @@ def train_regression(
     for epoch in range(epochs):
         # === Training ===
         model.train()
-        train_loss_sum = 0.0
+        train_loss_num = 0.0
+        train_loss_den = 0.0
         train_steer_ae_sum = 0.0
         train_total = 0
 
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
-        for front_imgs, speeds, targets in pbar:
+        for front_imgs, speeds, targets, interventions in pbar:
             front_imgs = front_imgs.to(device)
             speeds = speeds.to(device)
             targets = targets.to(device)
+            interventions = interventions.to(device)
 
             optimizer.zero_grad()
             preds = model(front_imgs, speeds)
 
-            # steering, throttle 각각 loss 계산
-            steer_loss = mse_loss(preds[:, 0], targets[:, 0])
-            throttle_loss = mse_loss(preds[:, 1], targets[:, 1])
-            loss = steering_loss_weight * steer_loss + throttle_loss
+            steer_sq = (preds[:, 0] - targets[:, 0]).pow(2)
+            throttle_sq = (preds[:, 1] - targets[:, 1]).pow(2)
+            per_sample_loss = steering_loss_weight * steer_sq + throttle_sq
+
+            if use_intervention_weighting:
+                sample_weights = 1.0 + (intervention_loss_weight - 1.0) * interventions
+            else:
+                sample_weights = torch.ones_like(interventions)
+
+            weighted_loss_sum = (per_sample_loss * sample_weights).sum()
+            weight_sum = sample_weights.sum().clamp_min(1e-6)
+            loss = weighted_loss_sum / weight_sum
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             batch_size_actual = targets.size(0)
-            train_loss_sum += loss.item() * batch_size_actual
+            train_loss_num += weighted_loss_sum.item()
+            train_loss_den += weight_sum.item()
             train_steer_ae_sum += (preds[:, 0] - targets[:, 0]).abs().sum().item()
             train_total += batch_size_actual
 
@@ -400,33 +427,44 @@ def train_regression(
                 'steer_mae': f'{(preds[:, 0] - targets[:, 0]).abs().mean().item():.4f}'
             })
 
-        train_loss = train_loss_sum / train_total
+        train_loss = train_loss_num / max(train_loss_den, 1e-6)
         train_steer_mae = train_steer_ae_sum / train_total
 
         # === Validation ===
         model.eval()
-        val_loss_sum = 0.0
+        val_loss_num = 0.0
+        val_loss_den = 0.0
         val_steer_ae_sum = 0.0
         val_total = 0
 
         with torch.no_grad():
-            for front_imgs, speeds, targets in val_loader:
+            for front_imgs, speeds, targets, interventions in val_loader:
                 front_imgs = front_imgs.to(device)
                 speeds = speeds.to(device)
                 targets = targets.to(device)
+                interventions = interventions.to(device)
 
                 preds = model(front_imgs, speeds)
 
-                steer_loss = mse_loss(preds[:, 0], targets[:, 0])
-                throttle_loss = mse_loss(preds[:, 1], targets[:, 1])
-                loss = steering_loss_weight * steer_loss + throttle_loss
+                steer_sq = (preds[:, 0] - targets[:, 0]).pow(2)
+                throttle_sq = (preds[:, 1] - targets[:, 1]).pow(2)
+                per_sample_loss = steering_loss_weight * steer_sq + throttle_sq
+
+                if use_intervention_weighting:
+                    sample_weights = 1.0 + (intervention_loss_weight - 1.0) * interventions
+                else:
+                    sample_weights = torch.ones_like(interventions)
+
+                weighted_loss_sum = (per_sample_loss * sample_weights).sum()
+                weight_sum = sample_weights.sum().clamp_min(1e-6)
 
                 batch_size_actual = targets.size(0)
-                val_loss_sum += loss.item() * batch_size_actual
+                val_loss_num += weighted_loss_sum.item()
+                val_loss_den += weight_sum.item()
                 val_steer_ae_sum += (preds[:, 0] - targets[:, 0]).abs().sum().item()
                 val_total += batch_size_actual
 
-        val_loss = val_loss_sum / val_total
+        val_loss = val_loss_num / max(val_loss_den, 1e-6)
         val_steer_mae = val_steer_ae_sum / val_total
 
         scheduler.step(val_loss)
@@ -454,6 +492,8 @@ def train_regression(
                 'backbone': backbone,
                 'speed_normalize': speed_normalize,
                 'steering_loss_weight': steering_loss_weight,
+                'intervention_loss_weight': intervention_loss_weight,
+                'use_intervention_weighting': use_intervention_weighting,
                 'image_type': image_type,
                 'model_version': 'speed_aware_regression_v1',
             }, model_save_path)
@@ -490,6 +530,8 @@ def train_regression(
                 'backbone': backbone,
                 'speed_normalize': speed_normalize,
                 'steering_loss_weight': steering_loss_weight,
+                'intervention_loss_weight': intervention_loss_weight,
+                'use_intervention_weighting': use_intervention_weighting,
                 'image_type': image_type,
                 'train_losses': [float(l) for l in train_losses],
                 'val_losses': [float(l) for l in val_losses],
@@ -517,6 +559,10 @@ if __name__ == "__main__":
     parser.add_argument("--speed_norm", type=float, default=3.0)
     parser.add_argument("--steering_weight", type=float, default=5.0,
                         help="steering loss 가중치 (throttle 대비)")
+    parser.add_argument("--intervention_weight", type=float, default=2.0,
+                        help="intervention=1 샘플에 적용할 추가 손실 가중치 (최소 1.0)")
+    parser.add_argument("--no_intervention_weighting", action="store_true",
+                        help="intervention 샘플 가중치 비활성화")
     parser.add_argument("--freeze_backbone", action="store_true")
     parser.add_argument("--image_type", type=str, default="front_1",
                         choices=["front_1", "front_2", "front_3", "front_4"])
@@ -530,10 +576,16 @@ if __name__ == "__main__":
         args.early_stopping = 15
         print("[TEST MODE]")
 
-    base_path = Path(__file__).parent.parent / "TrainingData"
+    # Prefer project-root TrainingData, fallback to legacy python/TrainingData.
+    project_root = Path(__file__).resolve().parents[2]
+    candidate_paths = [
+        project_root / "TrainingData",
+        Path(__file__).resolve().parents[1] / "TrainingData",
+    ]
+    base_path = next((p for p in candidate_paths if p.exists()), None)
 
-    if not base_path.exists():
-        print(f"Error: {base_path} does not exist!")
+    if base_path is None:
+        print(f"Error: TrainingData does not exist in any of: {candidate_paths}")
         exit(1)
 
     data_dirs = sorted(glob.glob(str(base_path / "session_*")))
@@ -564,6 +616,8 @@ if __name__ == "__main__":
         speed_normalize=args.speed_norm,
         freeze_backbone=args.freeze_backbone,
         steering_loss_weight=args.steering_weight,
+        intervention_loss_weight=args.intervention_weight,
+        use_intervention_weighting=not args.no_intervention_weighting,
         device="cuda" if torch.cuda.is_available() else "cpu",
         graph_save_dir=str(graph_dir),
         image_type=args.image_type

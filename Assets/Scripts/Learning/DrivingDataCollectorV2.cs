@@ -4,7 +4,6 @@ using System.IO;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Threading;
-using TMPro;
 
 /// <summary>
 /// 분류 기반 주행 데이터 수집기 V2
@@ -44,12 +43,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         "FORWARD", "FORWARD_LEFT", "FORWARD_RIGHT",
         "LEFT", "RIGHT", "BACKWARD", "NONE"
     };
-
-    [Header("UI References")]
-    public TextMeshProUGUI uiStatusText;
-    public TextMeshProUGUI uiInfoText;
-    public TextMeshProUGUI uiActionText;
-    public TextMeshProUGUI uiSpeedText;
 
     [Header("References")]
     [Tooltip("CameraPublisher 참조 (Front View 카메라 자동 획득)")]
@@ -232,7 +225,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
                                Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.LeftArrow) ||
                                Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.RightArrow));
 
-        UpdateUI();
     }
 
     void FixedUpdate()
@@ -567,6 +559,26 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         Debug.Log($"  ═══════════════════════════════════════");
     }
 
+    public int GetBufferedFrameCount()
+    {
+        return frameBuffer.Count;
+    }
+
+    public float GetRecordingDuration()
+    {
+        return isRecording ? Time.time - recordingStartTime : 0f;
+    }
+
+    public string GetCurrentActionName()
+    {
+        return KeyActionNames[(int)currentAction];
+    }
+
+    public float GetCurrentSpeedMS()
+    {
+        return wheelController != null ? wheelController.GetSpeedMS() : 0f;
+    }
+
     void OnDestroy()
     {
         // 쓰기 스레드 종료 및 잔여 큐 처리 대기
@@ -602,45 +614,4 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         }
     }
 
-    void UpdateUI()
-    {
-        // 1. Status Text (Main State)
-        if (uiStatusText != null)
-        {
-            if (isRecording)
-                uiStatusText.text = $"<color=red>● REC: {frameCount}</color>";
-            else
-                uiStatusText.text = $"[{recordKey}] Rec  [{saveKey}] Save";
-        }
-
-        // 2. Info Text (Time / Unsaved)
-        if (uiInfoText != null)
-        {
-            if (isRecording)
-            {
-                float duration = Time.time - recordingStartTime;
-                uiInfoText.text = $"Time: {duration:F1}s";
-            }
-            else
-            {
-                if (frameBuffer.Count > 0)
-                    uiInfoText.text = $"<color=yellow>Unsaved: {frameBuffer.Count}</color>";
-                else
-                    uiInfoText.text = "Ready";
-            }
-        }
-
-        // 3. Action Text
-        if (uiActionText != null)
-        {
-            uiActionText.text = $"Action: <color=#00FFFF>{KeyActionNames[(int)currentAction]}</color>";
-        }
-
-        // 4. Speed Text
-        if (uiSpeedText != null)
-        {
-            float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
-            uiSpeedText.text = $"Speed: {speed:F2} m/s";
-        }
-    }
 }

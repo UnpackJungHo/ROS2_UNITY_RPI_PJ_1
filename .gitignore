@@ -55,6 +55,8 @@ crashlytics-build.properties
 python/checkpoints/*
 python/datasets/*
 python/runs/*
+python/Regression/__pycache__/*
+python/Regression/checkpoints/*
 runs/*
 yolo26n.pt
 yolov8n.pt

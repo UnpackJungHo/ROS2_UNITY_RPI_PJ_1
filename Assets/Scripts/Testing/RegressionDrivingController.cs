@@ -1,6 +1,5 @@
 using UnityEngine;
 using Unity.Sentis;
-using TMPro;
 
 /// <summary>
 /// Speed-Aware 회귀(Regression) 자율주행 컨트롤러 (Single View)
@@ -22,13 +21,6 @@ public class RegressionDrivingController : MonoBehaviour
     [Header("AI Model")]
     [Tooltip("ONNX 회귀 모델 파일 (driving_regression.onnx)")]
     public ModelAsset modelAsset;
-
-    [Header("UI References")]
-    public TextMeshProUGUI uiModeText;
-    public TextMeshProUGUI uiActionText;
-    public TextMeshProUGUI uiControlText;
-    public TextMeshProUGUI uiStatsText;
-    public TextMeshProUGUI uiGuideText;
 
     [Header("References")]
     [Tooltip("차량 컨트롤러")]
@@ -200,7 +192,6 @@ public class RegressionDrivingController : MonoBehaviour
             }
         }
 
-        UpdateUI();
     }
 
     bool IsManualInputDetected()
@@ -245,6 +236,36 @@ public class RegressionDrivingController : MonoBehaviour
     public float GetPredictedThrottle()
     {
         return predictedThrottle;
+    }
+
+    public float GetAppliedSteering()
+    {
+        return appliedSteering;
+    }
+
+    public float GetAppliedThrottle()
+    {
+        return appliedThrottle;
+    }
+
+    public int GetInterventionCount()
+    {
+        return interventionCount;
+    }
+
+    public float GetInterventionRemainingTime()
+    {
+        return Mathf.Max(0f, autoResumeDelay - interventionTimer);
+    }
+
+    public bool IsModelLoaded()
+    {
+        return isModelLoaded;
+    }
+
+    public float GetCurrentSpeedMS()
+    {
+        return wheelController != null ? wheelController.GetSpeedMS() : 0f;
     }
 
     void StartIntervention()
@@ -378,70 +399,4 @@ public class RegressionDrivingController : MonoBehaviour
         if (frontTexture != null) Destroy(frontTexture);
     }
 
-    void UpdateUI()
-    {
-        float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
-
-        if (isAutonomousMode)
-        {
-            if (isInterventionActive)
-            {
-                if (uiModeText != null)
-                    uiModeText.text = $"<color=yellow> INTERVENTION (#{interventionCount})</color>";
-
-                if (uiActionText != null)
-                {
-                    float remaining = autoResumeDelay - interventionTimer;
-                    uiActionText.text = $"Return to AI in: {remaining:F1}s\nWASD Manual Control...";
-                }
-
-                if (uiControlText != null)
-                    uiControlText.text = "";
-            }
-            else
-            {
-                if (uiModeText != null)
-                    uiModeText.text = "<color=#00FF00>● AUTONOMOUS (Regression)</color>";
-
-                if (uiActionText != null)
-                    uiActionText.text = $"Steer: <color=#00FFFF>{predictedSteering:F3}</color> | Throt: <color=#00FFFF>{predictedThrottle:F3}</color>";
-
-                if (uiControlText != null)
-                    uiControlText.text = $"Applied → Steer: {appliedSteering:F2} | Throt: {appliedThrottle:F2}";
-            }
-
-            if (uiStatsText != null)
-                uiStatsText.text = $"Speed: {speed:F2} m/s | Interventions: {interventionCount}";
-
-            if (uiGuideText != null)
-                uiGuideText.text = "<color=grey>WASD: Intervention | P: Stop Auto</color>";
-        }
-        else
-        {
-            if (uiModeText != null)
-                uiModeText.text = "<color=yellow>○ MANUAL MODE</color>";
-
-            if (uiActionText != null)
-                uiActionText.text = $"[{toggleKey}] Start Autonomous Mode";
-
-            if (uiControlText != null)
-            {
-                if (interventionCount > 0)
-                    uiControlText.text = $"<color=#00FFFF>Total Interventions: {interventionCount}</color>";
-                else
-                    uiControlText.text = "";
-            }
-
-            if (uiStatsText != null)
-            {
-                if (!isModelLoaded)
-                    uiStatsText.text = "<color=red>! Model Not Loaded</color>";
-                else
-                    uiStatsText.text = "";
-            }
-
-            if (uiGuideText != null)
-                uiGuideText.text = "";
-        }
-    }
 }

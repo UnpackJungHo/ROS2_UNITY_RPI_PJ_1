@@ -56,6 +56,12 @@ public class CollisionWarningPublisher : MonoBehaviour
 
     [Header("Debug (디버그)")]
     public bool showDebugInfo = true;
+    [Tooltip("true면 경고 레벨/감지 소스가 변할 때만 로그 출력")]
+    public bool debugOnlyOnStateChange = true;
+    [Tooltip("상태 변화가 없어도 이 주기(초)마다 상태 스냅샷 로그 출력. 0 이하이면 비활성")]
+    public float debugSnapshotInterval = 1.0f;
+    [Tooltip("true면 초음파/레이더 채널 거리 상세를 함께 출력")]
+    public bool debugIncludeSensorChannels = true;
 
     // 현재 상태 변수들 (Inspector 확인용 HideInInspector 해제 가능)
     [HideInInspector] public float currentMinDistance = float.PositiveInfinity; // 가장 가까운 장애물 거리
@@ -106,6 +112,13 @@ public class CollisionWarningPublisher : MonoBehaviour
     private float previousMeasureTime = 0f;                      // 이전 측정 시간
     private float closingSpeed = 0f;                             // 상대속도 (양수: 가까워짐, 음수: 멀어짐)
     private float smoothedClosingSpeed = 0f;                     // 노이즈 필터링된 상대속도
+    private float lastDebugLogTime = -999f;
+    private WarningLevel lastLoggedWarningLevel = WarningLevel.Safe;
+    private string lastLoggedDetectionSource = "None";
+    private string lastLoggedDetectionSensor = "None";
+    private string debugDecisionTrace = "NotCalculated";
+    private WarningLevel lastTtcLevel = WarningLevel.Safe;
+    private WarningLevel lastLowSpeedLevel = WarningLevel.Safe;
     [Header("Closing Speed Settings (상대속도 계산 설정)")]
     [Tooltip("상대속도 스무딩 계수 (0~1, 낮을수록 더 부드러움)")]
     [Range(0.1f, 1.0f)]
@@ -302,6 +315,7 @@ public class CollisionWarningPublisher : MonoBehaviour
         detectionSource = "None";
         // 정확한 센서 이름(위치) 
         detectionSensor = "None";
+        debugDecisionTrace = "NoObstacle";
 
         // 전체 센서 중 최소 거리 계산
         float ultrasonicMin = GetMinUltrasonicDistance();
@@ -315,11 +329,15 @@ public class CollisionWarningPublisher : MonoBehaviour
             currentWarningLevel = WarningLevel.EmergencyStop;
             detectionSource = "Ultrasonic";
             detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
+            debugDecisionTrace = $"Layer1 EmergencyStop (ultra={ultrasonicMin:F2}m <= {emergencyStopDistance:F2}m, conf={ultrasonicClosestConfidence:F2} >= {minEmergencyStopConfidence:F2})";
+            lastTtcLevel = WarningLevel.Safe;
+            lastLowSpeedLevel = WarningLevel.Safe;
             return; // 즉시 반환 - 다른 판단 불필요
         }
 
         // ========== Layer 2: TTC 기반 동적 판단 ==========
         WarningLevel ttcLevel = EvaluateTTCWarning();
+        lastTtcLevel = ttcLevel;
 
         // ========== Layer 3: 저속 시 거리 기반 보완 판단 ==========
         WarningLevel lowSpeedLevel = WarningLevel.Safe;
@@ -327,11 +345,13 @@ public class CollisionWarningPublisher : MonoBehaviour
         {
             lowSpeedLevel = EvaluateLowSpeedWarning(ultrasonicMin, radarMin);
         }
+        lastLowSpeedLevel = lowSpeedLevel;
 
         // 두 판단 중 더 높은 위험도 채택
         if (ttcLevel >= lowSpeedLevel)
         {
             currentWarningLevel = ttcLevel;
+            debugDecisionTrace = $"Layer2 TTC selected (ttcLevel={ttcLevel}, lowSpeedLevel={lowSpeedLevel})";
             // TTC 판단은 주로 레이더 기반
             if (!float.IsInfinity(radarMin) && radarMin <= ultrasonicMin)
             {
@@ -347,6 +367,7 @@ public class CollisionWarningPublisher : MonoBehaviour
         else
         {
             currentWarningLevel = lowSpeedLevel;
+            debugDecisionTrace = $"Layer3 LowSpeed selected (ttcLevel={ttcLevel}, lowSpeedLevel={lowSpeedLevel}, speed={currentSpeed:F2}m/s <= {lowSpeedThreshold:F2}m/s)";
             // 저속 판단 시 가까운 센서 기준
             if (ultrasonicMin <= radarMin)
             {
@@ -368,6 +389,7 @@ public class CollisionWarningPublisher : MonoBehaviour
                 currentWarningLevel = WarningLevel.Warning;
                 detectionSource = "Radar";
                 detectionSensor = CurrentSensorData.radarClosest.ToString();
+                debugDecisionTrace = $"StopState RadarGuard (speed={currentSpeed:F2}m/s, radar={radarMin:F2}m <= {radarMinSafeDistance:F2}m)";
             }
         }
     }
@@ -567,6 +589,14 @@ public class CollisionWarningPublisher : MonoBehaviour
 
     void PrintDebugInfo()
     {
+        bool hasStateChanged = currentWarningLevel != lastLoggedWarningLevel ||
+                               detectionSource != lastLoggedDetectionSource ||
+                               detectionSensor != lastLoggedDetectionSensor;
+        bool hasSnapshotIntervalElapsed = debugSnapshotInterval > 0f && (Time.time - lastDebugLogTime) >= debugSnapshotInterval;
+
+        if (debugOnlyOnStateChange && !hasStateChanged && !hasSnapshotIntervalElapsed)
+            return;
+
         string levelStr = currentWarningLevel switch
         {
             WarningLevel.Safe => "SAFE",
@@ -591,11 +621,38 @@ public class CollisionWarningPublisher : MonoBehaviour
         else
             closingSpeedStr = $"{smoothedClosingSpeed:F2}m/s (이탈)";
 
-        // Awareness 이상일 때 로그 출력 (Safe는 제외)
-        if (currentWarningLevel != WarningLevel.Safe)
+        float ultrasonicMin = GetMinUltrasonicDistance();
+        float radarMin = GetMinRadarDistance();
+        string ultrasonicMinStr = float.IsInfinity(ultrasonicMin) ? "∞" : $"{ultrasonicMin:F2}m";
+        string radarMinStr = float.IsInfinity(radarMin) ? "∞" : $"{radarMin:F2}m";
+
+        Debug.Log(
+            $"[Collision] Level={levelStr}({(int)currentWarningLevel}) | Dist={distStr} | TTC={ttcStr} | Ego={currentSpeed:F2}m/s | Closing={closingSpeedStr} | " +
+            $"ULMin={ultrasonicMinStr} | RadarMin={radarMinStr} | Closest={detectionSource}-{detectionSensor} | UltraConf={CurrentSensorData.ultrasonicClosestConfidence:F2} | " +
+            $"TTCLevel={lastTtcLevel} | LowSpeedLevel={lastLowSpeedLevel} | Decision={debugDecisionTrace}"
+        );
+
+        if (debugIncludeSensorChannels)
         {
-            //Debug.Log($"[Collision] {levelStr}({(int)currentWarningLevel}) | Dist: {distStr} | TTC: {ttcStr} | ClosingSpd: {closingSpeedStr} | Source: {detectionSource}-{detectionSensor} | EgoSpd: {currentSpeed:F2}m/s");
+            string usFL = float.IsInfinity(CurrentSensorData.ultrasonicFL) ? "∞" : $"{CurrentSensorData.ultrasonicFL:F2}";
+            string usFR = float.IsInfinity(CurrentSensorData.ultrasonicFR) ? "∞" : $"{CurrentSensorData.ultrasonicFR:F2}";
+            string usFC = float.IsInfinity(CurrentSensorData.ultrasonicFC) ? "∞" : $"{CurrentSensorData.ultrasonicFC:F2}";
+            string usRL = float.IsInfinity(CurrentSensorData.ultrasonicRL) ? "∞" : $"{CurrentSensorData.ultrasonicRL:F2}";
+            string usRR = float.IsInfinity(CurrentSensorData.ultrasonicRR) ? "∞" : $"{CurrentSensorData.ultrasonicRR:F2}";
+            string usRC = float.IsInfinity(CurrentSensorData.ultrasonicRC) ? "∞" : $"{CurrentSensorData.ultrasonicRC:F2}";
+            string rdFront = float.IsInfinity(CurrentSensorData.radarFront) ? "∞" : $"{CurrentSensorData.radarFront:F2}";
+            string rdRear = float.IsInfinity(CurrentSensorData.radarRear) ? "∞" : $"{CurrentSensorData.radarRear:F2}";
+
+            Debug.Log(
+                $"[CollisionSensors] US[FL={usFL}, FR={usFR}, FC={usFC}, RL={usRL}, RR={usRR}, RC={usRC}] | " +
+                $"Radar[F={rdFront}, R={rdRear}]"
+            );
         }
+
+        lastLoggedWarningLevel = currentWarningLevel;
+        lastLoggedDetectionSource = detectionSource;
+        lastLoggedDetectionSensor = detectionSensor;
+        lastDebugLogTime = Time.time;
     }
 
     //// ========== 외부 참조용 안전 확인 메서드들 (7단계 기준) ==========

@@ -10,7 +10,25 @@ import torch.onnx
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Ensure local imports work regardless of current working directory.
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[1]
+sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def _check_onnx_dependency() -> bool:
+    """Return True if onnx is importable in the current environment."""
+    try:
+        import onnx  # noqa: F401
+        return True
+    except ImportError:
+        print("Error: ONNX export requires the `onnx` package.")
+        print("Install in this environment:")
+        print("  pip install onnx")
+        print("Optional (runtime inference test):")
+        print("  pip install onnxruntime")
+        return False
 
 
 def export_regression_to_onnx(
@@ -19,7 +37,10 @@ def export_regression_to_onnx(
     front_size: tuple = (66, 200),
 ):
     """회귀 모델을 ONNX로 변환"""
-    from python.Regression.train_regression import SpeedAwareRegressionNet
+    if not _check_onnx_dependency():
+        return None
+
+    from train_regression import SpeedAwareRegressionNet
 
     print(f"Loading checkpoint: {checkpoint_path}")
 
@@ -129,8 +150,8 @@ def export_regression_to_onnx(
 
 
 if __name__ == "__main__":
-    checkpoint_dir = Path(__file__).parent / "checkpoints"
-    unity_assets = Path(__file__).parent.parent / "Assets" / "Models" / "ONNX"
+    checkpoint_dir = SCRIPT_DIR / "checkpoints"
+    unity_assets = PROJECT_ROOT / "Assets" / "Models" / "ONNX"
     unity_assets.mkdir(parents=True, exist_ok=True)
 
     checkpoint = checkpoint_dir / "driving_regression.pth"
