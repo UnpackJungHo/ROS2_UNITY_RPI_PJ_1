@@ -13,6 +13,10 @@ public class DrivingStatusUIController : MonoBehaviour
     public CollisionWarningPublisher collisionWarningPublisher;
     public DrivingDataCollectorV2 dataCollector;
     public RegressionDrivingController regressionController;
+    public TrafficLightStateSubscriber trafficLightSubscriber;
+    public TrafficLightDecisionEngine trafficLightDecisionEngine;
+    public ProgressRewardProvider progressRewardProvider;
+    public RLEpisodeEvaluator rlEpisodeEvaluator;
 
     [Header("Auto Find")]
     public bool autoFindReferences = true;
@@ -36,6 +40,36 @@ public class DrivingStatusUIController : MonoBehaviour
     public TextMeshProUGUI regressionStatsText;
     public TextMeshProUGUI regressionGuideText;
 
+    [Header("Traffic Light UI")]
+    public TextMeshProUGUI trafficLightStateText;
+    public TextMeshProUGUI trafficLightConfidenceText;
+    public TextMeshProUGUI trafficLightDecisionValueText;
+    public TextMeshProUGUI trafficLightDecisionRelevantText;
+    public TextMeshProUGUI trafficLightDecisionReasonText;
+    public TextMeshProUGUI trafficLightDecisionConfText;
+    public TextMeshProUGUI trafficLightDecisionAreaText;
+    public TextMeshProUGUI trafficLightDecisionLaneText;
+    public TextMeshProUGUI trafficLightDecisionStopSrcText;
+    public TextMeshProUGUI trafficLightDistanceTfText;
+    public TextMeshProUGUI trafficLightDistancePerceptionText;
+    public TextMeshProUGUI trafficLightDistanceFusedText;
+    public TextMeshProUGUI trafficLightDistanceSourceText;
+    public TextMeshProUGUI trafficLightControlText;
+
+    [Header("Progress Reward UI")]
+    public TextMeshProUGUI progressZoneNameText;
+    public TextMeshProUGUI progressZoneScoreText;
+    public TextMeshProUGUI progressStepRewardText;
+    public TextMeshProUGUI progressCumulativeRewardText;
+    public TextMeshProUGUI progressPathText;
+    public TextMeshProUGUI progressLateralErrorText;
+
+    [Header("RL Episode UI")]
+    public TextMeshProUGUI rlEpisodeStatusText;
+    public TextMeshProUGUI rlEpisodeScoreText;
+    public TextMeshProUGUI rlEpisodeReasonText;
+    public TextMeshProUGUI rlEpisodeTrashText;
+
     void Start()
     {
         if (autoFindReferences)
@@ -45,7 +79,9 @@ public class DrivingStatusUIController : MonoBehaviour
     void Update()
     {
         if (autoFindReferences &&
-            (collisionWarningPublisher == null || dataCollector == null || regressionController == null))
+            (collisionWarningPublisher == null || dataCollector == null || regressionController == null ||
+             trafficLightSubscriber == null || trafficLightDecisionEngine == null || progressRewardProvider == null ||
+             rlEpisodeEvaluator == null))
         {
             AutoFindReferences();
         }
@@ -53,6 +89,9 @@ public class DrivingStatusUIController : MonoBehaviour
         UpdateCollisionWarningUI();
         UpdateDataCollectorUI();
         UpdateRegressionUI();
+        UpdateTrafficLightUI();
+        UpdateProgressRewardUI();
+        UpdateRLEpisodeUI();
     }
 
     void AutoFindReferences()
@@ -65,6 +104,18 @@ public class DrivingStatusUIController : MonoBehaviour
 
         if (regressionController == null)
             regressionController = FindObjectOfType<RegressionDrivingController>();
+
+        if (trafficLightSubscriber == null)
+            trafficLightSubscriber = FindObjectOfType<TrafficLightStateSubscriber>();
+
+        if (trafficLightDecisionEngine == null)
+            trafficLightDecisionEngine = FindObjectOfType<TrafficLightDecisionEngine>();
+
+        if (progressRewardProvider == null)
+            progressRewardProvider = FindObjectOfType<ProgressRewardProvider>();
+
+        if (rlEpisodeEvaluator == null)
+            rlEpisodeEvaluator = FindObjectOfType<RLEpisodeEvaluator>();
     }
 
     void UpdateCollisionWarningUI()
@@ -90,6 +141,11 @@ public class DrivingStatusUIController : MonoBehaviour
             string distanceStr = float.IsInfinity(info.distance) ? "∞" : $"{info.distance:F2}m";
             string sensorInfo = info.source == "None" ? "None" : $"{info.source}-{info.sensor}";
             collisionClosestSensorText.text = $"최근접 센서: {sensorInfo}";
+        }
+
+        if (collisionDistanceText != null)
+        {
+            string distanceStr = float.IsInfinity(info.distance) ? "∞" : $"{info.distance:F2}m";
             collisionDistanceText.text = $"거리: {distanceStr}";
         }
     }
@@ -210,5 +266,192 @@ public class DrivingStatusUIController : MonoBehaviour
             if (regressionGuideText != null)
                 regressionGuideText.text = "";
         }
+    }
+
+    void UpdateTrafficLightUI()
+    {
+        if (trafficLightSubscriber == null && trafficLightDecisionEngine == null)
+        {
+            if (trafficLightStateText != null) trafficLightStateText.text = "신호상태: none -> none (raw: none)";
+            if (trafficLightConfidenceText != null) trafficLightConfidenceText.text = "안정 상태비율: 0%, Raw Conf: 0.00";
+            if (trafficLightDecisionValueText != null) trafficLightDecisionValueText.text = "신호판단: N/A";
+            if (trafficLightDecisionRelevantText != null) trafficLightDecisionRelevantText.text = "Relevant=N/A";
+            if (trafficLightDecisionReasonText != null) trafficLightDecisionReasonText.text = "Reason: No Decision Engine";
+            if (trafficLightDecisionConfText != null) trafficLightDecisionConfText.text = "Gate Conf=0.00";
+            if (trafficLightDecisionAreaText != null) trafficLightDecisionAreaText.text = "Gate Area=0.0000";
+            if (trafficLightDecisionLaneText != null) trafficLightDecisionLaneText.text = "Gate LaneOk=false";
+            if (trafficLightDecisionStopSrcText != null) trafficLightDecisionStopSrcText.text = "Gate StopSrc=none";
+            if (trafficLightDistanceTfText != null) trafficLightDistanceTfText.text = "정지선거리: Tf(OFF)=∞";
+            if (trafficLightDistancePerceptionText != null) trafficLightDistancePerceptionText.text = "Perception=∞";
+            if (trafficLightDistanceFusedText != null) trafficLightDistanceFusedText.text = "Fused=∞";
+            if (trafficLightDistanceSourceText != null) trafficLightDistanceSourceText.text = "Src=none";
+            if (trafficLightControlText != null) trafficLightControlText.text = "권장제어: ThrottleScale=1.00, Brake=0.00";
+            return;
+        }
+
+        string prev = trafficLightSubscriber != null ? trafficLightSubscriber.GetPreviousState() : "none";
+        string current = trafficLightSubscriber != null ? trafficLightSubscriber.GetCurrentState() : "none";
+        string raw = trafficLightSubscriber != null ? trafficLightSubscriber.GetRawState() : "none";
+        float stableRatio = trafficLightSubscriber != null ? trafficLightSubscriber.GetStableStateRatio() : 0f;
+        float rawConf = trafficLightSubscriber != null ? trafficLightSubscriber.GetRawConfidence() : 0f;
+
+        if (trafficLightStateText != null)
+            trafficLightStateText.text = $"신호상태: {prev} -> {current} (raw: {raw})";
+
+        if (trafficLightConfidenceText != null)
+            trafficLightConfidenceText.text = $"안정 상태비율: {stableRatio:P0}, Raw Conf: {rawConf:F2}";
+
+        if (trafficLightDecisionEngine == null)
+        {
+            if (trafficLightDecisionValueText != null) trafficLightDecisionValueText.text = "신호판단: N/A";
+            if (trafficLightDecisionRelevantText != null) trafficLightDecisionRelevantText.text = "Relevant=N/A";
+            if (trafficLightDecisionReasonText != null) trafficLightDecisionReasonText.text = "Reason: No Decision Engine";
+            if (trafficLightDecisionConfText != null) trafficLightDecisionConfText.text = "Gate Conf=0.00";
+            if (trafficLightDecisionAreaText != null) trafficLightDecisionAreaText.text = "Gate Area=0.0000";
+            if (trafficLightDecisionLaneText != null) trafficLightDecisionLaneText.text = "Gate LaneOk=false";
+            if (trafficLightDecisionStopSrcText != null) trafficLightDecisionStopSrcText.text = "Gate StopSrc=none";
+            if (trafficLightDistanceTfText != null) trafficLightDistanceTfText.text = "정지선거리: Tf(OFF)=∞";
+            if (trafficLightDistancePerceptionText != null) trafficLightDistancePerceptionText.text = "Perception=∞";
+            if (trafficLightDistanceFusedText != null) trafficLightDistanceFusedText.text = "Fused=∞";
+            if (trafficLightDistanceSourceText != null) trafficLightDistanceSourceText.text = "Src=none";
+            if (trafficLightControlText != null) trafficLightControlText.text = "권장제어: No Decision Engine";
+            return;
+        }
+
+        bool relevant = trafficLightDecisionEngine.IsSignalRelevant();
+        var decision = trafficLightDecisionEngine.GetDecision();
+        string reason = trafficLightDecisionEngine.GetDecisionReason();
+        float gateConf = trafficLightDecisionEngine.GetGateStateConfidence();
+        float gateArea = trafficLightDecisionEngine.GetGateBBoxArea();
+        bool gateLaneOk = trafficLightDecisionEngine.GetGateLaneOk();
+        string gateStopSrc = trafficLightDecisionEngine.GetStopLineDistanceSource();
+        float stopLineDist = trafficLightDecisionEngine.GetStopLineDistance();
+        float stopLinePerceptionDist = trafficLightDecisionEngine.GetStopLineDistancePerception();
+        float fusedDist = trafficLightDecisionEngine.GetDecisionDistance();
+        string stopLineMode = trafficLightDecisionEngine.HasStopLineTransform() ? "ON" : "OFF";
+        string stopLineSource = trafficLightDecisionEngine.GetStopLineDistanceSource();
+        float throttleScale = trafficLightDecisionEngine.GetRecommendedThrottleScale();
+        float brake = trafficLightDecisionEngine.GetRecommendedBrake();
+
+        if (trafficLightDecisionValueText != null)
+            trafficLightDecisionValueText.text = $"신호판단: {decision}";
+
+        if (trafficLightDecisionRelevantText != null)
+            trafficLightDecisionRelevantText.text = $"Relevant={relevant}";
+
+        if (trafficLightDecisionReasonText != null)
+            trafficLightDecisionReasonText.text = $"Reason: {reason}";
+
+        if (trafficLightDecisionConfText != null)
+            trafficLightDecisionConfText.text = $"Gate Conf={gateConf:F2}";
+
+        if (trafficLightDecisionAreaText != null)
+            trafficLightDecisionAreaText.text = $"Gate Area={gateArea:F4}";
+
+        if (trafficLightDecisionLaneText != null)
+            trafficLightDecisionLaneText.text = $"Gate LaneOk={gateLaneOk}";
+
+        if (trafficLightDecisionStopSrcText != null)
+            trafficLightDecisionStopSrcText.text = $"Gate StopSrc={gateStopSrc}";
+
+        if (trafficLightDistanceTfText != null)
+            trafficLightDistanceTfText.text = $"정지선거리: Tf({stopLineMode})={FormatDistance(stopLineDist)}";
+
+        if (trafficLightDistancePerceptionText != null)
+            trafficLightDistancePerceptionText.text = $"Perception={FormatDistance(stopLinePerceptionDist)}";
+
+        if (trafficLightDistanceFusedText != null)
+            trafficLightDistanceFusedText.text = $"Fused={FormatDistance(fusedDist)}";
+
+        if (trafficLightDistanceSourceText != null)
+            trafficLightDistanceSourceText.text = $"Src={stopLineSource}";
+
+        if (trafficLightControlText != null)
+            trafficLightControlText.text = $"권장제어: ThrottleScale={throttleScale:F2}, Brake={brake:F2}";
+    }
+
+    void UpdateProgressRewardUI()
+    {
+        if (progressRewardProvider == null)
+        {
+            if (progressZoneNameText != null) progressZoneNameText.text = "현재 Zone: None";
+            if (progressZoneScoreText != null) progressZoneScoreText.text = "Zone Score: 0.00 (Active: 0)";
+            if (progressStepRewardText != null) progressStepRewardText.text = "Step Reward: 0.0000";
+            if (progressCumulativeRewardText != null) progressCumulativeRewardText.text = "누적 보상: 0.0000";
+            if (progressPathText != null) progressPathText.text = "경로 진행: 0.00m / 0.00m (0.0%)";
+            if (progressLateralErrorText != null) progressLateralErrorText.text = "횡 오차: 0.00m";
+            return;
+        }
+
+        string zoneName = progressRewardProvider.GetCurrentZoneName();
+        int activeZoneCount = progressRewardProvider.GetActiveZoneCount();
+        float zoneScore = progressRewardProvider.GetCurrentZoneScore();
+        float stepReward = progressRewardProvider.GetLastStepReward();
+        float cumulative = progressRewardProvider.GetCumulativeReward();
+        float pathS = progressRewardProvider.GetCurrentPathS();
+        float totalPath = progressRewardProvider.GetTotalPathLength();
+        float progressRatio = progressRewardProvider.GetPathProgressRatio();
+        float lateralError = progressRewardProvider.GetCurrentLateralError();
+
+        if (progressZoneNameText != null)
+            progressZoneNameText.text = $"현재 Zone: {zoneName}";
+
+        if (progressZoneScoreText != null)
+            progressZoneScoreText.text = $"Zone Score: {zoneScore:F2} (Active: {activeZoneCount})";
+
+        if (progressStepRewardText != null)
+            progressStepRewardText.text = $"Step Reward: {stepReward:F4}";
+
+        if (progressCumulativeRewardText != null)
+            progressCumulativeRewardText.text = $"누적 보상: {cumulative:F4}";
+
+        if (progressPathText != null)
+            progressPathText.text = $"경로 진행: {pathS:F2}m / {totalPath:F2}m ({progressRatio * 100f:F1}%)";
+
+        if (progressLateralErrorText != null)
+            progressLateralErrorText.text = $"횡 오차: {lateralError:F2}m";
+    }
+
+    void UpdateRLEpisodeUI()
+    {
+        if (rlEpisodeEvaluator == null)
+        {
+            if (rlEpisodeStatusText != null) rlEpisodeStatusText.text = "Episode: N/A";
+            if (rlEpisodeScoreText != null) rlEpisodeScoreText.text = "Episode Score: 0.000";
+            if (rlEpisodeReasonText != null) rlEpisodeReasonText.text = "Terminal Reason: None";
+            if (rlEpisodeTrashText != null) rlEpisodeTrashText.text = "Trash: false";
+            return;
+        }
+
+        string terminal = rlEpisodeEvaluator.GetTerminalType().ToString();
+        bool success = rlEpisodeEvaluator.IsEpisodeSuccess();
+        bool terminalReached = rlEpisodeEvaluator.IsTerminalReached();
+        bool isActive = rlEpisodeEvaluator.IsEpisodeActive();
+        float score = rlEpisodeEvaluator.GetEpisodeScore();
+        int episodeIndex = rlEpisodeEvaluator.GetEpisodeIndex();
+        string reason = rlEpisodeEvaluator.GetTerminalReason();
+        bool trash = rlEpisodeEvaluator.IsTrash();
+        string trashReason = rlEpisodeEvaluator.GetTrashReason();
+
+        if (rlEpisodeStatusText != null)
+        {
+            string status = isActive ? "Running" : (terminalReached ? "Terminated" : "Idle");
+            rlEpisodeStatusText.text =
+                $"Episode #{episodeIndex}: {status}, Success={success}, Terminal={terminal}";
+        }
+
+        if (rlEpisodeScoreText != null)
+            rlEpisodeScoreText.text = $"Episode Score: {score:F3}";
+
+        if (rlEpisodeReasonText != null)
+            rlEpisodeReasonText.text = $"Terminal Reason: {reason}";
+
+        if (rlEpisodeTrashText != null)
+            rlEpisodeTrashText.text = $"Trash: {trash}, Why: {trashReason}";
+    }
+
+    string FormatDistance(float distance)
+    {
+        return float.IsInfinity(distance) ? "∞" : $"{distance:F2}m";
     }
 }

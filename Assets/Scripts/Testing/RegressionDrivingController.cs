@@ -32,6 +32,12 @@ public class RegressionDrivingController : MonoBehaviour
     [Tooltip("데이터 수집기 (DAgger 연동)")]
     public DrivingDataCollectorV2 dataCollector;
 
+    [Tooltip("충돌 경고 융합기 (선택 - 안전 오버라이드용)")]
+    public CollisionWarningPublisher collisionWarningPublisher;
+
+    [Tooltip("신호등 판단 엔진 (선택 - 안전 오버라이드용)")]
+    public TrafficLightDecisionEngine trafficLightDecisionEngine;
+
     [Header("Image Settings")]
     public int frontImageWidth = 200;
     public int frontImageHeight = 66;
@@ -55,6 +61,17 @@ public class RegressionDrivingController : MonoBehaviour
     [Header("Safety")]
     [Tooltip("최대 속도 제한 (m/s)")]
     public float maxSpeedLimit = 3f;
+    [Tooltip("센서/신호등 기반 오버라이드 활성화")]
+    public bool enableSafetyOverride = true;
+    [Range(0f, 1f)]
+    [Tooltip("SlowDown 단계에서 throttle 스케일")]
+    public float slowDownThrottleScale = 0.55f;
+    [Range(0f, 1f)]
+    [Tooltip("Warning 단계 최소 브레이크")]
+    public float warningBrake = 0.45f;
+    [Range(0f, 1f)]
+    [Tooltip("Brake 단계 최소 브레이크")]
+    public float brakeLevelBrake = 0.8f;
 
     [Header("Debug (Read Only)")]
     [SerializeField] private float predictedSteering = 0f;
@@ -113,6 +130,10 @@ public class RegressionDrivingController : MonoBehaviour
 
         if (dataCollector == null)
             dataCollector = FindObjectOfType<DrivingDataCollectorV2>();
+        if (collisionWarningPublisher == null)
+            collisionWarningPublisher = FindObjectOfType<CollisionWarningPublisher>();
+        if (trafficLightDecisionEngine == null)
+            trafficLightDecisionEngine = FindObjectOfType<TrafficLightDecisionEngine>();
 
         if (cameraPublisher == null)
             Debug.LogError("[RegressionDriving] CameraPublisher를 찾을 수 없습니다!");
@@ -378,6 +399,7 @@ public class RegressionDrivingController : MonoBehaviour
 
         float currentSpeed = wheelController.GetSpeedMS();
         float adjustedThrottle = appliedThrottle;
+        float brakeCommand = 0f;
 
         // 최대 속도 초과 시 감속
         if (currentSpeed >= maxSpeedLimit)
@@ -385,8 +407,56 @@ public class RegressionDrivingController : MonoBehaviour
             adjustedThrottle = Mathf.Min(adjustedThrottle, 0f);
         }
 
+        if (enableSafetyOverride)
+        {
+            // 1) 센서 기반 충돌 오버라이드
+            if (collisionWarningPublisher != null)
+            {
+                CollisionWarningPublisher.WarningLevel level = collisionWarningPublisher.GetWarningLevel();
+                if (level >= CollisionWarningPublisher.WarningLevel.EmergencyStop)
+                {
+                    adjustedThrottle = 0f;
+                    brakeCommand = 1f;
+                }
+                else if (level >= CollisionWarningPublisher.WarningLevel.Brake)
+                {
+                    adjustedThrottle = 0f;
+                    brakeCommand = Mathf.Max(brakeCommand, brakeLevelBrake);
+                }
+                else if (level >= CollisionWarningPublisher.WarningLevel.Warning)
+                {
+                    adjustedThrottle = Mathf.Min(adjustedThrottle, 0.15f);
+                    brakeCommand = Mathf.Max(brakeCommand, warningBrake);
+                }
+                else if (level >= CollisionWarningPublisher.WarningLevel.SlowDown)
+                {
+                    adjustedThrottle = Mathf.Min(adjustedThrottle, appliedThrottle * slowDownThrottleScale);
+                }
+            }
+
+            // 2) 신호등 기반 오버라이드
+            if (trafficLightDecisionEngine != null)
+            {
+                TrafficLightDecisionEngine.TrafficDecision decision = trafficLightDecisionEngine.GetDecision();
+                if (decision == TrafficLightDecisionEngine.TrafficDecision.Stop)
+                {
+                    adjustedThrottle = 0f;
+                    brakeCommand = Mathf.Max(brakeCommand, trafficLightDecisionEngine.GetRecommendedBrake());
+                }
+                else if (decision == TrafficLightDecisionEngine.TrafficDecision.Caution)
+                {
+                    adjustedThrottle = Mathf.Min(
+                        adjustedThrottle,
+                        appliedThrottle * trafficLightDecisionEngine.GetRecommendedThrottleScale()
+                    );
+                    brakeCommand = Mathf.Max(brakeCommand, trafficLightDecisionEngine.GetRecommendedBrake());
+                }
+            }
+        }
+
         wheelController.SetSteering(appliedSteering);
         wheelController.SetThrottle(adjustedThrottle);
+        wheelController.SetBrake(brakeCommand);
     }
 
     void OnDestroy()

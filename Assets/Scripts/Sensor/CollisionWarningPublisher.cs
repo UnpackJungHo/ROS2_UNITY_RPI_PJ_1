@@ -53,6 +53,18 @@ public class CollisionWarningPublisher : MonoBehaviour
     [Tooltip("차량 속도를 가져올 물리 컴포넌트 (base_link)")]
     public ArticulationBody velocitySource;
     public bool useVelocityForTTC = true; // TTC(충돌 예측 시간) 계산에 속도 반영 여부
+    [Tooltip("조향 입력 참조(측면 근접의 제동 반영 여부 판단용)")]
+    public WheelTest wheelController;
+
+    [Header("Path-Aware Risk Split (경로축/측면 분리)")]
+    [Tooltip("true면 정면 진행축 위험(currentMinDistance)을 우선 사용하고 측면은 보조로 처리")]
+    public bool enablePathAwareRiskSplit = true;
+    [Tooltip("측면 근접 경고 거리 (m)")]
+    public float sideAdvisoryDistance = 0.45f;
+    [Tooltip("회피 조향 중 측면 제동 거리 (m)")]
+    public float sideTurnBrakeDistance = 0.25f;
+    [Tooltip("회피 조향으로 인정할 최소 조향각(도)")]
+    public float sideTurnSteeringAngleThreshold = 7f;
 
     [Header("Debug (디버그)")]
     public bool showDebugInfo = true;
@@ -65,6 +77,8 @@ public class CollisionWarningPublisher : MonoBehaviour
 
     // 현재 상태 변수들 (Inspector 확인용 HideInInspector 해제 가능)
     [HideInInspector] public float currentMinDistance = float.PositiveInfinity; // 가장 가까운 장애물 거리
+    [HideInInspector] public float currentPathMinDistance = float.PositiveInfinity; // 진행축 최소 거리
+    [HideInInspector] public float currentSideMinDistance = float.PositiveInfinity; // 측면 최소 거리
     [HideInInspector] public float currentTTC = float.PositiveInfinity; // 충돌까지 남은 시간 (초)
     [HideInInspector] public WarningLevel currentWarningLevel = WarningLevel.Safe; // 현재 위험 수준
     [HideInInspector] public string detectionSource = "None"; // 감지된 센서 종류 (Ultrasonic / Radar)
@@ -135,6 +149,8 @@ public class CollisionWarningPublisher : MonoBehaviour
         ros.RegisterPublisher<Float32Msg>(distanceTopicName);
 
         // 참조되어야 할 센서 매니저 유효성 검증
+        if (wheelController == null)
+            wheelController = FindObjectOfType<WheelTest>();
         ValidateSensorReferences();
 
         publishInterval = 1f / publishRate;
@@ -154,6 +170,8 @@ public class CollisionWarningPublisher : MonoBehaviour
             Debug.LogWarning("[CollisionWarning] RadarSensorPublisher가 할당되지 않았습니다.");
         if (useVelocityForTTC && velocitySource == null)
             Debug.LogWarning("[CollisionWarning] velocitySource가 할당되지 않았습니다. TTC 계산이 비활성화됩니다.");
+        if (enablePathAwareRiskSplit && wheelController == null)
+            Debug.LogWarning("[CollisionWarning] wheelController가 없어 측면-조향 연동 제어가 제한됩니다.");
     }
 
     void Update()
@@ -245,7 +263,20 @@ public class CollisionWarningPublisher : MonoBehaviour
     {
         float ultrasonicMin = GetMinUltrasonicDistance();
         float radarMin = GetMinRadarDistance();
-        currentMinDistance = Mathf.Min(ultrasonicMin, radarMin);
+        float globalMin = Mathf.Min(ultrasonicMin, radarMin);
+
+        currentPathMinDistance = GetPathMinDistance();
+        currentSideMinDistance = GetSideMinDistance();
+
+        // Path-aware 모드에서는 진행축 위험을 기준으로 TTC를 계산
+        if (enablePathAwareRiskSplit)
+        {
+            currentMinDistance = float.IsInfinity(currentPathMinDistance) ? globalMin : currentPathMinDistance;
+        }
+        else
+        {
+            currentMinDistance = globalMin;
+        }
     }
 
     /// <summary>
@@ -317,22 +348,39 @@ public class CollisionWarningPublisher : MonoBehaviour
         detectionSensor = "None";
         debugDecisionTrace = "NoObstacle";
 
-        // 전체 센서 중 최소 거리 계산
+        // 전체/진행축/측면 최소 거리 계산
         float ultrasonicMin = GetMinUltrasonicDistance();
         float radarMin = GetMinRadarDistance();
-        currentMinDistance = Mathf.Min(ultrasonicMin, radarMin);
+        float globalMin = Mathf.Min(ultrasonicMin, radarMin);
+        currentPathMinDistance = GetPathMinDistance();
+        currentSideMinDistance = GetSideMinDistance();
+        currentMinDistance = enablePathAwareRiskSplit && !float.IsInfinity(currentPathMinDistance)
+            ? currentPathMinDistance
+            : globalMin;
         float ultrasonicClosestConfidence = CurrentSensorData.ultrasonicClosestConfidence;
 
         // ========== Layer 1: 초음파 긴급정지 (최우선 - 속도와 무관한 최종 안전장치) ==========
         if (ultrasonicMin <= emergencyStopDistance && ultrasonicClosestConfidence >= minEmergencyStopConfidence)
         {
-            currentWarningLevel = WarningLevel.EmergencyStop;
-            detectionSource = "Ultrasonic";
-            detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
-            debugDecisionTrace = $"Layer1 EmergencyStop (ultra={ultrasonicMin:F2}m <= {emergencyStopDistance:F2}m, conf={ultrasonicClosestConfidence:F2} >= {minEmergencyStopConfidence:F2})";
-            lastTtcLevel = WarningLevel.Safe;
-            lastLowSpeedLevel = WarningLevel.Safe;
-            return; // 즉시 반환 - 다른 판단 불필요
+            bool isSideClosest = CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.FrontLeft ||
+                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.FrontRight ||
+                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearLeft ||
+                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearRight;
+            bool allowSideEmergency = !enablePathAwareRiskSplit ||
+                                      !isSideClosest ||
+                                      IsTurningTowardClosestSide() ||
+                                      ultrasonicMin <= sideTurnBrakeDistance;
+
+            if (allowSideEmergency)
+            {
+                currentWarningLevel = WarningLevel.EmergencyStop;
+                detectionSource = "Ultrasonic";
+                detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
+                debugDecisionTrace = $"Layer1 EmergencyStop (ultra={ultrasonicMin:F2}m <= {emergencyStopDistance:F2}m, conf={ultrasonicClosestConfidence:F2} >= {minEmergencyStopConfidence:F2})";
+                lastTtcLevel = WarningLevel.Safe;
+                lastLowSpeedLevel = WarningLevel.Safe;
+                return; // 즉시 반환 - 다른 판단 불필요
+            }
         }
 
         // ========== Layer 2: TTC 기반 동적 판단 ==========
@@ -343,7 +391,8 @@ public class CollisionWarningPublisher : MonoBehaviour
         WarningLevel lowSpeedLevel = WarningLevel.Safe;
         if (currentSpeed <= lowSpeedThreshold)
         {
-            lowSpeedLevel = EvaluateLowSpeedWarning(ultrasonicMin, radarMin);
+            float lowSpeedPrimary = enablePathAwareRiskSplit ? currentMinDistance : ultrasonicMin;
+            lowSpeedLevel = EvaluateLowSpeedWarning(lowSpeedPrimary, radarMin);
         }
         lastLowSpeedLevel = lowSpeedLevel;
 
@@ -381,6 +430,19 @@ public class CollisionWarningPublisher : MonoBehaviour
             }
         }
 
+        // 측면 근접은 기본적으로 보조 정보.
+        // 단, 회피 조향 중 측면 근접이 심하면 최소 Warning까지 상향.
+        if (enablePathAwareRiskSplit &&
+            currentSideMinDistance <= sideTurnBrakeDistance &&
+            IsTurningTowardClosestSide() &&
+            currentWarningLevel < WarningLevel.Warning)
+        {
+            currentWarningLevel = WarningLevel.Warning;
+            detectionSource = "Ultrasonic";
+            detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
+            debugDecisionTrace = $"SideTurnGuard(side={currentSideMinDistance:F2}m <= {sideTurnBrakeDistance:F2}m)";
+        }
+
         // 정지 상태에서 레이더 최소 안전거리 체크
         if (currentSpeed <= 0.01f && radarMin <= radarMinSafeDistance)
         {
@@ -412,6 +474,45 @@ public class CollisionWarningPublisher : MonoBehaviour
         if (radarManager == null) return float.PositiveInfinity;
         // radarManager에서 최소 거리 계산 후 반환
         return radarManager.ClosestDistance;
+    }
+
+    float GetPathMinDistance()
+    {
+        // 정면 진행축: 전방 중앙 초음파 + 전방 레이더 우선
+        float fc = CurrentSensorData.ultrasonicFC;
+        float radarFront = CurrentSensorData.radarFront;
+        float forwardCore = Mathf.Min(fc, radarFront);
+
+        // 센터 센서가 모두 비어있으면 전방 최소거리(코너 포함)로 fallback
+        if (float.IsInfinity(forwardCore))
+            forwardCore = CurrentSensorData.ultrasonicMinFront;
+
+        return forwardCore;
+    }
+
+    float GetSideMinDistance()
+    {
+        float leftMin = Mathf.Min(CurrentSensorData.ultrasonicFL, CurrentSensorData.ultrasonicRL);
+        float rightMin = Mathf.Min(CurrentSensorData.ultrasonicFR, CurrentSensorData.ultrasonicRR);
+        return Mathf.Min(leftMin, rightMin);
+    }
+
+    bool IsTurningTowardClosestSide()
+    {
+        if (wheelController == null)
+            return false;
+
+        float steeringAngle = wheelController.GetSteeringAngle();
+        bool turningLeft = steeringAngle > sideTurnSteeringAngleThreshold;
+        bool turningRight = steeringAngle < -sideTurnSteeringAngleThreshold;
+
+        SingleUltrasonicSensor.SensorPosition closest = CurrentSensorData.ultrasonicClosest;
+        bool closestIsLeft = closest == SingleUltrasonicSensor.SensorPosition.FrontLeft ||
+                             closest == SingleUltrasonicSensor.SensorPosition.RearLeft;
+        bool closestIsRight = closest == SingleUltrasonicSensor.SensorPosition.FrontRight ||
+                              closest == SingleUltrasonicSensor.SensorPosition.RearRight;
+
+        return (closestIsLeft && turningLeft) || (closestIsRight && turningRight);
     }
 
     /// <summary>
@@ -623,12 +724,18 @@ public class CollisionWarningPublisher : MonoBehaviour
 
         float ultrasonicMin = GetMinUltrasonicDistance();
         float radarMin = GetMinRadarDistance();
+        float pathMin = currentPathMinDistance;
+        float sideMin = currentSideMinDistance;
         string ultrasonicMinStr = float.IsInfinity(ultrasonicMin) ? "∞" : $"{ultrasonicMin:F2}m";
         string radarMinStr = float.IsInfinity(radarMin) ? "∞" : $"{radarMin:F2}m";
+        string pathMinStr = float.IsInfinity(pathMin) ? "∞" : $"{pathMin:F2}m";
+        string sideMinStr = float.IsInfinity(sideMin) ? "∞" : $"{sideMin:F2}m";
+        bool sideAdvisory = !float.IsInfinity(sideMin) && sideMin <= sideAdvisoryDistance;
 
         Debug.Log(
             $"[Collision] Level={levelStr}({(int)currentWarningLevel}) | Dist={distStr} | TTC={ttcStr} | Ego={currentSpeed:F2}m/s | Closing={closingSpeedStr} | " +
-            $"ULMin={ultrasonicMinStr} | RadarMin={radarMinStr} | Closest={detectionSource}-{detectionSensor} | UltraConf={CurrentSensorData.ultrasonicClosestConfidence:F2} | " +
+            $"ULMin={ultrasonicMinStr} | RadarMin={radarMinStr} | PathMin={pathMinStr} | SideMin={sideMinStr} (advisory={sideAdvisory}) | " +
+            $"Closest={detectionSource}-{detectionSensor} | UltraConf={CurrentSensorData.ultrasonicClosestConfidence:F2} | SplitMode={enablePathAwareRiskSplit} | " +
             $"TTCLevel={lastTtcLevel} | LowSpeedLevel={lastLowSpeedLevel} | Decision={debugDecisionTrace}"
         );
 
@@ -706,6 +813,8 @@ public class CollisionWarningPublisher : MonoBehaviour
     public bool ShouldStop() => currentWarningLevel >= WarningLevel.Brake;
 
     public float GetDistanceToObstacle() => currentMinDistance;
+    public float GetPathDistanceToObstacle() => currentPathMinDistance;
+    public float GetSideDistanceToObstacle() => currentSideMinDistance;
     public float GetTimeToCollision() => currentTTC;
     public WarningLevel GetWarningLevel() => currentWarningLevel;
     /// <summary>

@@ -26,7 +26,7 @@ Author: KJH
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.msg import ParameterDescriptor, IntegerRange, FloatingPointRange, SetParametersResult
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32MultiArray
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -40,6 +40,7 @@ import threading
 
 # 클래스 이름 매핑 (Roboflow 데이터셋 순서: 0=Green, 1=Red, 2=Yellow)
 CLASS_NAMES = {0: 'green', 1: 'red', 2: 'yellow'}
+STATE_TO_ID = {'none': 0, 'red': 1, 'yellow': 2, 'green': 3}
 
 
 class CameraThread:
@@ -129,6 +130,7 @@ class TrafficLightDetector(Node):
 
         # ========== Publishers ==========
         self.state_pub = self.create_publisher(String, '/traffic_light/state', 10)
+        self.perception_pub = self.create_publisher(Float32MultiArray, '/traffic_light/perception', 10)
         self.debug_pub = self.create_publisher(Image, '/traffic_light/debug', 10)
 
         # ========== 슬라이딩 윈도우 디바운싱 상태 ==========
@@ -226,9 +228,53 @@ class TrafficLightDetector(Node):
         state_msg.data = self.current_state
         self.state_pub.publish(state_msg)
 
+        # ========== 5-1. /traffic_light/perception 발행 ==========
+        # data[0]: stable_state_id      (0:none, 1:red, 2:yellow, 3:green)
+        # data[1]: stable_state_ratio   (윈도우 내 stable 비율 0~1)
+        # data[2]: raw_state_id         (YOLO raw state)
+        # data[3]: raw_confidence       (YOLO raw confidence 0~1)
+        # data[4]: bbox_center_x_norm   (0~1, 없으면 -1)
+        # data[5]: bbox_center_y_norm   (0~1, 없으면 -1)
+        # data[6]: bbox_area_norm       (0~1, 없으면 0)
+        perception_msg = Float32MultiArray()
+        stable_ratio = self._state_ratio(self.current_state)
+        raw_id = STATE_TO_ID.get(detected_state, 0)
+        stable_id = STATE_TO_ID.get(self.current_state, 0)
+
+        if best_box is not None:
+            h, w = frame.shape[:2]
+            x1, y1, x2, y2 = best_box
+            cx = ((x1 + x2) * 0.5) / max(w, 1)
+            cy = ((y1 + y2) * 0.5) / max(h, 1)
+            area = max(0, x2 - x1) * max(0, y2 - y1)
+            area_norm = area / max(w * h, 1)
+            cx = float(np.clip(cx, 0.0, 1.0))
+            cy = float(np.clip(cy, 0.0, 1.0))
+            area_norm = float(np.clip(area_norm, 0.0, 1.0))
+        else:
+            cx, cy, area_norm = -1.0, -1.0, 0.0
+
+        perception_msg.data = [
+            float(stable_id),
+            float(stable_ratio),
+            float(raw_id),
+            float(best_conf),
+            float(cx),
+            float(cy),
+            float(area_norm),
+        ]
+        self.perception_pub.publish(perception_msg)
+
         # ========== 6. /traffic_light/debug 발행 ==========
         debug_frame = self.draw_debug(frame, detected_state, best_conf, best_box)
         self.publish_image(self.debug_pub, debug_frame)
+
+    def _state_ratio(self, state: str) -> float:
+        """현재 슬라이딩 윈도우에서 특정 상태 비율 반환"""
+        if len(self.history) == 0:
+            return 0.0
+        counts = Counter(self.history)
+        return counts.get(state, 0) / len(self.history)
 
     def update_debounce(self, detected_state: str) -> str:
         """
