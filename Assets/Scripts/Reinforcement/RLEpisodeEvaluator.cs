@@ -74,6 +74,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [SerializeField] private float dangerStoppedDuration = 0f;
     [SerializeField] private float timeAtDangerLevel = 0f;
     [SerializeField] private int collisionCount = 0;
+    [SerializeField] private string lastCollisionObjectName = "None";
+    [SerializeField] private float lastCollisionRelativeSpeed = 0f;
     [SerializeField] private CollisionWarningPublisher.WarningLevel maxWarningLevel =
         CollisionWarningPublisher.WarningLevel.Safe;
     [SerializeField] private float minObservedTtc = float.PositiveInfinity;
@@ -148,6 +150,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
         dangerStoppedDuration = 0f;
         timeAtDangerLevel = 0f;
         collisionCount = 0;
+        lastCollisionObjectName = "None";
+        lastCollisionRelativeSpeed = 0f;
         maxWarningLevel = CollisionWarningPublisher.WarningLevel.Safe;
         minObservedTtc = float.PositiveInfinity;
 
@@ -204,6 +208,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
             return;
 
         collisionCount++;
+        lastCollisionObjectName = collision.collider != null ? collision.collider.name : "Unknown";
+        lastCollisionRelativeSpeed = relativeSpeed;
         SetTerminal(
             TerminalType.FailCollision,
             $"Collision(obj={collision.collider.name}, relV={relativeSpeed:F2}m/s)"
@@ -295,7 +301,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
         Debug.Log(
             $"[RLEpisode] End #{episodeIndex} | type={terminalType} | success={episodeSuccess} | " +
-            $"score={episodeScore:F3} | rewardBase={episodeRewardBase:F3} | trash={isTrashEpisode} | reason={terminalReason}"
+            $"score={episodeScore:F3} | rewardBase={episodeRewardBase:F3} | trash={isTrashEpisode} | " +
+            $"collisionObj={lastCollisionObjectName} | collisionRelV={lastCollisionRelativeSpeed:F2}m/s | reason={terminalReason}"
         );
 
         OnEpisodeTerminated?.Invoke(this);

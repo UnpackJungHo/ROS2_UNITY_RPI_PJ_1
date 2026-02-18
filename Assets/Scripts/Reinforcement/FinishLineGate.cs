@@ -5,6 +5,10 @@ public class FinishLineGate : MonoBehaviour
     [Header("Gate 설정")]
     [SerializeField] private BoxCollider gateCollider;
     [SerializeField] private ArticulationBody targetBody;
+    
+    [Header("RL 연동")]
+    [SerializeField] private RLEpisodeEvaluator episodeEvaluator;
+    [SerializeField] private bool autoFindEpisodeEvaluator = true;
 
     private bool _isInside;
     private bool _enteredFromFront;
@@ -16,6 +20,9 @@ public class FinishLineGate : MonoBehaviour
 
     private void Start()
     {
+        if (autoFindEpisodeEvaluator && episodeEvaluator == null)
+            episodeEvaluator = FindObjectOfType<RLEpisodeEvaluator>();
+
         if (gateCollider == null || targetBody == null)
         {
             Debug.LogError($"[FinishLineGate] 할당 안됨! gate:{gateCollider} target:{targetBody}");
@@ -79,7 +86,15 @@ public class FinishLineGate : MonoBehaviour
             Debug.Log($"[FinishLineGate] ★ 퇴출! 앞진입:{_enteredFromFront} 뒤퇴출:{exitedToBehind}");
 
             if (_enteredFromFront && exitedToBehind)
+            {
                 Debug.Log("[FinishLineGate] ★★★ 통과 성공! ★★★");
+                if (episodeEvaluator != null)
+                {
+                    float enterSigned = _enteredFromFront ? 1f : -1f;
+                    float exitSigned = exitedToBehind ? -1f : 1f;
+                    episodeEvaluator.NotifyFinishCrossed(gameObject.name, enterSigned, exitSigned);
+                }
+            }
             else
                 Debug.Log($"[FinishLineGate] 통과 실패 (앞진입:{_enteredFromFront}, 뒤퇴출:{exitedToBehind})");
         }
