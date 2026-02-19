@@ -73,6 +73,10 @@ public class RegressionDrivingController : MonoBehaviour
     [Tooltip("Brake 단계 최소 브레이크")]
     public float brakeLevelBrake = 0.8f;
 
+    [Header("RL Residual Mode")]
+    [Tooltip("true면 추론만 하고 차량에 직접 적용하지 않음 (RL Agent가 읽어서 보정)")]
+    public bool predictionOnlyMode = false;
+
     [Header("Debug (Read Only)")]
     [SerializeField] private float predictedSteering = 0f;
     [SerializeField] private float predictedThrottle = 0f;
@@ -84,7 +88,7 @@ public class RegressionDrivingController : MonoBehaviour
 
     // Sentis
     private Model runtimeModel;
-    private Worker worker;
+    private IWorker worker;
 
     // 카메라 및 렌더링
     private Camera frontCamera;
@@ -92,8 +96,8 @@ public class RegressionDrivingController : MonoBehaviour
     private Texture2D frontTexture;
 
     // 텐서
-    private Tensor<float> frontInputTensor;
-    private Tensor<float> speedInputTensor;
+    private TensorFloat frontInputTensor;
+    private TensorFloat speedInputTensor;
 
     // ImageNet 정규화 상수
     private readonly float[] mean = { 0.485f, 0.456f, 0.406f };
@@ -158,7 +162,7 @@ public class RegressionDrivingController : MonoBehaviour
         try
         {
             runtimeModel = ModelLoader.Load(modelAsset);
-            worker = new Worker(runtimeModel, BackendType.GPUCompute);
+            worker = WorkerFactory.CreateWorker(BackendType.GPUCompute, runtimeModel);
 
             isModelLoaded = true;
             Debug.Log("[RegressionDriving] Regression 모델 로드 완료");
@@ -209,7 +213,8 @@ public class RegressionDrivingController : MonoBehaviour
                     lastInferenceTime = Time.time;
                 }
 
-                ApplyAIControl();
+                if (!predictionOnlyMode)
+                    ApplyAIControl();
             }
         }
 
@@ -327,29 +332,25 @@ public class RegressionDrivingController : MonoBehaviour
         // 3. 속도 텐서 생성 (정규화)
         float currentSpeed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
         float normalizedSpeed = currentSpeed / speedNormalize;
-        speedInputTensor = new Tensor<float>(new TensorShape(1, 1), new float[] { normalizedSpeed });
+        speedInputTensor = new TensorFloat(new TensorShape(1, 1), new float[] { normalizedSpeed });
 
         // 4. 추론 실행
         worker.SetInput("front_image", frontInputTensor);
         worker.SetInput("speed", speedInputTensor);
-        worker.Schedule();
+        worker.Execute();
 
         // 5. 결과 읽기 - [steering, throttle] 연속값
-        using (Tensor<float> outputTensor = worker.PeekOutput("output") as Tensor<float>)
+        TensorFloat outputTensor = worker.PeekOutput("output") as TensorFloat;
+        if (outputTensor != null)
         {
-            if (outputTensor != null)
-            {
-                using (Tensor<float> cpuTensor = outputTensor.ReadbackAndClone())
-                {
-                    // 모델 출력: steering [-1, 1], throttle [0, 1]
-                    predictedSteering = cpuTensor[0];
-                    predictedThrottle = cpuTensor[1];
+            outputTensor.MakeReadable();
+            // 모델 출력: steering [-1, 1], throttle [0, 1]
+            predictedSteering = outputTensor[0];
+            predictedThrottle = outputTensor[1];
 
-                    // 직접 제어값으로 사용
-                    appliedSteering = predictedSteering;
-                    appliedThrottle = predictedThrottle;
-                }
-            }
+            // 직접 제어값으로 사용
+            appliedSteering = predictedSteering;
+            appliedThrottle = predictedThrottle;
         }
 
         // 텐서 정리
@@ -371,7 +372,7 @@ public class RegressionDrivingController : MonoBehaviour
         cam.targetTexture = originalTarget;
     }
 
-    Tensor<float> TextureToTensor(Texture2D texture, int height, int width)
+    TensorFloat TextureToTensor(Texture2D texture, int height, int width)
     {
         Color[] pixels = texture.GetPixels();
         float[] tensorData = new float[3 * height * width];
@@ -390,7 +391,7 @@ public class RegressionDrivingController : MonoBehaviour
             }
         }
 
-        return new Tensor<float>(new TensorShape(1, 3, height, width), tensorData);
+        return new TensorFloat(new TensorShape(1, 3, height, width), tensorData);
     }
 
     void ApplyAIControl()

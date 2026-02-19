@@ -66,6 +66,8 @@ public class RadarSensorPublisher : MonoBehaviour
     {
         // ROS 연결 인스턴스를 가져오거나 없으면 새로 생성 (싱글톤 패턴)
         ros = ROSConnection.GetOrCreateInstance();
+        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
+        targetsTopicName = RosTopicNamespace.Resolve(gameObject, targetsTopicName);
         // 이 스크립트를 Float32MultiArrayMsg 타입의 퍼블리셔로 등록
         ros.RegisterPublisher<Float32MultiArrayMsg>(topicName);
         ros.RegisterPublisher<Float32MultiArrayMsg>(targetsTopicName);

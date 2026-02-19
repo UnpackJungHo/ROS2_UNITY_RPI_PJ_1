@@ -45,30 +45,32 @@ from std_msgs.msg import Float32MultiArray, String
 
 
 class StopLineDetector(Node):
-    def __init__(self):
-        super().__init__("stop_line_detector")
+    def __init__(self, namespace=''):
+        self.ns = namespace.rstrip('/') if namespace else ''
+        node_name = 'stop_line_detector' if not self.ns else f'stop_line_detector_{self.ns.strip("/").replace("/","_")}'
+        super().__init__(node_name)
 
         self.bridge = CvBridge()
 
         # ===== ROS topics =====
         self.declare_parameter(
             "image_topic",
-            "/camera/image_raw",
+            f"{self.ns}/camera/image_raw",
             ParameterDescriptor(description="입력 카메라 이미지 토픽"),
         )
         self.declare_parameter(
             "state_topic",
-            "/stop_line/state",
+            f"{self.ns}/stop_line/state",
             ParameterDescriptor(description="정지선 상태 토픽"),
         )
         self.declare_parameter(
             "perception_topic",
-            "/stop_line/perception",
+            f"{self.ns}/stop_line/perception",
             ParameterDescriptor(description="정지선 수치 정보 토픽"),
         )
         self.declare_parameter(
             "debug_topic",
-            "/stop_line/debug",
+            f"{self.ns}/stop_line/debug",
             ParameterDescriptor(description="디버그 이미지 토픽"),
         )
 
@@ -729,8 +731,15 @@ class StopLineDetector(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = StopLineDetector()
+    import argparse
+    parser = argparse.ArgumentParser(description='Stop Line Detector ROS2 Node')
+    parser.add_argument('--namespace', type=str, default='',
+                        help='토픽 네임스페이스 prefix (예: /amr0)')
+    cli_args, remaining = parser.parse_known_args()
+
+    rclpy.init(args=remaining)
+    ns = cli_args.namespace.rstrip('/')
+    node = StopLineDetector(namespace=ns)
 
     try:
         rclpy.spin(node)

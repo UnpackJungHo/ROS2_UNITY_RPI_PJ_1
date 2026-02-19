@@ -23,6 +23,11 @@ public class OdometryPublisher : MonoBehaviour
     [Header("Vehicle Settings")]
     public ArticulationBody vehicleBody; // 차량의 물리 바디
 
+    [Header("Base Link Reference")]
+    [Tooltip("base_link 게임오브젝트를 지정. 비워두면 이 오브젝트 자신을 사용.")]
+    public GameObject baseLinkObject;
+
+    private Transform baseLinkTransform;
     private ROSConnection ros;
     private float timeElapsed;
     private float publishInterval;
@@ -33,23 +38,30 @@ public class OdometryPublisher : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        odomTopic = RosTopicNamespace.Resolve(gameObject, odomTopic);
+        tfTopic = RosTopicNamespace.Resolve(gameObject, tfTopic);
         ros.RegisterPublisher<OdometryMsg>(odomTopic);
         ros.RegisterPublisher<TFMessageMsg>(tfTopic);
 
         publishInterval = 1.0f / publishRate;
 
+        // baseLinkTransform 설정
+        baseLinkTransform = baseLinkObject != null ? baseLinkObject.transform : transform;
+
         if (vehicleBody == null)
         {
-            vehicleBody = GetComponentInParent<ArticulationBody>();
+            vehicleBody = baseLinkTransform.GetComponentInChildren<ArticulationBody>();
+            if (vehicleBody == null)
+                vehicleBody = baseLinkTransform.GetComponentInParent<ArticulationBody>();
             if (vehicleBody == null)
             {
-                Debug.LogError("OdometryPublisher: ArticulationBody not found in parent or self!");
+                Debug.LogError("OdometryPublisher: ArticulationBody not found!");
             }
         }
 
         // 초기 위치 저장
-        initialPosition = transform.position;
-        initialRotation = transform.rotation;
+        initialPosition = baseLinkTransform.position;
+        initialRotation = baseLinkTransform.rotation;
     }
 
     void Update()
@@ -72,8 +84,8 @@ public class OdometryPublisher : MonoBehaviour
         var tfTime = ConvertToRosTime(Time.time);
 
         // 2. 차량의 위치와 회전 (ROS 좌표계로 변환)
-        Vector3 currentPos = transform.position;
-        Quaternion currentRot = transform.rotation;
+        Vector3 currentPos = baseLinkTransform.position;
+        Quaternion currentRot = baseLinkTransform.rotation;
 
         // ROS 좌표 변환 (<Vector3> -> <PointMsg>)
         PointMsg position = currentPos.To<FLU>();
@@ -84,8 +96,8 @@ public class OdometryPublisher : MonoBehaviour
         Vector3 angularVel = vehicleBody.angularVelocity;
 
         // 월드 속도 -> 로컬 속도 변환
-        Vector3 localLinearVel = transform.InverseTransformDirection(linearVel);
-        Vector3 localAngularVel = transform.InverseTransformDirection(angularVel);
+        Vector3 localLinearVel = baseLinkTransform.InverseTransformDirection(linearVel);
+        Vector3 localAngularVel = baseLinkTransform.InverseTransformDirection(angularVel);
 
         Vector3Msg linearMsg = localLinearVel.To<FLU>();
         Vector3Msg angularMsg = localAngularVel.To<FLU>();

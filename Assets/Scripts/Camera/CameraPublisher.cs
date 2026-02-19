@@ -52,6 +52,7 @@ public class CameraPublisher : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
         ros.RegisterPublisher<ImageMsg>(topicName);
 
         if (cameraTransform == null)

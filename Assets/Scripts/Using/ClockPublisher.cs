@@ -21,6 +21,7 @@ public class ClockPublisher : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        clockTopic = RosTopicNamespace.Resolve(gameObject, clockTopic);
         ros.RegisterPublisher<ClockMsg>(clockTopic);
         publishInterval = 1.0f / publishRate;
     }

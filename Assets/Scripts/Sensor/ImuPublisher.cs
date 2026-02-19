@@ -15,6 +15,12 @@ public class ImuPublisher : MonoBehaviour
     [Header("Vehicle Reference")]
     public ArticulationBody vehicleBody;
 
+    [Header("Base Link Reference")]
+    [Tooltip("base_link 게임오브젝트를 지정. 비워두면 이 오브젝트 자신을 사용.")]
+    public GameObject baseLinkObject;
+
+    private Transform baseLinkTransform;
+
     [Header("Filter Settings")]
     [Tooltip("가속도 저역통과 필터 계수 (0.0~1.0). 낮을수록 더 부드러움")]
     [Range(0.05f, 1.0f)]
@@ -56,14 +62,20 @@ public class ImuPublisher : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
         ros.RegisterPublisher<ImuMsg>(topicName);
+
+        // baseLinkTransform 설정
+        baseLinkTransform = baseLinkObject != null ? baseLinkObject.transform : transform;
 
         if (vehicleBody == null)
         {
-            vehicleBody = GetComponentInParent<ArticulationBody>();
+            vehicleBody = baseLinkTransform.GetComponentInChildren<ArticulationBody>();
+            if (vehicleBody == null)
+                vehicleBody = baseLinkTransform.GetComponentInParent<ArticulationBody>();
             if (vehicleBody == null)
             {
-                Debug.LogError("ImuPublisher: ArticulationBody not found in parent or self!");
+                Debug.LogError("ImuPublisher: ArticulationBody not found!");
             }
         }
 
@@ -165,15 +177,15 @@ public class ImuPublisher : MonoBehaviour
         var tfTime = ConvertToRosTime(Time.time);
 
         // 회전 (Orientation) — Unity Ground Truth
-        Quaternion currentRot = transform.rotation;
+        Quaternion currentRot = baseLinkTransform.rotation;
         QuaternionMsg orientation = currentRot.To<FLU>();
 
         // 각속도 → 로컬 프레임 변환 후 ROS 좌표계 변환
-        Vector3 localAngularVel = transform.InverseTransformDirection(filteredAngularVelocity);
+        Vector3 localAngularVel = baseLinkTransform.InverseTransformDirection(filteredAngularVelocity);
         Vector3Msg angularVelMsg = localAngularVel.To<FLU>();
 
         // 선형 가속도 → 로컬 프레임 변환 후 ROS 좌표계 변환
-        Vector3 localAccel = transform.InverseTransformDirection(filteredAcceleration);
+        Vector3 localAccel = baseLinkTransform.InverseTransformDirection(filteredAcceleration);
         Vector3Msg linearAccelMsg = localAccel.To<FLU>();
 
         ImuMsg imuMsg = new ImuMsg

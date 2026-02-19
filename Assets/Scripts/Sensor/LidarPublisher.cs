@@ -63,6 +63,7 @@ public class LidarPublisher : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
         ros.RegisterPublisher<PointCloud2Msg>(topicName);
 
         if (lidarTransform == null)

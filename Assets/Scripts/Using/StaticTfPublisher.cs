@@ -34,6 +34,7 @@ public class StaticTfPublisher : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        tfStaticTopic = RosTopicNamespace.Resolve(gameObject, tfStaticTopic);
         ros.RegisterPublisher<TFMessageMsg>(tfStaticTopic);
 
         // 기본값 설정 (Inspector에서 설정 가능하도록)

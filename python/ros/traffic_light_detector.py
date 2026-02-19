@@ -86,8 +86,10 @@ class TrafficLightDetector(Node):
     THRESHOLD_CHANGE = 0.5    # 색상 → 다른 색상: 50% 이상 (신중한 전환)
     THRESHOLD_NONE = 0.8      # 색상 → none: 80% 이상 (깜빡임 방지)
 
-    def __init__(self, mode='simulation', model_path=None, camera_device=0):
-        super().__init__('traffic_light_detector')
+    def __init__(self, mode='simulation', model_path=None, camera_device=0, namespace=''):
+        node_name = 'traffic_light_detector' if not namespace else f'traffic_light_detector_{namespace.strip("/").replace("/","_")}'
+        super().__init__(node_name)
+        self.ns = namespace.rstrip('/') if namespace else ''
 
         self.mode = mode
         self.bridge = CvBridge()
@@ -129,9 +131,9 @@ class TrafficLightDetector(Node):
         self.get_logger().info('YOLO model loaded successfully')
 
         # ========== Publishers ==========
-        self.state_pub = self.create_publisher(String, '/traffic_light/state', 10)
-        self.perception_pub = self.create_publisher(Float32MultiArray, '/traffic_light/perception', 10)
-        self.debug_pub = self.create_publisher(Image, '/traffic_light/debug', 10)
+        self.state_pub = self.create_publisher(String, f'{self.ns}/traffic_light/state', 10)
+        self.perception_pub = self.create_publisher(Float32MultiArray, f'{self.ns}/traffic_light/perception', 10)
+        self.debug_pub = self.create_publisher(Image, f'{self.ns}/traffic_light/debug', 10)
 
         # ========== 슬라이딩 윈도우 디바운싱 상태 ==========
         self.current_state = 'none'
@@ -142,11 +144,12 @@ class TrafficLightDetector(Node):
 
         if mode == 'simulation':
             # Unity CameraPublisher 토픽 구독
+            image_topic = f'{self.ns}/camera/image_raw'
             self.image_sub = self.create_subscription(
-                Image, '/camera/image_raw', self.image_callback, 10
+                Image, image_topic, self.image_callback, 10
             )
             self.get_logger().info(
-                f'[Simulation] Subscribing /camera/image_raw (imgsz={self.infer_imgsz})')
+                f'[Simulation] Subscribing {image_topic} (imgsz={self.infer_imgsz})')
         else:
             # 웹캠 직접 모드 (스레딩)
             dev = self.get_parameter('camera_device').value
@@ -384,15 +387,19 @@ def main(args=None):
                         help='YOLO 모델 경로 (미지정 시 모드별 기본값 사용)')
     parser.add_argument('--camera', type=int, default=0,
                         help='웹캠 디바이스 번호 (real 모드)')
+    parser.add_argument('--namespace', type=str, default='',
+                        help='토픽 네임스페이스 prefix (예: /amr0)')
     cli_args = parser.parse_args()
 
     mode = 'real' if cli_args.real else 'simulation'
 
     rclpy.init(args=args)
+    ns = cli_args.namespace.rstrip('/')
     node = TrafficLightDetector(
         mode=mode,
         model_path=cli_args.model,
         camera_device=cli_args.camera,
+        namespace=ns,
     )
 
     try:

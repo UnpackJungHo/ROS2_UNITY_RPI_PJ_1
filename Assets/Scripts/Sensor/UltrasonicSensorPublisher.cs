@@ -60,6 +60,7 @@ public class UltrasonicSensorPublisher : MonoBehaviour
     {
         // ROS 연결 인스턴스 가져오기 및 퍼블리셔 등록
         ros = ROSConnection.GetOrCreateInstance();
+        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
         ros.RegisterPublisher<Float32MultiArrayMsg>(topicName);
 
         // 센서 배열 초기화 및 검증

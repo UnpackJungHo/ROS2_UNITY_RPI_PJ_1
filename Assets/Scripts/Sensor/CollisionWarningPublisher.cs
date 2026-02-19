@@ -144,6 +144,8 @@ public class CollisionWarningPublisher : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        warningTopicName = RosTopicNamespace.Resolve(gameObject, warningTopicName);
+        distanceTopicName = RosTopicNamespace.Resolve(gameObject, distanceTopicName);
         // 배열 메시지(상세 정보)와 단일 값 메시지(가장 가까운 거리) 퍼블리셔 등록
         ros.RegisterPublisher<Float32MultiArrayMsg>(warningTopicName);
         ros.RegisterPublisher<Float32Msg>(distanceTopicName);
