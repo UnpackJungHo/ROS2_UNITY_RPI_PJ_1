@@ -5,11 +5,12 @@
 /[Bb]uild/
 /[Bb]uilds/
 /[Ll]ogs/
-#/[Uu]ser[Ss]ettings/
+/[Uu]ser[Ss]ettings/
 /[Mm]emoryCaptures/
 /[Rr]ecordings/
 /[Tt]rainingData/
 /[Tt]rainingDataV2/
+/[Rr]esults/
 
 # [Asset Store Tools]
 /[Aa]ssets/AssetStoreTools*
@@ -62,3 +63,20 @@ runs/*
 yolo26n.pt
 yolov8n.pt
 yolov8s.pt
+
+# [Local Tooling / Generated Context]
+/.codex/config.toml
+/.codex/skills/
+/PROJECT_CONTEXT.md
+/PROJECT_CONTEXT_FULL.md
+/PROJECT_RULES.md
+
+# [ML-Agents Generated]
+/Assets/ML-Agents/Timers/
+/Assets/ML-Agents/Timers.meta
+
+# [AI Game Developer Local Config]
+/Assets/Resources/AI-Game-Developer-Config.json
+/Assets/Resources/AI-Game-Developer-Config.json.meta
+/Assets/Resources/RL/rl_episode_report.csv
+/Assets/Resources/RL/rl_episode_report.csv.meta
