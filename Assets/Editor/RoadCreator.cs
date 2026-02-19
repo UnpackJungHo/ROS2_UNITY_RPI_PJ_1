@@ -4,45 +4,6 @@ using System.Collections.Generic;
 
 
 /// <summary>
-/// 보상 구역 정보
-/// </summary>
-[System.Serializable]
-public class RewardZoneInfo
-{
-    public string zoneName = "Zone";
-    public float score = 0f;
-    public float startOffset = 0f;
-    public float endOffset = 1f;
-}
-
-/// <summary>
-/// 도로 데이터를 저장하는 컴포넌트
-/// </summary>
-public class RoadData : MonoBehaviour
-{
-    [Header("Control Points")]
-    public List<Vector3> controlPoints = new List<Vector3>();
-    
-    [Header("Road Settings")]
-    public float roadWidth = 5f;
-    public int curveResolution = 10;
-    public Material roadMaterial;
-    public bool isLooped = false;
-    
-    // 턱(Curb) 설정
-    public bool hasCurbs = false;
-    public float curbWidth = 0.5f;
-    public float curbHeight = 0.2f;
-    public Material curbMaterial;
-
-    // 보상 구역 설정
-    [Header("Reward Zones")]
-    public List<RewardZoneInfo> rewardZones = new List<RewardZoneInfo>();
-    // public string baseZoneName = "BaseZone"; // Deprecated
-    // public float baseZoneScore = 1f; // Deprecated
-}
-
-/// <summary>
 /// Road Creator Editor Tool
 /// Shift+클릭으로 포인트를 찍고, 포인트들을 연결하는 도로 메쉬를 생성합니다.
 /// 곡선 구간은 Catmull-Rom Spline을 사용하여 부드럽게 처리합니다.
@@ -81,6 +42,10 @@ public class RoadCreator : EditorWindow
     // 도로 목록 관리
     private List<RoadData> sceneRoads = new List<RoadData>();
     private Vector2 roadListScrollPosition;
+
+    // 씬 간 재사용(프리팹) 관리
+    private GameObject reusableRoadPrefab;
+    private const string DEFAULT_ROAD_PREFAB_FOLDER = "Assets/Prefabs/Roads";
     
 
     
@@ -145,6 +110,7 @@ public class RoadCreator : EditorWindow
         // 하지만 여기서는 단순 로드만 수행. 새로운 UI에서 조정하도록 유도.
 
         currentRoadObject = roadData.gameObject;
+        reusableRoadPrefab = PrefabUtility.GetCorrespondingObjectFromSource(roadData.gameObject) as GameObject;
         selectedPointIndices.Clear();
 
         Debug.Log($"Road Creator: '{roadData.name}' 로드 완료 ({controlPoints.Count} 포인트)");
@@ -211,6 +177,9 @@ public class RoadCreator : EditorWindow
             }
         }
         EditorGUILayout.EndScrollView();
+
+        EditorGUILayout.Space(8);
+        DrawCrossSceneReuseUI();
         
         if (GUILayout.Button("🚧 성능 최적화 (Collider 강제 업데이트)"))
         {
@@ -330,6 +299,137 @@ public class RoadCreator : EditorWindow
 
         // 보상 구역 UI
         DrawRewardZoneUI();
+    }
+
+    private void DrawCrossSceneReuseUI()
+    {
+        EditorGUILayout.LabelField("씬 간 재사용 (Prefab)", EditorStyles.boldLabel);
+        reusableRoadPrefab = (GameObject)EditorGUILayout.ObjectField("Road Prefab", reusableRoadPrefab, typeof(GameObject), false);
+
+        EditorGUILayout.BeginHorizontal();
+
+        GUI.enabled = currentRoadObject != null;
+        if (GUILayout.Button("현재 도로를 Prefab으로 저장", GUILayout.Height(24)))
+        {
+            SaveCurrentRoadAsPrefab();
+        }
+
+        GUI.enabled = reusableRoadPrefab != null;
+        if (GUILayout.Button("Prefab을 현재 씬에 불러오기", GUILayout.Height(24)))
+        {
+            InstantiateRoadPrefabInScene();
+        }
+
+        GUI.enabled = true;
+        EditorGUILayout.EndHorizontal();
+        EditorGUILayout.HelpBox("RoadCreator로 만든 도로를 Prefab으로 저장하면 다른 Scene에서도 동일 도로를 바로 재사용할 수 있습니다.", MessageType.None);
+    }
+
+    private void SaveCurrentRoadAsPrefab()
+    {
+        if (currentRoadObject == null)
+        {
+            EditorUtility.DisplayDialog("Prefab 저장", "저장할 도로가 없습니다. 먼저 도로를 생성하거나 로드하세요.", "확인");
+            return;
+        }
+
+        SaveRoadData();
+        EnsureFolderExists(DEFAULT_ROAD_PREFAB_FOLDER);
+
+        string defaultFileName = $"{currentRoadObject.name}.prefab";
+        string path = EditorUtility.SaveFilePanelInProject(
+            "도로 Prefab 저장",
+            defaultFileName,
+            "prefab",
+            "다른 씬에서 재사용할 도로 Prefab 저장 위치를 선택하세요.",
+            DEFAULT_ROAD_PREFAB_FOLDER
+        );
+
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (existingPrefab != null)
+        {
+            int missingScriptCount = GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(existingPrefab);
+            if (missingScriptCount > 0)
+            {
+                AssetDatabase.DeleteAsset(path);
+                AssetDatabase.Refresh();
+            }
+        }
+
+        GameObject prefabAsset = PrefabUtility.SaveAsPrefabAsset(currentRoadObject, path);
+        if (prefabAsset == null)
+        {
+            EditorUtility.DisplayDialog("Prefab 저장 실패", "Prefab 저장 중 오류가 발생했습니다. Console 로그를 확인하세요.", "확인");
+            return;
+        }
+
+        reusableRoadPrefab = prefabAsset;
+        AssetDatabase.SaveAssets();
+        RefreshRoadList();
+
+        Debug.Log($"Road Creator: Prefab 저장 완료 -> {path}");
+    }
+
+    private void InstantiateRoadPrefabInScene()
+    {
+        if (reusableRoadPrefab == null)
+        {
+            EditorUtility.DisplayDialog("Prefab 불러오기", "Road Prefab을 먼저 지정하세요.", "확인");
+            return;
+        }
+
+        if (!PrefabUtility.IsPartOfPrefabAsset(reusableRoadPrefab))
+        {
+            EditorUtility.DisplayDialog("Prefab 불러오기", "지정한 오브젝트가 Prefab Asset이 아닙니다. Project 창의 Prefab을 선택하세요.", "확인");
+            return;
+        }
+
+        GameObject instantiated = PrefabUtility.InstantiatePrefab(reusableRoadPrefab) as GameObject;
+        if (instantiated == null)
+            return;
+
+        Undo.RegisterCreatedObjectUndo(instantiated, "Instantiate Road Prefab");
+        Selection.activeGameObject = instantiated;
+
+        RoadData roadData = instantiated.GetComponent<RoadData>();
+        if (roadData != null)
+        {
+            LoadRoad(roadData);
+        }
+        else
+        {
+            currentRoadObject = instantiated;
+            selectedPointIndices.Clear();
+            SceneView.RepaintAll();
+            Repaint();
+        }
+
+        RefreshRoadList();
+        Debug.Log($"Road Creator: Prefab 로드 완료 -> {reusableRoadPrefab.name}");
+    }
+
+    private void EnsureFolderExists(string folderPath)
+    {
+        if (AssetDatabase.IsValidFolder(folderPath))
+            return;
+
+        string[] parts = folderPath.Split('/');
+        if (parts.Length == 0)
+            return;
+
+        string current = parts[0];
+        for (int i = 1; i < parts.Length; i++)
+        {
+            string next = $"{current}/{parts[i]}";
+            if (!AssetDatabase.IsValidFolder(next))
+            {
+                AssetDatabase.CreateFolder(current, parts[i]);
+            }
+            current = next;
+        }
     }
     
     private void OnSceneGUI(SceneView sceneView)
