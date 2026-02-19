@@ -39,6 +39,10 @@ public class ProgressRewardProvider : MonoBehaviour
     [Tooltip("역주행(음의 progress)에 대한 추가 패널티 배율")]
     public float reverseProgressPenaltyScale = 1.4f;
 
+    [Header("Trigger Target")]
+    [Tooltip("트리거 감지할 대상 (base_link 등). 미할당 시 자기 자신의 OnTrigger 사용")]
+    public GameObject triggerTarget;
+
     [Header("Safety Penalty")]
     public CollisionWarningPublisher collisionWarningPublisher;
     public float cautionPenaltyPerSec = 0.05f;
@@ -81,6 +85,14 @@ public class ProgressRewardProvider : MonoBehaviour
     {
         if (wheelController == null)
             wheelController = FindObjectOfType<WheelTest>();
+
+        if (triggerTarget != null && triggerTarget != gameObject)
+        {
+            var proxy = triggerTarget.GetComponent<ProgressRewardProxy>();
+            if (proxy == null)
+                proxy = triggerTarget.AddComponent<ProgressRewardProxy>();
+            proxy.owner = this;
+        }
 
         if (autoBuildWaypointsFromRoadData && (progressWaypoints == null || progressWaypoints.Length < 2))
         {
@@ -130,7 +142,7 @@ public class ProgressRewardProvider : MonoBehaviour
             );
         }
 
-        currentPathS = ProjectOnPath(transform.position, out currentLateralError);
+        currentPathS = ProjectOnPath(GetTrackedPosition(), out currentLateralError);
         previousPathS = currentPathS;
         initialized = true;
     }
@@ -348,9 +360,14 @@ public class ProgressRewardProvider : MonoBehaviour
         return sampled;
     }
 
+    Vector3 GetTrackedPosition()
+    {
+        return (triggerTarget != null) ? triggerTarget.transform.position : transform.position;
+    }
+
     void UpdatePathProgress()
     {
-        currentPathS = ProjectOnPath(transform.position, out currentLateralError);
+        currentPathS = ProjectOnPath(GetTrackedPosition(), out currentLateralError);
     }
 
     float ProjectOnPath(Vector3 position, out float lateralError)
@@ -479,26 +496,31 @@ public class ProgressRewardProvider : MonoBehaviour
         currentZoneScore = hasZone ? maxScore : 0f;
     }
 
-    private void OnTriggerEnter(Collider other)
+    public void NotifyTriggerEnter(Collider other)
     {
         RewardZone zone = other.GetComponent<RewardZone>();
         if (zone != null)
             activeZones.Add(zone);
     }
 
-    private void OnTriggerStay(Collider other)
+    public void NotifyTriggerStay(Collider other)
     {
         RewardZone zone = other.GetComponent<RewardZone>();
         if (zone != null)
             activeZones.Add(zone);
     }
 
-    private void OnTriggerExit(Collider other)
+    public void NotifyTriggerExit(Collider other)
     {
         RewardZone zone = other.GetComponent<RewardZone>();
         if (zone != null)
             activeZones.Remove(zone);
     }
+
+    // triggerTarget이 자기 자신일 때 직접 수신
+    void OnTriggerEnter(Collider other) { if (triggerTarget == null || triggerTarget == gameObject) NotifyTriggerEnter(other); }
+    void OnTriggerStay(Collider other) { if (triggerTarget == null || triggerTarget == gameObject) NotifyTriggerStay(other); }
+    void OnTriggerExit(Collider other) { if (triggerTarget == null || triggerTarget == gameObject) NotifyTriggerExit(other); }
 
     public float ConsumeStepReward()
     {
@@ -528,10 +550,16 @@ public class ProgressRewardProvider : MonoBehaviour
 
     public void ResetRewardState()
     {
+        // Start() 실행 순서와 무관하게 waypoint가 없으면 자동 빌드 시도
         if (!initialized)
-            InitializePath();
+        {
+            if (autoBuildWaypointsFromRoadData && (progressWaypoints == null || progressWaypoints.Length < 2))
+                TryBuildWaypointsFromRoadData();
 
-        currentPathS = ProjectOnPath(transform.position, out currentLateralError);
+            InitializePath();
+        }
+
+        currentPathS = ProjectOnPath(GetTrackedPosition(), out currentLateralError);
         previousPathS = currentPathS;
 
         currentZoneScore = 0f;

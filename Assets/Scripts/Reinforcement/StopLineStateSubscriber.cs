@@ -30,6 +30,8 @@ public class StopLineStateSubscriber : MonoBehaviour
     void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
+        stateTopicName = RosTopicNamespace.Resolve(gameObject, stateTopicName);
+        perceptionTopicName = RosTopicNamespace.Resolve(gameObject, perceptionTopicName);
         ros.Subscribe<StringMsg>(stateTopicName, OnState);
         ros.Subscribe<Float32MultiArrayMsg>(perceptionTopicName, OnPerception);
 

@@ -1,0 +1,2 @@
+mlagents==1.0.0
+mlagents-envs==1.0.0

@@ -1,0 +1,36 @@
+behaviors:
+  AutoDriver:
+    # --- 알고리즘 ---
+    trainer_type: ppo
+
+    # --- 하이퍼파라미터 ---
+    hyperparameters:
+      batch_size: 1024
+      buffer_size: 10240
+      learning_rate: 3.0e-4
+      beta: 1.0e-2                # Residual RL은 탐색 범위가 좁으므로 엔트로피 약간 높임
+      epsilon: 0.2                # PPO 클리핑 범위
+      lambd: 0.95                 # GAE lambda
+      num_epoch: 3
+      learning_rate_schedule: linear
+
+    # --- 네트워크 ---
+    network_settings:
+      normalize: true             # observation running mean/std 정규화
+      hidden_units: 256
+      num_layers: 2
+
+    # --- 보상 신호 ---
+    reward_signals:
+      extrinsic:
+        gamma: 0.99
+        strength: 1.0
+
+    # --- 학습 제어 ---
+    # Residual RL은 base policy 위에 보정하므로 수렴이 빠름
+    max_steps: 1000000
+    time_horizon: 512
+    summary_freq: 5000
+    keep_checkpoints: 5
+    checkpoint_interval: 50000
+    threaded: true

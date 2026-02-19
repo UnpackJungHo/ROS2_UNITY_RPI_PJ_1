@@ -17,7 +17,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
         Finish = 1,
         FailRiskStop = 2,
         FailCollision = 3,
-        FailTimeout = 4
+        FailTimeout = 4,
+        FailStuck = 5
     }
 
     [Header("References")]
@@ -46,12 +47,21 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [Tooltip("상대 충돌속도가 이 값 이상일 때만 충돌 실패로 인정")]
     public float collisionMinRelativeSpeed = 0.1f;
 
+    [Header("Stuck Detection")]
+    [Tooltip("에피소드 시작 후 이 시간(초)이 지나야 stuck 감지 시작")]
+    public float stuckGracePeriod = 5f;
+    [Tooltip("이 시간(초) 동안 이동거리가 stuckDistanceThreshold 미만이면 FailStuck")]
+    public float stuckTimeWindow = 10f;
+    [Tooltip("stuckTimeWindow 동안 최소 이동거리 (m)")]
+    public float stuckDistanceThreshold = 1f;
+
     [Header("Scoring")]
     public float finishBonus = 20f;
     public float baseFailurePenalty = 10f;
     public float riskStopExtraPenalty = 6f;
     public float collisionExtraPenalty = 10f;
     public float timeoutExtraPenalty = 4f;
+    public float stuckExtraPenalty = 8f;
     [Tooltip("실패 시 progress ratio가 이 값 미만이면 쓰레기 학습으로 라벨")]
     [Range(0f, 1f)] public float lowProgressTrashThreshold = 0.1f;
 
@@ -79,6 +89,9 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [SerializeField] private CollisionWarningPublisher.WarningLevel maxWarningLevel =
         CollisionWarningPublisher.WarningLevel.Safe;
     [SerializeField] private float minObservedTtc = float.PositiveInfinity;
+    [SerializeField] private float stuckTimer = 0f;
+    [SerializeField] private float stuckDistanceAccum = 0f;
+    private Vector3 stuckLastPosition;
 
     public event Action<RLEpisodeEvaluator> OnEpisodeTerminated;
 
@@ -118,8 +131,11 @@ public class RLEpisodeEvaluator : MonoBehaviour
                     TerminalType.FailRiskStop,
                     $"OffPath(lateral={lateral:F2}m > {maxLateralErrorForFailure:F2}m)"
                 );
+                return;
             }
         }
+
+        UpdateStuckDetection(dt);
     }
 
     void AutoFindReferences()
@@ -154,6 +170,9 @@ public class RLEpisodeEvaluator : MonoBehaviour
         lastCollisionRelativeSpeed = 0f;
         maxWarningLevel = CollisionWarningPublisher.WarningLevel.Safe;
         minObservedTtc = float.PositiveInfinity;
+        stuckTimer = 0f;
+        stuckDistanceAccum = 0f;
+        stuckLastPosition = wheelController != null ? wheelController.transform.position : transform.position;
 
         if (progressRewardProvider != null)
             progressRewardProvider.ResetRewardState();
@@ -191,6 +210,37 @@ public class RLEpisodeEvaluator : MonoBehaviour
                 TerminalType.FailRiskStop,
                 $"DangerStop(level={(int)level}, hold={dangerStoppedDuration:F2}s, speed={speed:F2}m/s)"
             );
+        }
+    }
+
+    void UpdateStuckDetection(float dt)
+    {
+        if (stuckTimeWindow <= 0f)
+            return;
+
+        // 에피소드 초기에는 모델 로드/추론 시작까지 시간이 필요하므로 grace period 적용
+        if (elapsedSeconds < stuckGracePeriod)
+            return;
+
+        Vector3 currentPos = wheelController != null ? wheelController.transform.position : transform.position;
+        stuckDistanceAccum += Vector3.Distance(currentPos, stuckLastPosition);
+        stuckLastPosition = currentPos;
+        stuckTimer += dt;
+
+        if (stuckTimer >= stuckTimeWindow)
+        {
+            if (stuckDistanceAccum < stuckDistanceThreshold)
+            {
+                SetTerminal(
+                    TerminalType.FailStuck,
+                    $"Stuck(moved={stuckDistanceAccum:F2}m in {stuckTimer:F1}s < {stuckDistanceThreshold:F1}m)"
+                );
+                return;
+            }
+
+            // 윈도우 리셋
+            stuckTimer = 0f;
+            stuckDistanceAccum = 0f;
         }
     }
 
@@ -264,18 +314,24 @@ public class RLEpisodeEvaluator : MonoBehaviour
                 case TerminalType.FailTimeout:
                     episodeScore -= timeoutExtraPenalty;
                     break;
+                case TerminalType.FailStuck:
+                    episodeScore -= stuckExtraPenalty;
+                    break;
             }
 
             float progressRatio = progressRewardProvider != null ? progressRewardProvider.GetPathProgressRatio() : 0f;
             bool lowProgress = progressRatio < lowProgressTrashThreshold;
             bool highRiskStop = type == TerminalType.FailRiskStop;
             bool collisionFail = type == TerminalType.FailCollision;
+            bool stuckFail = type == TerminalType.FailStuck;
 
-            isTrashEpisode = highRiskStop || collisionFail || lowProgress;
+            isTrashEpisode = highRiskStop || collisionFail || stuckFail || lowProgress;
             if (collisionFail)
                 trashReason = "Trash: Collision termination";
             else if (highRiskStop)
                 trashReason = "Trash: Danger level(5/6) stop termination";
+            else if (stuckFail)
+                trashReason = $"Trash: Stuck ({stuckDistanceAccum:F2}m in {stuckTimeWindow:F1}s)";
             else if (lowProgress)
                 trashReason = $"Trash: Low progress ratio ({progressRatio:F2} < {lowProgressTrashThreshold:F2})";
             else
@@ -312,7 +368,10 @@ public class RLEpisodeEvaluator : MonoBehaviour
     {
         try
         {
-            string path = Path.Combine(Application.persistentDataPath, csvFileName);
+            string dir = Path.Combine(Application.dataPath, "Resources", "RL");
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, csvFileName);
             bool writeHeader = !File.Exists(path);
             using (var sw = new StreamWriter(path, true))
             {

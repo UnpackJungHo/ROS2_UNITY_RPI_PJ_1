@@ -96,7 +96,7 @@ public class TrafficLightDecisionEngine : MonoBehaviour
             wheelController = FindObjectOfType<WheelTest>();
 
         if (egoTransform == null)
-            egoTransform = transform;
+            egoTransform = wheelController != null ? wheelController.transform : transform;
     }
 
     void EvaluateDecision()
