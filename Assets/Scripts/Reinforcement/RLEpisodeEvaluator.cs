@@ -44,8 +44,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public bool autoBeginOnStart = true;
     /// <summary>에피소드 종료 시 차량을 강제 정지(브레이크 100%)시킬지 여부.</summary>
     public bool stopVehicleOnTerminal = true;
-    /// <summary>에피소드 종료 시 자율주행 모드를 비활성화할지 여부.</summary>
-    public bool disableAutonomousOnTerminal = true;
     /// <summary>에피소드 최대 허용 시간(초). 0 이하이면 타임아웃 비활성.</summary>
     [Tooltip("0 이하이면 타임아웃 비활성")]
     public float maxEpisodeSeconds = 120f;
@@ -440,13 +438,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
             wheelController.SetSteering(0f);
             wheelController.SetThrottle(0f);
             wheelController.SetBrake(1f);
-        }
-
-        if (disableAutonomousOnTerminal && regressionDrivingController != null)
-        {
-            regressionDrivingController.isAutonomousMode = false;
-            if (wheelController != null)
-                wheelController.externalControlEnabled = false;
         }
 
         if (saveEpisodeReportCsv)

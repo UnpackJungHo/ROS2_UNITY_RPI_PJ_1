@@ -1,7 +1,9 @@
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using Unity.MLAgents.Sensors;
+using Unity.Robotics.ROSTCPConnector;
 using UnityEngine;
+using RosMessageTypes.Geometry;
 
 /// <summary>
 /// Residual RL Agent: 모방학습(Regression) 출력 위에 보정값(delta)을 학습.
@@ -29,6 +31,7 @@ public class AutoDriverRLAgent : Agent
     public CollisionWarningPublisher collisionWarningPublisher;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
     public RegressionDrivingController regressionDrivingController;
+    public VehicleCmdSubscriber vehicleCmdSubscriber;
     public DecisionRequester decisionRequester;
 
     [Header("Setup")]
@@ -72,6 +75,24 @@ public class AutoDriverRLAgent : Agent
     [Range(0f, 1f)] public float brakeLevelBrake = 0.8f;
     [Range(0f, 1f)] public float emergencyBrake = 1f;
 
+    [Header("ROS Command Output (Topic-Driven Actuation)")]
+    [Tooltip("true면 외부 ROS cmd 토픽만 사용하고, Agent/Regression의 내부 제어 출력을 차량에 적용하지 않음")]
+    public bool externalRosCmdInputOnly = false;
+    [Tooltip("true면 RL 최종 제어를 /vehicle/cmd(Twist)로 발행")]
+    public bool outputViaVehicleCmdTopic = true;
+    [Tooltip("VehicleCmdSubscriber가 있으면 direct 제어 대신 토픽 경유 제어를 우선 사용")]
+    public bool preferTopicActuationWhenSubscriberPresent = true;
+    [Tooltip("RL 출력 command 토픽 이름 (RosTopicNamespace prefix가 자동 적용됨)")]
+    public string vehicleCmdTopicName = "/vehicle/cmd";
+    [Tooltip("throttle=1일 때 선속도(m/s)")]
+    public float cmdTopicMaxForwardSpeed = 2.0f;
+    [Tooltip("brake=1 또는 reverse=1일 때 대응 선속도 크기(m/s)")]
+    public float cmdTopicMaxReverseSpeed = 1.0f;
+    [Tooltip("steer=1일 때 대응 yaw rate(rad/s)")]
+    public float cmdTopicMaxYawRateForFullSteer = 1.2f;
+    [Tooltip("OnDisable 시 1회 정지 명령 발행")]
+    public bool publishZeroCmdOnDisable = true;
+
     [Header("Observation Normalization")]
     public float speedNormalize = 3f;
     public float lateralErrorNormalize = 2f;
@@ -96,6 +117,10 @@ public class AutoDriverRLAgent : Agent
     [SerializeField] private float lastHeadingErrorDeg = 0f;
     [SerializeField] private float lastSignedLateralError = 0f;
     [SerializeField] private string lastTerminalReason = "None";
+    [SerializeField] private string resolvedCmdTopicName = "";
+    [SerializeField] private float lastPublishedCmdLinearX = 0f;
+    [SerializeField] private float lastPublishedCmdAngularZ = 0f;
+    [SerializeField] private bool lastActionPublishedToRos = false;
 
     private Vector3 startPosition;
     private Quaternion startRotation;
@@ -103,6 +128,8 @@ public class AutoDriverRLAgent : Agent
     private ArticulationBody rootArticulation;
     private RLEpisodeEvaluator subscribedEvaluator;
     private bool agentInitialized = false;
+    private ROSConnection ros;
+    private bool rosCmdPublisherReady = false;
 
     public override void Initialize()
     {
@@ -124,6 +151,9 @@ public class AutoDriverRLAgent : Agent
 
     protected override void OnDisable()
     {
+        if (publishZeroCmdOnDisable && !externalRosCmdInputOnly)
+            PublishVehicleCmdFromAction(0f, 0f, 1f);
+
         UnsubscribeTerminalEvent();
         base.OnDisable();
     }
@@ -137,7 +167,18 @@ public class AutoDriverRLAgent : Agent
     {
         SyncToFollowTarget();
 
-        if (requestDecisionInFixedUpdateWithoutRequester && decisionRequester == null)
+        if (externalRosCmdInputOnly)
+        {
+            if (regressionDrivingController != null && !regressionDrivingController.predictionOnlyMode)
+                regressionDrivingController.predictionOnlyMode = true;
+
+            if (wheelController != null && !wheelController.externalControlEnabled)
+                wheelController.externalControlEnabled = true;
+        }
+
+        if (!externalRosCmdInputOnly &&
+            requestDecisionInFixedUpdateWithoutRequester &&
+            decisionRequester == null)
             RequestDecision();
     }
 
@@ -298,6 +339,9 @@ public class AutoDriverRLAgent : Agent
         if (regressionDrivingController == null)
             regressionDrivingController = GetComponent<RegressionDrivingController>() ?? GetComponentInParent<RegressionDrivingController>();
 
+        if (vehicleCmdSubscriber == null)
+            vehicleCmdSubscriber = GetComponent<VehicleCmdSubscriber>() ?? GetComponentInParent<VehicleCmdSubscriber>();
+
         if (decisionRequester == null)
             decisionRequester = GetComponent<DecisionRequester>();
 
@@ -356,17 +400,30 @@ public class AutoDriverRLAgent : Agent
     }
 
     /// <summary>
-    /// 모방학습을 predictionOnly 모드로 켜고, RL이 차량을 직접 제어하도록 설정.
+    /// 모방학습을 predictionOnly 모드로 켜고, RL 출력이 제어 우선권을 갖도록 설정.
     /// </summary>
     void EnableResidualMode()
     {
+        if (externalRosCmdInputOnly)
+        {
+            if (regressionDrivingController != null)
+            {
+                regressionDrivingController.predictionOnlyMode = true;
+            }
+
+            if (wheelController != null)
+                wheelController.externalControlEnabled = true;
+
+            return;
+        }
+
         if (regressionDrivingController != null)
         {
             regressionDrivingController.isAutonomousMode = true;
             regressionDrivingController.predictionOnlyMode = true;
         }
 
-        if (wheelController != null)
+        if (wheelController != null && !ShouldUseTopicActuation())
             wheelController.externalControlEnabled = true;
     }
 
@@ -477,6 +534,13 @@ public class AutoDriverRLAgent : Agent
         if (wheelController == null)
             return;
 
+        if (externalRosCmdInputOnly)
+        {
+            wheelController.externalControlEnabled = true;
+            lastActionPublishedToRos = false;
+            return;
+        }
+
         var continuous = actions.ContinuousActions;
         float deltaSteer = continuous.Length > 0 ? Mathf.Clamp(continuous[0], -1f, 1f) * residualSteerScale : 0f;
         float deltaAccel = continuous.Length > 1 ? Mathf.Clamp(continuous[1], -1f, 1f) * residualAccelScale : 0f;
@@ -519,16 +583,103 @@ public class AutoDriverRLAgent : Agent
         if (enableSafetyOverride)
             ApplySafetyOverride(ref throttle, ref brake);
 
-        wheelController.externalControlEnabled = true;
-        wheelController.SetSteering(finalSteer);
-        wheelController.SetThrottle(Mathf.Clamp(throttle, allowReverse ? -1f : 0f, 1f));
-        wheelController.SetBrake(Mathf.Clamp01(brake));
+        float clampedThrottle = Mathf.Clamp(throttle, allowReverse ? -1f : 0f, 1f);
+        float clampedBrake = Mathf.Clamp01(brake);
+
+        bool publishedToRos = PublishVehicleCmdFromAction(finalSteer, clampedThrottle, clampedBrake);
+        bool useTopicActuation = ShouldUseTopicActuation() && publishedToRos;
+
+        if (!useTopicActuation)
+        {
+            wheelController.externalControlEnabled = true;
+            wheelController.SetSteering(finalSteer);
+            wheelController.SetThrottle(clampedThrottle);
+            wheelController.SetBrake(clampedBrake);
+        }
 
         lastDeltaSteering = deltaSteer;
         lastDeltaAccel = deltaAccel;
         lastAppliedSteer = finalSteer;
-        lastAppliedThrottle = throttle;
-        lastAppliedBrake = brake;
+        lastAppliedThrottle = clampedThrottle;
+        lastAppliedBrake = clampedBrake;
+        lastActionPublishedToRos = publishedToRos;
+    }
+
+    bool ShouldUseTopicActuation()
+    {
+        return outputViaVehicleCmdTopic &&
+               preferTopicActuationWhenSubscriberPresent &&
+               vehicleCmdSubscriber != null;
+    }
+
+    bool EnsureRosCmdPublisherReady()
+    {
+        if (!outputViaVehicleCmdTopic)
+            return false;
+
+        if (rosCmdPublisherReady && ros != null)
+            return true;
+
+        try
+        {
+            ros = ROSConnection.GetOrCreateInstance();
+            resolvedCmdTopicName = RosTopicNamespace.Resolve(gameObject, vehicleCmdTopicName);
+            ros.RegisterPublisher<TwistMsg>(resolvedCmdTopicName);
+            rosCmdPublisherReady = true;
+            return true;
+        }
+        catch (System.Exception e)
+        {
+            rosCmdPublisherReady = false;
+            Debug.LogWarning($"[AutoDriverRLAgent] ROS cmd publisher init 실패: {e.Message}");
+            return false;
+        }
+    }
+
+    bool PublishVehicleCmdFromAction(float steerInput, float throttleInput, float brakeInput)
+    {
+        if (!EnsureRosCmdPublisherReady())
+            return false;
+
+        float safeForward = Mathf.Max(0.01f, cmdTopicMaxForwardSpeed);
+        float safeReverse = Mathf.Max(0.01f, cmdTopicMaxReverseSpeed);
+        float safeYaw = Mathf.Max(0.01f, cmdTopicMaxYawRateForFullSteer);
+
+        float linearX;
+        if (allowReverse && throttleInput < 0f)
+        {
+            linearX = -Mathf.Clamp01(-throttleInput) * safeReverse;
+        }
+        else if (brakeInput > 0.001f)
+        {
+            linearX = -Mathf.Clamp01(brakeInput) * safeReverse;
+        }
+        else
+        {
+            linearX = Mathf.Clamp01(throttleInput) * safeForward;
+        }
+
+        float angularZ = Mathf.Clamp(steerInput, -1f, 1f) * safeYaw;
+
+        var twist = new TwistMsg
+        {
+            linear = new Vector3Msg(linearX, 0.0, 0.0),
+            angular = new Vector3Msg(0.0, 0.0, angularZ)
+        };
+
+        try
+        {
+            ros.Publish(resolvedCmdTopicName, twist);
+            lastPublishedCmdLinearX = linearX;
+            lastPublishedCmdAngularZ = angularZ;
+            return true;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[AutoDriverRLAgent] ROS cmd publish 실패: {e.Message}");
+            rosCmdPublisherReady = false;
+            return false;
+        }
     }
 
     void ApplySafetyOverride(ref float throttle, ref float brake)

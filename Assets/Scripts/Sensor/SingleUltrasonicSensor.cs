@@ -1,5 +1,7 @@
 using System;
 using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Std;
 
 /// <summary>
 /// 개별 초음파 센서를 시뮬레이션하는 클래스입니다.
@@ -62,6 +64,37 @@ public class SingleUltrasonicSensor : MonoBehaviour
     public Color hitColor = Color.cyan; // 장애물 감지 시 레이 색상
     public Color missColor = Color.blue; // 미감지 시 레이 색상
 
+    [Header("External Topic Input (실차 센서 토픽 연동)")]
+    [Tooltip("true면 레이캐스트 대신 개별 센서 ROS 토픽을 우선 사용")]
+    public bool useExternalTopicInput = false;
+    [Tooltip("true면 inputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽을 사용")]
+    public bool autoTopicFromSensorPosition = true;
+    [Tooltip("개별 초음파 입력 토픽 (std_msgs/Float32MultiArray: [distance_m, confidence(optional), angle_deg(optional)])")]
+    public string inputTopicName = "";
+    [Tooltip("이 시간(초) 이상 새 메시지가 없으면 stale로 판단")]
+    public float externalDataTimeoutSec = 0.5f;
+    [Tooltip("외부 입력이 stale일 때 시뮬레이션 레이캐스트로 fallback")]
+    public bool fallbackToRaycastWhenExternalStale = true;
+    [Tooltip("confidence가 메시지에 없을 때 사용할 기본값")]
+    [Range(0f, 1f)]
+    public float defaultExternalConfidence = 1f;
+
+    [Header("External Topic Debug (Read Only)")]
+    [SerializeField] private string resolvedInputTopicName = "";
+    [SerializeField] private bool hasExternalMessage = false;
+    [SerializeField] private float lastExternalMessageTime = -999f;
+
+    [Header("Raw Topic Output (개별 센서 발행)")]
+    [Tooltip("true면 이 센서의 raw 토픽을 발행")]
+    public bool publishRawTopic = true;
+    [Tooltip("true면 outputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽을 사용")]
+    public bool autoOutputTopicFromSensorPosition = true;
+    [Tooltip("개별 초음파 출력 토픽 (std_msgs/Float32MultiArray: [distance_m, confidence, angle_deg])")]
+    public string outputTopicName = "";
+
+    [Header("Raw Topic Output Debug (Read Only)")]
+    [SerializeField] private string resolvedOutputTopicName = "";
+
     // 감지 결과 데이터
     
     // 가장 가까운 장애물과의 거리 (감지 없을 시 무한대)
@@ -110,6 +143,8 @@ public class SingleUltrasonicSensor : MonoBehaviour
     // 내부 동작 제어 변수
     private float scanInterval = 0.05f; // 스캔 주기(초)
     private float lastScanTime;
+    private ROSConnection ros;
+    private bool rawPublisherReady = false;
 
     void Start()
     {
@@ -119,17 +154,39 @@ public class SingleUltrasonicSensor : MonoBehaviour
             selfRoot = transform.root;
 
         lastScanTime = Time.time;
+        if (useExternalTopicInput)
+            SetupExternalTopicInput();
+        if (publishRawTopic)
+            SetupRawTopicOutput();
+
         Debug.Log($"[Ultrasonic-{SensorName}] Initialized - Range: {rangeMin}-{rangeMax}m, FOV: {fieldOfView}°");
     }
 
     void Update()
     {
-        // 정해진 주기마다 스캔 수행
-        if (Time.time - lastScanTime >= scanInterval)
+        if (Time.time - lastScanTime < scanInterval)
+            return;
+
+        if (!useExternalTopicInput)
         {
             PerformScan();
+            PublishRawTopic();
             lastScanTime = Time.time;
+            return;
         }
+
+        bool externalFresh = hasExternalMessage &&
+                             (Time.time - lastExternalMessageTime) <= Mathf.Max(0.02f, externalDataTimeoutSec);
+        if (!externalFresh)
+        {
+            if (fallbackToRaycastWhenExternalStale)
+                PerformScan();
+            else
+                ResetDetection();
+        }
+
+        PublishRawTopic();
+        lastScanTime = Time.time;
     }
 
     /// <summary>
@@ -144,10 +201,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
         float angleStep = rayCount > 1 ? fieldOfView / (rayCount - 1) : 0f;
 
         // 감지 데이터 초기화
-        Distance = float.PositiveInfinity;
-        DetectedAngle = 0f;
-        DetectedPoint = Vector3.zero;
-        Confidence = 0f;
+        ResetDetection();
 
         // 설정된 레이 개수만큼 반복
         for (int i = 0; i < rayCount; i++)
@@ -214,6 +268,131 @@ public class SingleUltrasonicSensor : MonoBehaviour
                     Debug.DrawRay(origin, direction * rangeMax, missColor, scanInterval);
             }
         }
+    }
+
+    void SetupExternalTopicInput()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+
+        if (autoTopicFromSensorPosition && string.IsNullOrWhiteSpace(inputTopicName))
+            inputTopicName = GetDefaultInputTopicName();
+
+        if (string.IsNullOrWhiteSpace(inputTopicName))
+        {
+            Debug.LogWarning($"[Ultrasonic-{SensorName}] inputTopicName이 비어 있어 외부 입력 모드를 비활성화합니다.");
+            useExternalTopicInput = false;
+            return;
+        }
+
+        resolvedInputTopicName = RosTopicNamespace.Resolve(gameObject, inputTopicName);
+        ros.Subscribe<Float32MultiArrayMsg>(resolvedInputTopicName, OnExternalData);
+        Debug.Log($"[Ultrasonic-{SensorName}] External topic subscribed: {resolvedInputTopicName}");
+    }
+
+    void SetupRawTopicOutput()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+
+        if (autoOutputTopicFromSensorPosition && string.IsNullOrWhiteSpace(outputTopicName))
+            outputTopicName = GetDefaultRawTopicName();
+
+        if (string.IsNullOrWhiteSpace(outputTopicName))
+        {
+            Debug.LogWarning($"[Ultrasonic-{SensorName}] outputTopicName이 비어 있어 raw 발행을 비활성화합니다.");
+            return;
+        }
+
+        resolvedOutputTopicName = RosTopicNamespace.Resolve(gameObject, outputTopicName);
+        if (!string.IsNullOrWhiteSpace(resolvedInputTopicName) && resolvedInputTopicName == resolvedOutputTopicName)
+        {
+            Debug.LogWarning($"[Ultrasonic-{SensorName}] input/output topic이 동일({resolvedOutputTopicName})하여 self-loop 방지를 위해 raw 발행을 비활성화합니다.");
+            return;
+        }
+
+        ros.RegisterPublisher<Float32MultiArrayMsg>(resolvedOutputTopicName);
+        rawPublisherReady = true;
+        Debug.Log($"[Ultrasonic-{SensorName}] Raw topic publisher registered: {resolvedOutputTopicName}");
+    }
+
+    string GetDefaultInputTopicName()
+    {
+        return GetDefaultRawTopicName();
+    }
+
+    string GetDefaultRawTopicName()
+    {
+        return sensorPosition switch
+        {
+            SensorPosition.FrontLeft => "/ultrasonic/fl",
+            SensorPosition.FrontRight => "/ultrasonic/fr",
+            SensorPosition.FrontCenter => "/ultrasonic/fc",
+            SensorPosition.RearLeft => "/ultrasonic/rl",
+            SensorPosition.RearRight => "/ultrasonic/rr",
+            SensorPosition.RearCenter => "/ultrasonic/rc",
+            _ => "/ultrasonic/unknown"
+        };
+    }
+
+    void PublishRawTopic()
+    {
+        if (!publishRawTopic || !rawPublisherReady || ros == null)
+            return;
+
+        Float32MultiArrayMsg msg = new Float32MultiArrayMsg
+        {
+            data = new float[]
+            {
+                HasDetection ? Distance : -1f,
+                Confidence,
+                DetectedAngle
+            }
+        };
+        ros.Publish(resolvedOutputTopicName, msg);
+    }
+
+    void OnExternalData(Float32MultiArrayMsg msg)
+    {
+        hasExternalMessage = true;
+        lastExternalMessageTime = Time.time;
+
+        if (msg == null || msg.data == null || msg.data.Length == 0)
+        {
+            ResetDetection();
+            return;
+        }
+
+        float distance = msg.data[0];
+        if (!IsValidExternalDistance(distance))
+        {
+            ResetDetection();
+            return;
+        }
+
+        float confidence = msg.data.Length > 1 ? msg.data[1] : defaultExternalConfidence;
+        float angle = msg.data.Length > 2 ? msg.data[2] : 0f;
+
+        Distance = Mathf.Clamp(distance, rangeMin, rangeMax);
+        Confidence = Mathf.Clamp01(confidence);
+        DetectedAngle = angle;
+
+        float angleRad = angle * Mathf.Deg2Rad;
+        Vector3 localDirection = new Vector3(Mathf.Sin(angleRad), 0f, Mathf.Cos(angleRad)).normalized;
+        DetectedPoint = transform.position + transform.TransformDirection(localDirection) * Distance;
+    }
+
+    bool IsValidExternalDistance(float distance)
+    {
+        if (float.IsNaN(distance) || float.IsInfinity(distance))
+            return false;
+        return distance > 0f;
+    }
+
+    void ResetDetection()
+    {
+        Distance = float.PositiveInfinity;
+        DetectedAngle = 0f;
+        DetectedPoint = Vector3.zero;
+        Confidence = 0f;
     }
 
     bool IsSelfCollider(Collider collider)

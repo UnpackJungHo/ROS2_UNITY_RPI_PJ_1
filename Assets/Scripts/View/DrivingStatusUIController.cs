@@ -1,5 +1,7 @@
 using UnityEngine;
 using TMPro;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Std;
 
 /// <summary>
 /// 주행 관련 UI 텍스트를 한 곳에서 갱신하는 전용 컨트롤러.
@@ -9,6 +11,16 @@ using TMPro;
 /// </summary>
 public class DrivingStatusUIController : MonoBehaviour
 {
+    [Header("Collision UI Source")]
+    [Tooltip("true면 UI의 Collision 카드 값을 /collision_warning 토픽에서 읽음")]
+    public bool useExternalCollisionTopicForUI = false;
+    [Tooltip("외부 Collision 토픽명 (Float32MultiArray, collision_data[17] 포맷)")]
+    public string externalCollisionTopicName = "/collision_warning";
+    [Tooltip("이 시간(초) 이상 메시지가 없으면 stale로 간주")]
+    public float externalCollisionTimeoutSec = 0.5f;
+    [Tooltip("외부 토픽이 stale이면 기존 CollisionWarningPublisher 값으로 fallback")]
+    public bool fallbackToLocalCollisionPublisher = true;
+
     [Header("Source References")]
     public CollisionWarningPublisher collisionWarningPublisher;
     public DrivingDataCollectorV2 dataCollector;
@@ -71,10 +83,25 @@ public class DrivingStatusUIController : MonoBehaviour
     public TextMeshProUGUI rlEpisodeReasonText;
     public TextMeshProUGUI rlEpisodeTrashText;
 
+    [Header("External Collision Topic Debug (Read Only)")]
+    [SerializeField] private string resolvedExternalCollisionTopicName = "";
+    [SerializeField] private bool hasExternalCollisionMessage = false;
+    [SerializeField] private float lastExternalCollisionMessageTime = -999f;
+
+    private ROSConnection ros;
+    private bool externalCollisionSubscribed = false;
+    private int externalWarningLevel = 0;
+    private float externalTtc = float.PositiveInfinity;
+    private float externalDistance = float.PositiveInfinity;
+    private int externalSourceId = 0;
+    private int externalClosestUltrasonicId = 0;
+    private int externalClosestRadarId = 0;
+
     void Start()
     {
         if (autoFindReferences)
             AutoFindReferences();
+        SetupExternalCollisionTopicSubscription();
     }
 
     void Update()
@@ -87,6 +114,9 @@ public class DrivingStatusUIController : MonoBehaviour
         {
             AutoFindReferences();
         }
+
+        if (useExternalCollisionTopicForUI && !externalCollisionSubscribed)
+            SetupExternalCollisionTopicSubscription();
 
         UpdateCollisionWarningUI();
         UpdateDataCollectorUI();
@@ -123,17 +153,160 @@ public class DrivingStatusUIController : MonoBehaviour
             rlEpisodeEvaluator = FindObjectOfType<RLEpisodeEvaluator>();
     }
 
+    void SetupExternalCollisionTopicSubscription()
+    {
+        if (!useExternalCollisionTopicForUI)
+            return;
+
+        ros = ROSConnection.GetOrCreateInstance();
+        if (ros == null)
+            return;
+
+        resolvedExternalCollisionTopicName = RosTopicNamespace.Resolve(gameObject, externalCollisionTopicName);
+        ros.Subscribe<Float32MultiArrayMsg>(resolvedExternalCollisionTopicName, OnExternalCollisionWarning);
+        externalCollisionSubscribed = true;
+        Debug.Log($"[DrivingStatusUI] External collision topic subscribed: {resolvedExternalCollisionTopicName}");
+    }
+
+    void OnExternalCollisionWarning(Float32MultiArrayMsg msg)
+    {
+        hasExternalCollisionMessage = true;
+        lastExternalCollisionMessageTime = Time.time;
+
+        if (msg == null || msg.data == null || msg.data.Length < 3)
+            return;
+
+        float[] data = msg.data;
+        externalDistance = ToInfinityIfNegative(data[0]);
+        externalTtc = ToInfinityIfNegative(data[1]);
+        externalWarningLevel = Mathf.Clamp(Mathf.RoundToInt(data[2]), 0, 6);
+
+        externalSourceId = data.Length > 13 ? Mathf.RoundToInt(data[13]) : 0;
+        externalClosestUltrasonicId = data.Length > 14 ? Mathf.RoundToInt(data[14]) : 0;
+        externalClosestRadarId = data.Length > 15 ? Mathf.RoundToInt(data[15]) : 0;
+    }
+
+    static float ToInfinityIfNegative(float value)
+    {
+        if (float.IsNaN(value) || value < 0f)
+            return float.PositiveInfinity;
+        return value;
+    }
+
+    bool TryGetExternalCollisionUiData(out int warningLevel, out float ttc, out string sensorInfo, out float distance)
+    {
+        warningLevel = 0;
+        ttc = float.PositiveInfinity;
+        sensorInfo = "None";
+        distance = float.PositiveInfinity;
+
+        if (!useExternalCollisionTopicForUI)
+            return false;
+
+        bool fresh = hasExternalCollisionMessage &&
+                     (Time.time - lastExternalCollisionMessageTime) <= Mathf.Max(0.02f, externalCollisionTimeoutSec);
+        if (!fresh)
+            return false;
+
+        warningLevel = externalWarningLevel;
+        ttc = externalTtc;
+        distance = externalDistance;
+
+        if (externalSourceId == 1)
+            sensorInfo = $"Ultrasonic-{GetUltrasonicSensorLabel(externalClosestUltrasonicId)}";
+        else if (externalSourceId == 2)
+            sensorInfo = $"Radar-{GetRadarSensorLabel(externalClosestRadarId)}";
+        else
+            sensorInfo = "None";
+
+        return true;
+    }
+
+    static string GetUltrasonicSensorLabel(int sensorId)
+    {
+        return sensorId switch
+        {
+            0 => "FL",
+            1 => "FR",
+            2 => "RL",
+            3 => "RR",
+            4 => "FC",
+            5 => "RC",
+            _ => "Unknown"
+        };
+    }
+
+    static string GetRadarSensorLabel(int sensorId)
+    {
+        return sensorId switch
+        {
+            0 => "Front",
+            1 => "Rear",
+            _ => "Unknown"
+        };
+    }
+
+    static string GetWarningLevelLabel(int level)
+    {
+        return level switch
+        {
+            0 => "Safe",
+            1 => "Awareness",
+            2 => "Caution",
+            3 => "SlowDown",
+            4 => "Warning",
+            5 => "Brake",
+            6 => "EmergencyStop",
+            _ => "Unknown"
+        };
+    }
+
     void UpdateCollisionWarningUI()
     {
-        if (collisionWarningPublisher == null) return;
+        bool externalReady = TryGetExternalCollisionUiData(
+            out int extLevel,
+            out float extTtc,
+            out string extSensor,
+            out float extDistance
+        );
 
-        CollisionWarningPublisher.WarningLevel level = collisionWarningPublisher.GetWarningLevel();
-        float ttc = collisionWarningPublisher.GetTimeToCollision();
-        (string source, string sensor, float distance) info = collisionWarningPublisher.GetClosestObstacleInfo();
+        bool useLocal = !externalReady && (!useExternalCollisionTopicForUI || fallbackToLocalCollisionPublisher);
+        if (!externalReady && !useLocal)
+        {
+            if (collisionWarningLevelText != null) collisionWarningLevelText.text = "위험도: N/A";
+            if (collisionTtcText != null) collisionTtcText.text = "TTC: N/A";
+            if (collisionClosestSensorText != null) collisionClosestSensorText.text = "최근접 센서: N/A";
+            if (collisionDistanceText != null) collisionDistanceText.text = "거리: N/A";
+            return;
+        }
+
+        string levelText;
+        float ttc;
+        string sensorInfo;
+        float distance;
+
+        if (externalReady)
+        {
+            levelText = $"{GetWarningLevelLabel(extLevel)} ({extLevel})";
+            ttc = extTtc;
+            sensorInfo = extSensor;
+            distance = extDistance;
+        }
+        else
+        {
+            if (collisionWarningPublisher == null) return;
+            CollisionWarningPublisher.WarningLevel level = collisionWarningPublisher.GetWarningLevel();
+            (string source, string sensor, float distance) info = collisionWarningPublisher.GetClosestObstacleInfo();
+
+            levelText = $"{level} ({(int)level})";
+            ttc = collisionWarningPublisher.GetTimeToCollision();
+            sensorInfo = info.source == "None" ? "None" : $"{info.source}-{info.sensor}";
+            distance = info.distance;
+        }
 
         if (collisionWarningLevelText != null)
         {
-            collisionWarningLevelText.text = $"위험도: {level} ({(int)level})";
+            collisionWarningLevelText.text = $"위험도: {levelText}";
         }
 
         if (collisionTtcText != null)
@@ -143,14 +316,12 @@ public class DrivingStatusUIController : MonoBehaviour
 
         if (collisionClosestSensorText != null)
         {
-            string distanceStr = float.IsInfinity(info.distance) ? "∞" : $"{info.distance:F2}m";
-            string sensorInfo = info.source == "None" ? "None" : $"{info.source}-{info.sensor}";
             collisionClosestSensorText.text = $"최근접 센서: {sensorInfo}";
         }
 
         if (collisionDistanceText != null)
         {
-            string distanceStr = float.IsInfinity(info.distance) ? "∞" : $"{info.distance:F2}m";
+            string distanceStr = float.IsInfinity(distance) ? "∞" : $"{distance:F2}m";
             collisionDistanceText.text = $"거리: {distanceStr}";
         }
     }

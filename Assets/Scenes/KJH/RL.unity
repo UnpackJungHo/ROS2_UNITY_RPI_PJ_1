@@ -19258,7 +19258,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1237673362}
   m_Direction: 2
   m_Value: 1
-  m_Size: 0.49202785
+  m_Size: 0.49223852
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -23630,7 +23630,7 @@ GameObject:
   m_Component:
   - component: {fileID: 552733470}
   m_Layer: 0
-  m_Name: RL_Runtime
+  m_Name: RL_Setting
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -29759,6 +29759,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 26194515969480933, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 26194515969480933, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 127900819456268115, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: isAutonomousMode
       value: 1
@@ -29811,6 +29819,18 @@ PrefabInstance:
       propertyPath: m_ParentAnchorRotation.z
       value: 0.6532814
       objectReference: {fileID: 0}
+    - target: {fileID: 1300040170997208230, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1300040170997208230, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1414767696993177157, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2019101790433325521, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: roadObject
       value: 
@@ -29824,21 +29844,9 @@ PrefabInstance:
       value: 0.7071069
       objectReference: {fileID: 0}
     - target: {fileID: 2079015559847074402, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2079015559847074402, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: decisionRequester
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 2079015559847074402, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: episodeStartTransform
       value: 
       objectReference: {fileID: 1216068240}
-    - target: {fileID: 2079015559847074402, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: requestDecisionInFixedUpdateWithoutRequester
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 2138114767987309022, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_ParentAnchorPosition.x
       value: 0.32499987
@@ -29850,6 +29858,22 @@ PrefabInstance:
     - target: {fileID: 2138114767987309022, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_ParentAnchorRotation.w
       value: 1.0000001
+      objectReference: {fileID: 0}
+    - target: {fileID: 2246429167327062144, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2246429167327062144, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2301943848518113009, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2301943848518113009, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2353988821296207058, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_ParentAnchorPosition.x
@@ -29903,14 +29927,6 @@ PrefabInstance:
       propertyPath: m_ParentAnchorPosition.z
       value: -0.37999964
       objectReference: {fileID: 0}
-    - target: {fileID: 3402549095578012132, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorRear
-      value: 
-      objectReference: {fileID: 702309232}
-    - target: {fileID: 3402549095578012132, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorFront
-      value: 
-      objectReference: {fileID: 702309233}
     - target: {fileID: 3485212717259784536, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_ParentAnchorRotation.w
       value: 0.7071069
@@ -29959,6 +29975,14 @@ PrefabInstance:
       propertyPath: m_ParentAnchorRotation.z
       value: -0.7071069
       objectReference: {fileID: 0}
+    - target: {fileID: 3763158317228283413, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3763158317228283413, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3775507998252672659, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_Name
       value: FactoryAMR_RL
@@ -29979,6 +30003,14 @@ PrefabInstance:
       propertyPath: m_ParentAnchorRotation.z
       value: 0.7071069
       objectReference: {fileID: 0}
+    - target: {fileID: 4628125776777260596, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4628125776777260596, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4822128453594697507, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_Enabled
       value: 0
@@ -29986,6 +30018,14 @@ PrefabInstance:
     - target: {fileID: 4822128453594697507, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: gateCollider
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 5737873666085956283, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5737873666085956283, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5911942563998823385, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_ParentAnchorPosition.x
@@ -30015,30 +30055,6 @@ PrefabInstance:
       propertyPath: m_ParentAnchorRotation.z
       value: 0.7071069
       objectReference: {fileID: 0}
-    - target: {fileID: 7334279566532870788, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorFC
-      value: 
-      objectReference: {fileID: 702309237}
-    - target: {fileID: 7334279566532870788, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorFL
-      value: 
-      objectReference: {fileID: 702309239}
-    - target: {fileID: 7334279566532870788, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorFR
-      value: 
-      objectReference: {fileID: 702309238}
-    - target: {fileID: 7334279566532870788, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorRC
-      value: 
-      objectReference: {fileID: 702309234}
-    - target: {fileID: 7334279566532870788, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorRL
-      value: 
-      objectReference: {fileID: 702309236}
-    - target: {fileID: 7334279566532870788, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-      propertyPath: sensorRR
-      value: 
-      objectReference: {fileID: 702309235}
     - target: {fileID: 7585092161658739124, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_LocalPosition.x
       value: -17.38
@@ -30110,6 +30126,14 @@ PrefabInstance:
     - target: {fileID: 7692571899022028363, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_ParentAnchorRotation.z
       value: 0.7071069
+      objectReference: {fileID: 0}
+    - target: {fileID: 7810559069361781330, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: useExternalTopicInput
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7810559069361781330, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: autoTopicFromSensorPosition
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7819564763279613065, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_ParentAnchorPosition.x
@@ -30197,94 +30221,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 01fca6b7c6a2516d8bec8cbd807d140c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309232 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7810559069361781330, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e6bbe9738bbbd77ef9eac3bf4333f69f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309233 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 4628125776777260596, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e6bbe9738bbbd77ef9eac3bf4333f69f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309234 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 26194515969480933, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb2a8eb320e724133a0621f2660046fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309235 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2246429167327062144, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb2a8eb320e724133a0621f2660046fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309236 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1300040170997208230, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb2a8eb320e724133a0621f2660046fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309237 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 5737873666085956283, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb2a8eb320e724133a0621f2660046fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309238 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2301943848518113009, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb2a8eb320e724133a0621f2660046fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &702309239 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 3763158317228283413, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
-  m_PrefabInstance: {fileID: 702309230}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb2a8eb320e724133a0621f2660046fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!171741748 &702309241 stripped
@@ -55285,6 +55221,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8a68e51969044a12b604c8cebbbcf936, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  useExternalCollisionTopicForUI: 1
+  externalCollisionTopicName: /amr0/policy/collision_warning
+  externalCollisionTimeoutSec: 0.5
+  fallbackToLocalCollisionPublisher: 0
   collisionWarningPublisher: {fileID: 0}
   dataCollector: {fileID: 0}
   regressionController: {fileID: 0}
@@ -55331,6 +55271,9 @@ MonoBehaviour:
   rlEpisodeScoreText: {fileID: 439625266}
   rlEpisodeReasonText: {fileID: 909629579}
   rlEpisodeTrashText: {fileID: 545042723}
+  resolvedExternalCollisionTopicName: 
+  hasExternalCollisionMessage: 0
+  lastExternalCollisionMessageTime: -999
 --- !u!4 &1319656036
 Transform:
   m_ObjectHideFlags: 0
@@ -75703,8 +75646,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1880459838}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: -0.37885225, y: 0.59312993, z: -0.38107386, w: -0.5995421}
+  m_LocalPosition: {x: 35.809345, y: 84.7415, z: 5.3067427}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Std;
 
 /// <summary>
 /// 단일 레이더 센서 시뮬레이터
@@ -64,9 +66,8 @@ public class SingleRadarSensor : MonoBehaviour
     [Range(0.05f, 1f)]
     public float relativeVelocityFilterAlpha = 0.35f;
     public float maxRelativeVelocity = 8f;
-    [Tooltip("Ego 속도 기준 (없으면 부모에서 자동 탐색)")]
+    [Tooltip("Ego 속도 기준 ArticulationBody (없으면 부모에서 자동 탐색)")]
     public ArticulationBody egoArticulationBody;
-    public Rigidbody egoRigidbody;
 
     [Header("Ghost / Clutter Modeling")]
     [Tooltip("고스트 타깃 활성화 여부 (실제 반사 대신 존재하지 않는 고스트 타깃이 감지되는 경우)")]
@@ -100,6 +101,39 @@ public class SingleRadarSensor : MonoBehaviour
     public Color hitColor = Color.red;
     public Color missColor = new Color(1f, 0.5f, 0.5f, 0.3f);
 
+    [Header("External Topic Input (실차 센서 토픽 연동)")]
+    [Tooltip("true면 레이캐스트 대신 개별 레이더 토픽 입력을 우선 사용")]
+    public bool useExternalTopicInput = false;
+    [Tooltip("true면 inputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽 사용")]
+    public bool autoTopicFromSensorPosition = true;
+    [Tooltip("개별 레이더 입력 토픽 (std_msgs/Float32MultiArray 권장)")]
+    public string inputTopicName = "";
+    [Tooltip("이 시간(초) 이상 새 메시지가 없으면 stale로 판단")]
+    public float externalDataTimeoutSec = 0.5f;
+    [Tooltip("외부 입력이 stale일 때 시뮬레이션 레이캐스트로 fallback")]
+    public bool fallbackToRaycastWhenExternalStale = true;
+    [Range(0f, 1f)]
+    [Tooltip("confidence 필드가 없거나 비정상일 때 기본값")]
+    public float defaultExternalConfidence = 0.9f;
+    [Tooltip("RCS 필드가 없을 때 기본값")]
+    public float defaultExternalRcs = 8f;
+
+    [Header("External Topic Debug (Read Only)")]
+    [SerializeField] private string resolvedInputTopicName = "";
+    [SerializeField] private bool hasExternalMessage = false;
+    [SerializeField] private float lastExternalMessageTime = -999f;
+
+    [Header("Raw Topic Output (개별 센서 발행)")]
+    [Tooltip("true면 이 센서의 raw 토픽을 발행")]
+    public bool publishRawTopic = true;
+    [Tooltip("true면 outputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽 사용")]
+    public bool autoOutputTopicFromSensorPosition = true;
+    [Tooltip("개별 레이더 출력 토픽 (std_msgs/Float32MultiArray: [distance, angle, radial_vel, rcs, confidence, isGhost, isClutter])")]
+    public string outputTopicName = "";
+
+    [Header("Raw Topic Output Debug (Read Only)")]
+    [SerializeField] private string resolvedOutputTopicName = "";
+
     // Legacy output (기존 호환)
     public float Distance { get; private set; } = float.PositiveInfinity;
     public float DetectedAngle { get; private set; } = 0f;
@@ -117,6 +151,8 @@ public class SingleRadarSensor : MonoBehaviour
     private float lastScanTime;
     private readonly List<RadarDetection> detections = new List<RadarDetection>();
     private readonly Dictionary<int, int> colliderIndexMap = new Dictionary<int, int>();
+    private ROSConnection ros;
+    private bool rawPublisherReady = false;
 
     void Start()
     {
@@ -131,16 +167,39 @@ public class SingleRadarSensor : MonoBehaviour
 
         AutoFindEgoVelocitySources();
         lastScanTime = Time.time;
+        if (useExternalTopicInput)
+            SetupExternalTopicInput();
+        if (publishRawTopic)
+            SetupRawTopicOutput();
+
         Debug.Log($"[Radar-{SensorName}] Initialized - Range: {rangeMin}-{rangeMax}m, H-FOV: {horizontalFOV}°, V-FOV: {verticalFOV}°");
     }
 
     void Update()
     {
-        if (Time.time - lastScanTime >= scanInterval)
+        if (Time.time - lastScanTime < scanInterval)
+            return;
+
+        if (!useExternalTopicInput)
         {
             PerformScan();
+            PublishRawTopic();
             lastScanTime = Time.time;
+            return;
         }
+
+        bool externalFresh = hasExternalMessage &&
+                             (Time.time - lastExternalMessageTime) <= Mathf.Max(0.02f, externalDataTimeoutSec);
+        if (!externalFresh)
+        {
+            if (fallbackToRaycastWhenExternalStale)
+                PerformScan();
+            else
+                ClearAllDetections();
+        }
+
+        PublishRawTopic();
+        lastScanTime = Time.time;
     }
 
     public void PerformScan()
@@ -218,10 +277,6 @@ public class SingleRadarSensor : MonoBehaviour
         if (egoArticulationBody == null)
         {
             egoArticulationBody = GetComponentInParent<ArticulationBody>();
-        }
-        if (egoRigidbody == null)
-        {
-            egoRigidbody = GetComponentInParent<Rigidbody>();
         }
     }
 
@@ -379,23 +434,7 @@ public class SingleRadarSensor : MonoBehaviour
 
     private void UpdateLegacyPrimaryDetection()
     {
-        RadarDetection? primary = null;
-
-        // 우선순위: 실제 반사 > (없으면) 고스트/클러터
-        for (int i = 0; i < detections.Count; i++)
-        {
-            if (!detections[i].isGhost && !detections[i].isClutter)
-            {
-                primary = detections[i];
-                break;
-            }
-        }
-        if (!primary.HasValue && detections.Count > 0)
-        {
-            primary = detections[0];
-        }
-
-        if (!primary.HasValue)
+        if (!TryGetPrimaryDetection(out RadarDetection p))
         {
             Distance = float.PositiveInfinity;
             DetectedAngle = 0f;
@@ -404,7 +443,6 @@ public class SingleRadarSensor : MonoBehaviour
             return;
         }
 
-        RadarDetection p = primary.Value;
         Distance = p.distance;
         DetectedAngle = p.angle;
         DetectedPoint = p.point;
@@ -417,6 +455,27 @@ public class SingleRadarSensor : MonoBehaviour
         {
             RelativeVelocity = Mathf.Lerp(RelativeVelocity, p.radialVelocity, relativeVelocityFilterAlpha);
         }
+    }
+
+    private bool TryGetPrimaryDetection(out RadarDetection primary)
+    {
+        for (int i = 0; i < detections.Count; i++)
+        {
+            if (!detections[i].isGhost && !detections[i].isClutter)
+            {
+                primary = detections[i];
+                return true;
+            }
+        }
+
+        if (detections.Count > 0)
+        {
+            primary = detections[0];
+            return true;
+        }
+
+        primary = default;
+        return false;
     }
 
     private float CalculateDopplerRadialVelocity(Vector3 origin, RaycastHit hit, Vector3 rayDirection)
@@ -454,10 +513,6 @@ public class SingleRadarSensor : MonoBehaviour
 
     private Vector3 GetEgoVelocity()
     {
-        if (egoRigidbody != null)
-        {
-            return egoRigidbody.velocity;
-        }
         if (egoArticulationBody != null)
         {
             return egoArticulationBody.velocity;
@@ -521,5 +576,210 @@ public class SingleRadarSensor : MonoBehaviour
     public void SetScanInterval(float interval)
     {
         scanInterval = Mathf.Max(0.005f, interval);
+    }
+
+    void SetupExternalTopicInput()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+
+        if (autoTopicFromSensorPosition && string.IsNullOrWhiteSpace(inputTopicName))
+            inputTopicName = GetDefaultInputTopicName();
+
+        if (string.IsNullOrWhiteSpace(inputTopicName))
+        {
+            Debug.LogWarning($"[Radar-{SensorName}] inputTopicName이 비어 있어 외부 입력 모드를 비활성화합니다.");
+            useExternalTopicInput = false;
+            return;
+        }
+
+        resolvedInputTopicName = RosTopicNamespace.Resolve(gameObject, inputTopicName);
+        ros.Subscribe<Float32MultiArrayMsg>(resolvedInputTopicName, OnExternalDetections);
+        Debug.Log($"[Radar-{SensorName}] External topic subscribed: {resolvedInputTopicName}");
+    }
+
+    void SetupRawTopicOutput()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+
+        if (autoOutputTopicFromSensorPosition && string.IsNullOrWhiteSpace(outputTopicName))
+            outputTopicName = GetDefaultRawTopicName();
+
+        if (string.IsNullOrWhiteSpace(outputTopicName))
+        {
+            Debug.LogWarning($"[Radar-{SensorName}] outputTopicName이 비어 있어 raw 발행을 비활성화합니다.");
+            return;
+        }
+
+        resolvedOutputTopicName = RosTopicNamespace.Resolve(gameObject, outputTopicName);
+        if (!string.IsNullOrWhiteSpace(resolvedInputTopicName) && resolvedInputTopicName == resolvedOutputTopicName)
+        {
+            Debug.LogWarning($"[Radar-{SensorName}] input/output topic이 동일({resolvedOutputTopicName})하여 self-loop 방지를 위해 raw 발행을 비활성화합니다.");
+            return;
+        }
+
+        ros.RegisterPublisher<Float32MultiArrayMsg>(resolvedOutputTopicName);
+        rawPublisherReady = true;
+        Debug.Log($"[Radar-{SensorName}] Raw topic publisher registered: {resolvedOutputTopicName}");
+    }
+
+    string GetDefaultInputTopicName()
+    {
+        return GetDefaultRawTopicName();
+    }
+
+    string GetDefaultRawTopicName()
+    {
+        return sensorPosition == SensorPosition.Front ? "/radar/front" : "/radar/rear";
+    }
+
+    void PublishRawTopic()
+    {
+        if (!publishRawTopic || !rawPublisherReady || ros == null)
+            return;
+
+        bool hasPrimary = TryGetPrimaryDetection(out RadarDetection primary);
+        float distance = hasPrimary ? primary.distance : -1f;
+        float angle = hasPrimary ? primary.angle : 0f;
+        float radialVelocity = hasPrimary ? primary.radialVelocity : 0f;
+        float rcs = hasPrimary ? primary.rcs : defaultExternalRcs;
+        float confidence = hasPrimary ? primary.confidence : 0f;
+        float isGhost = (hasPrimary && primary.isGhost) ? 1f : 0f;
+        float isClutter = (hasPrimary && primary.isClutter) ? 1f : 0f;
+
+        Float32MultiArrayMsg msg = new Float32MultiArrayMsg
+        {
+            data = new float[]
+            {
+                distance,
+                angle,
+                radialVelocity,
+                rcs,
+                confidence,
+                isGhost,
+                isClutter
+            }
+        };
+        ros.Publish(resolvedOutputTopicName, msg);
+    }
+
+    void OnExternalDetections(Float32MultiArrayMsg msg)
+    {
+        hasExternalMessage = true;
+        lastExternalMessageTime = Time.time;
+
+        ApplyExternalDetections(msg != null ? msg.data : null);
+    }
+
+    void ApplyExternalDetections(float[] data)
+    {
+        detections.Clear();
+        colliderIndexMap.Clear();
+
+        if (data == null || data.Length == 0)
+        {
+            UpdateLegacyPrimaryDetection();
+            return;
+        }
+
+        bool parsed = TryParsePackedDetections(data, fieldCount: 8, hasSensorIdField: true);
+        if (!parsed)
+            parsed = TryParsePackedDetections(data, fieldCount: 7, hasSensorIdField: false);
+        if (!parsed)
+            TryParseSimpleDetection(data);
+
+        SortAndTrimDetections();
+        UpdateLegacyPrimaryDetection();
+    }
+
+    bool TryParsePackedDetections(float[] data, int fieldCount, bool hasSensorIdField)
+    {
+        if (fieldCount <= 0 || data.Length < fieldCount || data.Length % fieldCount != 0)
+            return false;
+
+        int targetCount = data.Length / fieldCount;
+        for (int i = 0; i < targetCount; i++)
+        {
+            int start = i * fieldCount;
+
+            if (hasSensorIdField)
+            {
+                float sensorId = data[start];
+                if (sensorId < -0.5f || sensorId > 1.5f)
+                    return false;
+                start += 1;
+            }
+
+            float distance = data[start];
+            float angle = data[start + 1];
+            float radialVelocity = data[start + 2];
+            float rcs = data[start + 3];
+            float confidence = data[start + 4];
+            bool isGhost = data[start + 5] > 0.5f;
+            bool isClutter = data[start + 6] > 0.5f;
+
+            AddExternalDetection(distance, angle, radialVelocity, confidence, rcs, isGhost, isClutter);
+        }
+
+        return true;
+    }
+
+    bool TryParseSimpleDetection(float[] data)
+    {
+        if (data.Length == 0)
+            return false;
+
+        float distance = data[0];
+        float angle = data.Length > 1 ? data[1] : 0f;
+        float radialVelocity = data.Length > 2 ? data[2] : 0f;
+        float confidence = data.Length > 3 ? data[3] : defaultExternalConfidence;
+        float rcs = data.Length > 4 ? data[4] : defaultExternalRcs;
+        bool isGhost = data.Length > 5 && data[5] > 0.5f;
+        bool isClutter = data.Length > 6 && data[6] > 0.5f;
+
+        return AddExternalDetection(distance, angle, radialVelocity, confidence, rcs, isGhost, isClutter);
+    }
+
+    bool AddExternalDetection(float distance, float angle, float radialVelocity, float confidence, float rcs, bool isGhost, bool isClutter)
+    {
+        if (!IsValidExternalDistance(distance))
+            return false;
+
+        float clampedDistance = Mathf.Clamp(distance, rangeMin, rangeMax);
+        float clampedAngle = Mathf.Clamp(angle, -horizontalFOV * 0.5f, horizontalFOV * 0.5f);
+        float clampedVelocity = Mathf.Clamp(radialVelocity, -maxRelativeVelocity, maxRelativeVelocity);
+        float safeConfidence = float.IsNaN(confidence) || float.IsInfinity(confidence)
+            ? defaultExternalConfidence
+            : confidence;
+        float safeRcs = float.IsNaN(rcs) || float.IsInfinity(rcs) ? defaultExternalRcs : rcs;
+
+        RadarDetection detection = new RadarDetection
+        {
+            distance = clampedDistance,
+            angle = clampedAngle,
+            point = transform.position + GetDirectionFromAngles(clampedAngle, 0f) * clampedDistance,
+            radialVelocity = clampedVelocity,
+            rcs = Mathf.Clamp(safeRcs, minRcs, maxRcs),
+            confidence = Mathf.Clamp01(safeConfidence),
+            isGhost = isGhost,
+            isClutter = isClutter,
+            colliderName = "external_topic"
+        };
+
+        detections.Add(detection);
+        return true;
+    }
+
+    bool IsValidExternalDistance(float distance)
+    {
+        if (float.IsNaN(distance) || float.IsInfinity(distance))
+            return false;
+        return distance > 0f;
+    }
+
+    void ClearAllDetections()
+    {
+        detections.Clear();
+        colliderIndexMap.Clear();
+        UpdateLegacyPrimaryDetection();
     }
 }

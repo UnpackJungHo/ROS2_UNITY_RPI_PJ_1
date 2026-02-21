@@ -372,6 +372,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
@@ -3839,6 +3841,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
@@ -4239,6 +4243,7 @@ GameObject:
   - component: {fileID: 14880820633905704}
   - component: {fileID: 127900819456268115}
   - component: {fileID: 2396941261833620371}
+  - component: {fileID: 5956527516674499999}
   m_Layer: 11
   m_Name: factory_amr
   m_TagString: robot
@@ -4354,6 +4359,7 @@ MonoBehaviour:
   enableSafetyOverride: 1
   slowDownThrottleScale: 0.55
   warningBrake: 0.45
+  warningBrakeMinSpeed: 0.6
   brakeLevelBrake: 0.8
   predictionOnlyMode: 0
   predictedSteering: 0
@@ -4363,6 +4369,9 @@ MonoBehaviour:
   isInterventionActive: 0
   interventionTimer: 0
   interventionCount: 0
+  inferenceSuccessCount: 0
+  inferenceFailureCount: 0
+  lastInferenceError: None
 --- !u!114 &2396941261833620371
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4376,6 +4385,42 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   namespacePrefix: 
+--- !u!114 &5956527516674499999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3775507998252672659}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc8107185e3284b828a0a851b1a6bba1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cmdTopicName: /vehicle/cmd
+  wheelController: {fileID: 6089124739900913193}
+  autoFindWheelController: 1
+  useRegressionAutonomyGate: 1
+  regressionDrivingController: {fileID: 127900819456268115}
+  autoFindRegressionController: 1
+  releaseExternalControlWhenGateClosed: 1
+  holdBrakeWhenGateClosed: 0
+  maxForwardSpeed: 2
+  maxReverseSpeed: 1
+  maxYawRateForFullSteer: 1.2
+  allowReverse: 1
+  directionChangeBrakeSpeedThreshold: 0.35
+  commandTimeoutSec: 0.35
+  holdBrakeOnTimeout: 1
+  releaseExternalControlOnTimeout: 0
+  resolvedTopicName: 
+  hasReceivedCommand: 0
+  lastCommandTime: -999
+  lastLinearX: 0
+  lastAngularZ: 0
+  lastAppliedSteering: 0
+  lastAppliedThrottle: 0
+  lastAppliedBrake: 0
 --- !u!1 &3781307098237865052
 GameObject:
   m_ObjectHideFlags: 0
@@ -4552,6 +4597,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
@@ -5946,8 +5993,8 @@ MonoBehaviour:
   targetsTopicName: /radar/targets
   publishRate: 20
   maxPublishedTargets: 32
-  sensorFront: {fileID: 0}
-  sensorRear: {fileID: 0}
+  sensorFront: {fileID: 4628125776777260596}
+  sensorRear: {fileID: 7810559069361781330}
   showDebugInfo: 0
 --- !u!1 &5425516531526219730
 GameObject:
@@ -6490,7 +6537,6 @@ MonoBehaviour:
   relativeVelocityFilterAlpha: 0.35
   maxRelativeVelocity: 8
   egoArticulationBody: {fileID: 1449825922278816140}
-  egoRigidbody: {fileID: 0}
   enableGhostTargets: 0
   ghostProbability: 0.08
   ghostDistanceOffsetMin: 0.6
@@ -6505,6 +6551,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
@@ -6843,7 +6891,9 @@ MonoBehaviour:
   progressRewardProvider: {fileID: 2019101790433325521}
   collisionWarningPublisher: {fileID: 5823276948693427506}
   wheelController: {fileID: 6089124739900913193}
+  trafficLightDecisionEngine: {fileID: 6731819344390320471}
   regressionDrivingController: {fileID: 127900819456268115}
+  autoDriverRLAgent: {fileID: 2079015559847074402}
   autoFindReferences: 1
   autoBeginOnStart: 1
   stopVehicleOnTerminal: 1
@@ -6869,6 +6919,8 @@ MonoBehaviour:
   lowProgressTrashThreshold: 0.1
   saveEpisodeReportCsv: 1
   csvFileName: rl_episode_report.csv
+  appendSessionTimestampToCsv: 1
+  csvSessionLabel: 
   episodeIndex: 0
   episodeActive: 0
   terminalReached: 0
@@ -6889,6 +6941,7 @@ MonoBehaviour:
   minObservedTtc: Infinity
   stuckTimer: 0
   stuckDistanceAccum: 0
+  resolvedCsvFileName: rl_episode_report.csv
 --- !u!1 &5785476045318913152
 GameObject:
   m_ObjectHideFlags: 0
@@ -7129,7 +7182,6 @@ MonoBehaviour:
   relativeVelocityFilterAlpha: 0.35
   maxRelativeVelocity: 8
   egoArticulationBody: {fileID: 1449825922278816140}
-  egoRigidbody: {fileID: 0}
   enableGhostTargets: 0
   ghostProbability: 0.08
   ghostDistanceOffsetMin: 0.6
@@ -7144,6 +7196,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
@@ -7340,6 +7394,12 @@ MonoBehaviour:
   progressRewardPerMeter: 1
   zoneRewardWeight: 0.25
   reverseProgressPenaltyScale: 1.4
+  zoneRewardNoProgressScale: 0.1
+  zoneRewardFullScaleProgressMeters: 0.03
+  clampProgressDeltaBySpeed: 1
+  progressDeltaSpeedMultiplier: 2
+  progressDeltaClampMarginMeters: 0.05
+  progressDeltaAbsoluteMaxMeters: 0.5
   triggerTarget: {fileID: 1126507030755811990}
   collisionWarningPublisher: {fileID: 5823276948693427506}
   cautionPenaltyPerSec: 0.05
@@ -7350,6 +7410,8 @@ MonoBehaviour:
   wheelController: {fileID: 6089124739900913193}
   redViolationSpeedThreshold: 0.2
   redViolationPenaltyPerSec: 0.6
+  accumulateOnlyWhenEpisodeActive: 1
+  episodeEvaluator: {fileID: 6816130881944066883}
   currentPathS: 0
   currentLateralError: 0
   currentZoneName: None
@@ -7365,6 +7427,10 @@ MonoBehaviour:
   currentZoneScore: 0
   lastStepReward: 0
   cumulativeReward: 0
+  lastZoneProgressScale: 1
+  lastRawDeltaS: 0
+  lastUsedDeltaS: 0
+  lastDeltaSClamped: 0
 --- !u!1 &6025786939805018165
 GameObject:
   m_ObjectHideFlags: 0
@@ -7892,6 +7958,7 @@ GameObject:
   - component: {fileID: 4021840841467161023}
   - component: {fileID: 8733470339400607096}
   - component: {fileID: 4616583320479726781}
+  - component: {fileID: 5180744201739932145}
   m_Layer: 11
   m_Name: camera_link
   m_TagString: Untagged
@@ -8054,6 +8121,25 @@ MonoBehaviour:
   rotationSmoothTime: 0.5
   stabilizeVertical: 1
   stabilizeRoll: 1
+--- !u!114 &5180744201739932145
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6630710396695952719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e57667c7c04b4cf0e9a8d81dcb9eb174, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  topicName: /camera/policy/image_raw
+  frameId: camera_link
+  publishRate: 20
+  imageWidth: 200
+  imageHeight: 66
+  sourceCameraPublisher: {fileID: 4616583320479726781}
+  autoFindSourceCameraPublisher: 1
 --- !u!1 &6636072158633844567
 GameObject:
   m_ObjectHideFlags: 0
@@ -8722,6 +8808,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
@@ -9158,7 +9246,7 @@ MonoBehaviour:
   TeamId: 0
   m_UseChildSensors: 1
   m_UseChildActuators: 1
-  m_DeterministicInference: 0
+  m_DeterministicInference: 1
   m_ObservableAttributeHandling: 0
 --- !u!114 &2079015559847074402
 MonoBehaviour:
@@ -9182,23 +9270,39 @@ MonoBehaviour:
   collisionWarningPublisher: {fileID: 5823276948693427506}
   trafficLightDecisionEngine: {fileID: 6731819344390320471}
   regressionDrivingController: {fileID: 127900819456268115}
+  vehicleCmdSubscriber: {fileID: 5956527516674499999}
   decisionRequester: {fileID: 0}
   autoFindReferences: 1
-  requestDecisionInFixedUpdateWithoutRequester: 0
+  requestDecisionInFixedUpdateWithoutRequester: 1
   followTargetTransform: {fileID: 3677516862083987071}
   followTargetPosition: 1
   followTargetRotation: 1
   resetVehicleTransformOnEpisodeBegin: 1
   resetRootArticulationVelocity: 1
   episodeStartTransform: {fileID: 0}
+  useEpisodeStartTransformHeight: 0
+  useEpisodeStartTransformRotation: 1
   residualSteerScale: 0.3
   residualAccelScale: 0.3
-  allowReverse: 0
+  applyTrainingStabilityTuning: 1
+  tunedResidualSteerScale: 0.16
+  tunedResidualAccelScale: 0.12
+  tunedWarningBrake: 0.15
+  allowReverse: 1
   enableSafetyOverride: 1
   cautionThrottleScale: 0.55
   warningBrake: 0.35
+  warningBrakeMinSpeed: 0.6
   brakeLevelBrake: 0.8
   emergencyBrake: 1
+  externalRosCmdInputOnly: 1
+  outputViaVehicleCmdTopic: 1
+  preferTopicActuationWhenSubscriberPresent: 1
+  vehicleCmdTopicName: /vehicle/cmd
+  cmdTopicMaxForwardSpeed: 2
+  cmdTopicMaxReverseSpeed: 1
+  cmdTopicMaxYawRateForFullSteer: 1.2
+  publishZeroCmdOnDisable: 1
   speedNormalize: 3
   lateralErrorNormalize: 2
   headingErrorNormalizeDeg: 45
@@ -9218,6 +9322,10 @@ MonoBehaviour:
   lastHeadingErrorDeg: 0
   lastSignedLateralError: 0
   lastTerminalReason: None
+  resolvedCmdTopicName: 
+  lastPublishedCmdLinearX: 0
+  lastPublishedCmdAngularZ: 0
+  lastActionPublishedToRos: 0
 --- !u!1 &7593888128540673980
 GameObject:
   m_ObjectHideFlags: 0
@@ -9802,6 +9910,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
@@ -10098,6 +10208,7 @@ MonoBehaviour:
   enablePathAwareRiskSplit: 1
   sideAdvisoryDistance: 0.45
   sideTurnBrakeDistance: 0.25
+  sideEmergencyHardDistance: 0.12
   sideTurnSteeringAngleThreshold: 7
   showDebugInfo: 0
   debugOnlyOnStateChange: 1
@@ -10531,6 +10642,8 @@ MonoBehaviour:
   detectionLayer:
     serializedVersion: 2
     m_Bits: 55
+  ignoreSelfColliders: 1
+  selfRoot: {fileID: 0}
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
@@ -10928,12 +11041,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   topicName: /ultrasonic
   publishRate: 20
-  sensorFL: {fileID: 0}
-  sensorFR: {fileID: 0}
-  sensorFC: {fileID: 0}
-  sensorRL: {fileID: 0}
-  sensorRR: {fileID: 0}
-  sensorRC: {fileID: 0}
+  sensorFL: {fileID: 3763158317228283413}
+  sensorFR: {fileID: 2301943848518113009}
+  sensorFC: {fileID: 5737873666085956283}
+  sensorRL: {fileID: 1300040170997208230}
+  sensorRR: {fileID: 2246429167327062144}
+  sensorRC: {fileID: 26194515969480933}
   showDebugInfo: 0
 --- !u!1 &9074794532764407664
 GameObject:
