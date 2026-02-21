@@ -111,6 +111,11 @@ public class CameraPublisher : MonoBehaviour
         texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
         cam.targetTexture = renderTexture;
 
+        // 5. 차체(RLVehicle 레이어) 제외 - 카메라가 자기 폴/본체를 찍지 않도록
+        int vehicleLayer = LayerMask.NameToLayer("RLVehicle");
+        if (vehicleLayer >= 0)
+            cam.cullingMask &= ~(1 << vehicleLayer);
+
         Debug.Log("[CameraPublisher] Stabilized camera created - physics shake will be filtered");
     }
 
@@ -140,6 +145,11 @@ public class CameraPublisher : MonoBehaviour
         texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
 
         cam.targetTexture = renderTexture;
+
+        // 차체(RLVehicle 레이어) 제외 - 카메라 폴/본체가 찍히지 않도록
+        int vehicleLayerDirect = LayerMask.NameToLayer("RLVehicle");
+        if (vehicleLayerDirect >= 0)
+            cam.cullingMask &= ~(1 << vehicleLayerDirect);
     }
 
     void Update()

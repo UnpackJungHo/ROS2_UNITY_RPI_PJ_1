@@ -8780,7 +8780,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3642466544989240121}
-  - component: {fileID: 4822128453594697507}
   m_Layer: 11
   m_Name: Finish
   m_TagString: Untagged
@@ -8803,22 +8802,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3794378085794194833}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &4822128453594697507
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7282857693428103954}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fc418429920735638bee7a239985659a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  gateCollider: {fileID: 0}
-  targetBody: {fileID: 1449825922278816140}
-  episodeEvaluator: {fileID: 6816130881944066883}
-  autoFindEpisodeEvaluator: 1
 --- !u!1 &7295299281283386706
 GameObject:
   m_ObjectHideFlags: 0
@@ -10105,6 +10088,7 @@ MonoBehaviour:
   emergencyStopDistance: 0.3
   minEmergencyStopConfidence: 0.55
   radarMinSafeDistance: 0.5
+  suppressRearEmergencyWhenNotReversing: 1
   lowSpeedThreshold: 0.5
   lowSpeedCautionDistance: 1.5
   lowSpeedWarningDistance: 0.8

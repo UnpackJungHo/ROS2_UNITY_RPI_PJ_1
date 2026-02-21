@@ -13,6 +13,7 @@ public class DrivingStatusUIController : MonoBehaviour
     public CollisionWarningPublisher collisionWarningPublisher;
     public DrivingDataCollectorV2 dataCollector;
     public RegressionDrivingController regressionController;
+    public WheelTest wheelController;
     public TrafficLightStateSubscriber trafficLightSubscriber;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
     public ProgressRewardProvider progressRewardProvider;
@@ -80,6 +81,7 @@ public class DrivingStatusUIController : MonoBehaviour
     {
         if (autoFindReferences &&
             (collisionWarningPublisher == null || dataCollector == null || regressionController == null ||
+             wheelController == null ||
              trafficLightSubscriber == null || trafficLightDecisionEngine == null || progressRewardProvider == null ||
              rlEpisodeEvaluator == null))
         {
@@ -104,6 +106,9 @@ public class DrivingStatusUIController : MonoBehaviour
 
         if (regressionController == null)
             regressionController = FindObjectOfType<RegressionDrivingController>();
+
+        if (wheelController == null)
+            wheelController = FindObjectOfType<WheelTest>();
 
         if (trafficLightSubscriber == null)
             trafficLightSubscriber = FindObjectOfType<TrafficLightStateSubscriber>();
@@ -196,6 +201,7 @@ public class DrivingStatusUIController : MonoBehaviour
 
         float speed = regressionController.GetCurrentSpeedMS();
         int interventionCount = regressionController.GetInterventionCount();
+        bool residualMode = regressionController.predictionOnlyMode;
 
         if (regressionController.isAutonomousMode)
         {
@@ -216,25 +222,48 @@ public class DrivingStatusUIController : MonoBehaviour
             else
             {
                 if (regressionModeText != null)
-                    regressionModeText.text = "<color=#00FF00>● AUTONOMOUS (Regression)</color>";
+                    regressionModeText.text = residualMode
+                        ? "<color=#00FF00>● AUTONOMOUS (Regression Base + RL Final)</color>"
+                        : "<color=#00FF00>● AUTONOMOUS (Regression)</color>";
 
                 if (regressionActionText != null)
                 {
                     regressionActionText.text =
-                        $"Steer: <color=#00FFFF>{regressionController.GetPredictedSteering():F3}</color> | " +
-                        $"Throt: <color=#00FFFF>{regressionController.GetPredictedThrottle():F3}</color>";
+                        $"Base Steer: <color=#00FFFF>{regressionController.GetPredictedSteering():F3}</color> | " +
+                        $"Base Throt: <color=#00FFFF>{regressionController.GetPredictedThrottle():F3}</color>";
                 }
 
                 if (regressionControlText != null)
                 {
-                    regressionControlText.text =
-                        $"Applied → Steer: {regressionController.GetAppliedSteering():F2} | " +
-                        $"Throt: {regressionController.GetAppliedThrottle():F2}";
+                    if (residualMode)
+                    {
+                        float finalSteer = wheelController != null
+                            ? wheelController.GetSteeringInput()
+                            : regressionController.GetAppliedSteering();
+                        float finalThrottle = wheelController != null
+                            ? wheelController.GetThrottleInput()
+                            : regressionController.GetAppliedThrottle();
+                        float finalBrake = wheelController != null ? wheelController.GetBrakeInput() : 0f;
+
+                        regressionControlText.text =
+                            $"Final → Steer: {finalSteer:F2} | Throt: {finalThrottle:F2} | Brake: {finalBrake:F2}";
+                    }
+                    else
+                    {
+                        regressionControlText.text =
+                            $"Applied → Steer: {regressionController.GetAppliedSteering():F2} | " +
+                            $"Throt: {regressionController.GetAppliedThrottle():F2}";
+                    }
                 }
             }
 
             if (regressionStatsText != null)
-                regressionStatsText.text = $"Speed: {speed:F2} m/s | Interventions: {interventionCount}";
+            {
+                string warningInfo = collisionWarningPublisher != null
+                    ? $" | Warn: {collisionWarningPublisher.GetWarningLevel()}"
+                    : "";
+                regressionStatsText.text = $"Speed: {speed:F2} m/s | Interventions: {interventionCount}{warningInfo}";
+            }
 
             if (regressionGuideText != null)
                 regressionGuideText.text = "<color=grey>WASD: Intervention | P: Stop Auto</color>";

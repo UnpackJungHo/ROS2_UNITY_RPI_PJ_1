@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 /// <summary>
@@ -49,6 +50,12 @@ public class SingleUltrasonicSensor : MonoBehaviour
 
     [Header("Collision Detection Layer (감지할 레이어)")]
     public LayerMask detectionLayer = ~0; // 기본값: 모든 레이어 감지
+
+    [Header("Self Filtering (자차 감지 제외)")]
+    [Tooltip("true면 센서가 자기 차량 콜라이더를 감지하지 않음")]
+    public bool ignoreSelfColliders = true;
+    [Tooltip("자차 루트(미할당 시 transform.root 사용)")]
+    public Transform selfRoot;
 
     [Header("Debug (디버그 설정)")]
     public bool showDebugRays = true; // Scene 뷰에 레이를 그릴지 여부
@@ -108,6 +115,8 @@ public class SingleUltrasonicSensor : MonoBehaviour
     {
         reliableRangeMin = Mathf.Clamp(reliableRangeMin, rangeMin, rangeMax);
         reliableRangeMax = Mathf.Clamp(reliableRangeMax, reliableRangeMin, rangeMax);
+        if (selfRoot == null)
+            selfRoot = transform.root;
 
         lastScanTime = Time.time;
         Debug.Log($"[Ultrasonic-{SensorName}] Initialized - Range: {rangeMin}-{rangeMax}m, FOV: {fieldOfView}°");
@@ -153,45 +162,67 @@ public class SingleUltrasonicSensor : MonoBehaviour
                 new Vector3(Mathf.Sin(angleRad), 0, Mathf.Cos(angleRad))
             );
 
-            RaycastHit hit;
-            // 레이캐스트 수행
-            if (Physics.Raycast(origin, direction, out hit, rangeMax, detectionLayer))
+            bool hitAccepted = false;
+            RaycastHit acceptedHit = default;
+            RaycastHit[] hits = Physics.RaycastAll(
+                origin,
+                direction,
+                rangeMax,
+                detectionLayer,
+                QueryTriggerInteraction.Ignore
+            );
+            if (hits != null && hits.Length > 0)
             {
-                // 최소 거리 이상이고, 기존 최단 거리보다 가까우면 갱신
-                if (hit.distance >= rangeMin && hit.distance < rangeMax)
+                Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                for (int h = 0; h < hits.Length; h++)
                 {
+                    RaycastHit hit = hits[h];
+                    if (hit.collider == null)
+                        continue;
+                    if (IsSelfCollider(hit.collider))
+                        continue;
+                    if (hit.distance < rangeMin || hit.distance >= rangeMax)
+                        continue;
+
                     float confidence = CalculateDetectionConfidence(hit.distance, direction, hit.normal);
-                    if (confidence > 0f)
+                    if (confidence <= 0f)
+                        continue;
+
+                    bool isCloser = hit.distance < Distance;
+                    bool isSameDistanceButMoreReliable =
+                        Mathf.Abs(hit.distance - Distance) < 0.02f && confidence > Confidence;
+
+                    if (isCloser || isSameDistanceButMoreReliable)
                     {
-                        bool isCloser = hit.distance < Distance;
-                        bool isSameDistanceButMoreReliable =
-                            Mathf.Abs(hit.distance - Distance) < 0.02f && confidence > Confidence;
-
-                        if (isCloser || isSameDistanceButMoreReliable)
-                        {
-                            Distance = hit.distance;
-                            DetectedAngle = angle;
-                            DetectedPoint = hit.point;
-                            Confidence = confidence;
-                        }
+                        Distance = hit.distance;
+                        DetectedAngle = angle;
+                        DetectedPoint = hit.point;
+                        Confidence = confidence;
                     }
-                }
 
-                // 디버그 레이 (감지됨: Cyan)
-                if (showDebugRays)
-                {
-                    Debug.DrawLine(origin, hit.point, hitColor, scanInterval);
+                    acceptedHit = hit;
+                    hitAccepted = true;
+                    break;
                 }
             }
-            else
+
+            if (showDebugRays)
             {
-                // 디버그 레이 (감지안됨: Blue)
-                if (showDebugRays)
-                {
+                if (hitAccepted)
+                    Debug.DrawLine(origin, acceptedHit.point, hitColor, scanInterval);
+                else
                     Debug.DrawRay(origin, direction * rangeMax, missColor, scanInterval);
-                }
             }
         }
+    }
+
+    bool IsSelfCollider(Collider collider)
+    {
+        if (!ignoreSelfColliders || collider == null || selfRoot == null)
+            return false;
+
+        Transform ct = collider.transform;
+        return ct == selfRoot || ct.IsChildOf(selfRoot);
     }
 
     float CalculateDetectionConfidence(float distance, Vector3 rayDirection, Vector3 hitNormal)
@@ -207,7 +238,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
         dropoutProbability += (1f - incidenceConfidence) * 0.2f;
         dropoutProbability = Mathf.Clamp(dropoutProbability, 0f, 0.95f);
 
-        if (Random.value < dropoutProbability)
+        if (UnityEngine.Random.value < dropoutProbability)
         {
             return 0f;
         }

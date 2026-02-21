@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ai-game-developer": {
+      "args": [
+        "port=52338",
+        "plugin-timeout=10000",
+        "client-transport=stdio"
+      ],
+      "command": "/home/kjhz/UnityProjects/ros2_unity_rpi/ros2_unity_autoDriver/Library/mcp-server/linux-x64/unity-mcp-server"
+    }
+  }
+}

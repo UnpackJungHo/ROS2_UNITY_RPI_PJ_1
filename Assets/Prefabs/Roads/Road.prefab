@@ -616,11 +616,11 @@ MonoBehaviour:
     startOffset: 0
     endOffset: 1
   - zoneName: Zone_L1
-    score: -1
+    score: -3
     startOffset: 1.2
     endOffset: 2.9
   - zoneName: Zone_c
-    score: -3
+    score: -1
     startOffset: 3
     endOffset: 4.1
   - zoneName: Zone_R1
@@ -1136,7 +1136,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &262459784050765022
 GameObject:
   m_ObjectHideFlags: 0
@@ -1499,7 +1499,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &528976406041032753
 GameObject:
   m_ObjectHideFlags: 0
@@ -1862,7 +1862,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &577807224936755046
 GameObject:
   m_ObjectHideFlags: 0
@@ -1983,7 +1983,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &600378876966254261
 GameObject:
   m_ObjectHideFlags: 0
@@ -2346,7 +2346,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &709054292381736733
 GameObject:
   m_ObjectHideFlags: 0
@@ -2467,7 +2467,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &732352839907911945
 GameObject:
   m_ObjectHideFlags: 0
@@ -2588,7 +2588,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &759242501572970437
 GameObject:
   m_ObjectHideFlags: 0
@@ -3154,7 +3154,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &850163694305643255
 GameObject:
   m_ObjectHideFlags: 0
@@ -3638,7 +3638,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &923305526828578653
 GameObject:
   m_ObjectHideFlags: 0
@@ -3759,7 +3759,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &935582586615262175
 GameObject:
   m_ObjectHideFlags: 0
@@ -3880,7 +3880,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &988356418852243601
 GameObject:
   m_ObjectHideFlags: 0
@@ -5211,7 +5211,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &1364822042039832220
 GameObject:
   m_ObjectHideFlags: 0
@@ -5332,7 +5332,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &1419502363339097960
 GameObject:
   m_ObjectHideFlags: 0
@@ -5574,7 +5574,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &1476003500942036284
 GameObject:
   m_ObjectHideFlags: 0
@@ -5695,7 +5695,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &1495132950560275633
 GameObject:
   m_ObjectHideFlags: 0
@@ -6542,7 +6542,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &1608698069626486630
 GameObject:
   m_ObjectHideFlags: 0
@@ -6905,7 +6905,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &1721404065011371428
 GameObject:
   m_ObjectHideFlags: 0
@@ -7389,7 +7389,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &1955056230534166042
 GameObject:
   m_ObjectHideFlags: 0
@@ -7510,7 +7510,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &1958584571217751131
 GameObject:
   m_ObjectHideFlags: 0
@@ -7752,7 +7752,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &1975673356066941116
 GameObject:
   m_ObjectHideFlags: 0
@@ -8115,7 +8115,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &2164775834851208273
 GameObject:
   m_ObjectHideFlags: 0
@@ -8236,7 +8236,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &2250064287952932720
 GameObject:
   m_ObjectHideFlags: 0
@@ -8357,7 +8357,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &2256832485676470928
 GameObject:
   m_ObjectHideFlags: 0
@@ -8599,7 +8599,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &2315355463253783195
 GameObject:
   m_ObjectHideFlags: 0
@@ -9204,7 +9204,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &2543338352124639473
 GameObject:
   m_ObjectHideFlags: 0
@@ -9567,7 +9567,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &2652206273812194672
 GameObject:
   m_ObjectHideFlags: 0
@@ -9688,7 +9688,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &2770322387871933253
 GameObject:
   m_ObjectHideFlags: 0
@@ -10051,7 +10051,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &2854560414620857542
 GameObject:
   m_ObjectHideFlags: 0
@@ -10172,7 +10172,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &2859914213722773534
 GameObject:
   m_ObjectHideFlags: 0
@@ -10535,7 +10535,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &2915596590724556838
 GameObject:
   m_ObjectHideFlags: 0
@@ -10656,7 +10656,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &2953022373149489549
 GameObject:
   m_ObjectHideFlags: 0
@@ -11019,7 +11019,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &3015034085213885198
 GameObject:
   m_ObjectHideFlags: 0
@@ -11140,7 +11140,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &3138824568955861182
 GameObject:
   m_ObjectHideFlags: 0
@@ -11261,7 +11261,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &3180384214417788741
 GameObject:
   m_ObjectHideFlags: 0
@@ -11382,7 +11382,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &3182452550363273600
 GameObject:
   m_ObjectHideFlags: 0
@@ -11972,7 +11972,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &3431749296896086751
 GameObject:
   m_ObjectHideFlags: 0
@@ -12093,7 +12093,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &3448929312839897884
 GameObject:
   m_ObjectHideFlags: 0
@@ -12456,7 +12456,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &3500228017442657029
 GameObject:
   m_ObjectHideFlags: 0
@@ -12577,7 +12577,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &3562753737576251745
 GameObject:
   m_ObjectHideFlags: 0
@@ -13530,7 +13530,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &3957799917819614629
 GameObject:
   m_ObjectHideFlags: 0
@@ -14217,7 +14217,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4156982039088863617
 GameObject:
   m_ObjectHideFlags: 0
@@ -14580,7 +14580,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4223073400844559466
 GameObject:
   m_ObjectHideFlags: 0
@@ -14822,7 +14822,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &4232889238826340121
 GameObject:
   m_ObjectHideFlags: 0
@@ -14943,7 +14943,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &4240408411006798554
 GameObject:
   m_ObjectHideFlags: 0
@@ -15064,7 +15064,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4264507906273884818
 GameObject:
   m_ObjectHideFlags: 0
@@ -15185,7 +15185,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &4280607032134397956
 GameObject:
   m_ObjectHideFlags: 0
@@ -15306,7 +15306,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4505223318242996889
 GameObject:
   m_ObjectHideFlags: 0
@@ -15669,7 +15669,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4670273224279555734
 GameObject:
   m_ObjectHideFlags: 0
@@ -15790,7 +15790,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4678123268165477019
 GameObject:
   m_ObjectHideFlags: 0
@@ -16395,7 +16395,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &4874972959085281225
 GameObject:
   m_ObjectHideFlags: 0
@@ -16516,7 +16516,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4893117851225831893
 GameObject:
   m_ObjectHideFlags: 0
@@ -16637,7 +16637,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &4929167004296648248
 GameObject:
   m_ObjectHideFlags: 0
@@ -16879,7 +16879,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5014484389492789669
 GameObject:
   m_ObjectHideFlags: 0
@@ -17605,7 +17605,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &5180917687900300838
 GameObject:
   m_ObjectHideFlags: 0
@@ -17726,7 +17726,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5181246878347166449
 GameObject:
   m_ObjectHideFlags: 0
@@ -17968,7 +17968,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &5250243003638562372
 GameObject:
   m_ObjectHideFlags: 0
@@ -18089,7 +18089,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5256844591895184900
 GameObject:
   m_ObjectHideFlags: 0
@@ -18210,7 +18210,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5307017076041978556
 GameObject:
   m_ObjectHideFlags: 0
@@ -18331,7 +18331,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5321531082762205213
 GameObject:
   m_ObjectHideFlags: 0
@@ -18452,7 +18452,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &5359998082990191089
 GameObject:
   m_ObjectHideFlags: 0
@@ -18694,7 +18694,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &5412939968712321197
 GameObject:
   m_ObjectHideFlags: 0
@@ -18936,7 +18936,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &5495083796340625886
 GameObject:
   m_ObjectHideFlags: 0
@@ -19057,7 +19057,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5510206454866528822
 GameObject:
   m_ObjectHideFlags: 0
@@ -19420,7 +19420,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5635775797632414284
 GameObject:
   m_ObjectHideFlags: 0
@@ -19783,7 +19783,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5736697820400120792
 GameObject:
   m_ObjectHideFlags: 0
@@ -19904,7 +19904,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &5751050499733727541
 GameObject:
   m_ObjectHideFlags: 0
@@ -20146,7 +20146,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5786440206710295934
 GameObject:
   m_ObjectHideFlags: 0
@@ -20509,7 +20509,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &5927486039028450549
 GameObject:
   m_ObjectHideFlags: 0
@@ -20751,7 +20751,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &6019354031071691124
 GameObject:
   m_ObjectHideFlags: 0
@@ -21196,7 +21196,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &6235352115017535741
 GameObject:
   m_ObjectHideFlags: 0
@@ -21317,7 +21317,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &6276283728004577645
 GameObject:
   m_ObjectHideFlags: 0
@@ -22406,7 +22406,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &6472019597540096238
 GameObject:
   m_ObjectHideFlags: 0
@@ -22769,7 +22769,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &6522848804939764066
 GameObject:
   m_ObjectHideFlags: 0
@@ -22890,7 +22890,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &6528835784476129214
 GameObject:
   m_ObjectHideFlags: 0
@@ -23011,7 +23011,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &6581754171314792094
 GameObject:
   m_ObjectHideFlags: 0
@@ -23132,7 +23132,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &6589360084394896623
 GameObject:
   m_ObjectHideFlags: 0
@@ -23495,7 +23495,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &6782787099698768548
 GameObject:
   m_ObjectHideFlags: 0
@@ -24378,7 +24378,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7112672191411331580
 GameObject:
   m_ObjectHideFlags: 0
@@ -24741,7 +24741,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &7151988188970479257
 GameObject:
   m_ObjectHideFlags: 0
@@ -24983,7 +24983,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7176394708018124388
 GameObject:
   m_ObjectHideFlags: 0
@@ -25225,7 +25225,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7201963383337853679
 GameObject:
   m_ObjectHideFlags: 0
@@ -25346,7 +25346,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7286061237422455226
 GameObject:
   m_ObjectHideFlags: 0
@@ -25467,7 +25467,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &7290436351708614889
 GameObject:
   m_ObjectHideFlags: 0
@@ -25588,7 +25588,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &7303830811592517280
 GameObject:
   m_ObjectHideFlags: 0
@@ -25830,7 +25830,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7364416247335968584
 GameObject:
   m_ObjectHideFlags: 0
@@ -26072,7 +26072,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7403379582139514614
 GameObject:
   m_ObjectHideFlags: 0
@@ -26435,7 +26435,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7473171748337374067
 GameObject:
   m_ObjectHideFlags: 0
@@ -26556,7 +26556,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &7478424546828357931
 GameObject:
   m_ObjectHideFlags: 0
@@ -26919,7 +26919,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7683169996629713509
 GameObject:
   m_ObjectHideFlags: 0
@@ -27282,7 +27282,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &7756635430870551841
 GameObject:
   m_ObjectHideFlags: 0
@@ -28129,7 +28129,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &7958325050730164855
 GameObject:
   m_ObjectHideFlags: 0
@@ -28371,7 +28371,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8002540612592469276
 GameObject:
   m_ObjectHideFlags: 0
@@ -28492,7 +28492,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8009941705243786444
 GameObject:
   m_ObjectHideFlags: 0
@@ -28816,7 +28816,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8122700770761837557
 GameObject:
   m_ObjectHideFlags: 0
@@ -29019,7 +29019,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &8153076057636144849
 GameObject:
   m_ObjectHideFlags: 0
@@ -29745,7 +29745,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8353755163992174805
 GameObject:
   m_ObjectHideFlags: 0
@@ -29866,7 +29866,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8359782764485604300
 GameObject:
   m_ObjectHideFlags: 0
@@ -30108,7 +30108,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_c
-  score: -3
+  score: -1
 --- !u!1 &8427991961419969067
 GameObject:
   m_ObjectHideFlags: 0
@@ -30592,7 +30592,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8600797263127322893
 GameObject:
   m_ObjectHideFlags: 0
@@ -31197,7 +31197,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8892442867157667447
 GameObject:
   m_ObjectHideFlags: 0
@@ -31318,7 +31318,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8928410499232787803
 GameObject:
   m_ObjectHideFlags: 0
@@ -31439,7 +31439,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   zoneName: Zone_L1
-  score: -1
+  score: -3
 --- !u!1 &8969914233215317637
 GameObject:
   m_ObjectHideFlags: 0

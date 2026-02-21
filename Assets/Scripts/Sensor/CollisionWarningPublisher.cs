@@ -40,6 +40,8 @@ public class CollisionWarningPublisher : MonoBehaviour
     public float minEmergencyStopConfidence = 0.55f;
     [Tooltip("레이더 최소 안전거리 (m) - 정지 상태에서도 이 거리 이하면 경고")]
     public float radarMinSafeDistance = 0.5f;
+    [Tooltip("경로분리 모드에서 후방 초음파만 근접한 경우(Ego 비후진) EmergencyStop 승격을 막음")]
+    public bool suppressRearEmergencyWhenNotReversing = true;
 
     [Header("저속 주행 시 거리 기반 판단 (속도가 낮을 때 TTC 보완)")]
     [Tooltip("저속 판단 기준 (m/s) - 이 속도 이하면 거리 기반 판단 병행")]
@@ -63,6 +65,8 @@ public class CollisionWarningPublisher : MonoBehaviour
     public float sideAdvisoryDistance = 0.45f;
     [Tooltip("회피 조향 중 측면 제동 거리 (m)")]
     public float sideTurnBrakeDistance = 0.25f;
+    [Tooltip("측면 센서가 가장 가까울 때(비회피조향)에도 EmergencyStop을 허용할 초근접 거리 (m)")]
+    public float sideEmergencyHardDistance = 0.12f;
     [Tooltip("회피 조향으로 인정할 최소 조향각(도)")]
     public float sideTurnSteeringAngleThreshold = 7f;
 
@@ -364,16 +368,27 @@ public class CollisionWarningPublisher : MonoBehaviour
         // ========== Layer 1: 초음파 긴급정지 (최우선 - 속도와 무관한 최종 안전장치) ==========
         if (ultrasonicMin <= emergencyStopDistance && ultrasonicClosestConfidence >= minEmergencyStopConfidence)
         {
+            bool isRearClosest = CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearLeft ||
+                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearRight ||
+                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearCenter;
             bool isSideClosest = CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.FrontLeft ||
                                  CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.FrontRight ||
                                  CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearLeft ||
                                  CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearRight;
-            bool allowSideEmergency = !enablePathAwareRiskSplit ||
-                                      !isSideClosest ||
-                                      IsTurningTowardClosestSide() ||
-                                      ultrasonicMin <= sideTurnBrakeDistance;
+            bool rearRelevant = !enablePathAwareRiskSplit ||
+                                !suppressRearEmergencyWhenNotReversing ||
+                                !isRearClosest ||
+                                currentSpeed < -0.05f;
+            bool turningTowardSide = IsTurningTowardClosestSide();
+            bool allowSideEmergency = true;
+            if (enablePathAwareRiskSplit && isSideClosest)
+            {
+                // 측면 센서는 회피/차선 변경 상황에서 자주 근접하므로,
+                // EmergencyStop은 초근접(hard distance)에서만 허용.
+                allowSideEmergency = ultrasonicMin <= Mathf.Max(0.01f, sideEmergencyHardDistance);
+            }
 
-            if (allowSideEmergency)
+            if (rearRelevant && allowSideEmergency)
             {
                 currentWarningLevel = WarningLevel.EmergencyStop;
                 detectionSource = "Ultrasonic";
@@ -382,6 +397,13 @@ public class CollisionWarningPublisher : MonoBehaviour
                 lastTtcLevel = WarningLevel.Safe;
                 lastLowSpeedLevel = WarningLevel.Safe;
                 return; // 즉시 반환 - 다른 판단 불필요
+            }
+
+            if (!rearRelevant || !allowSideEmergency)
+            {
+                debugDecisionTrace =
+                    $"Layer1 Suppressed(rearRelevant={rearRelevant}, sideEmergency={allowSideEmergency}, " +
+                    $"turnTowardSide={turningTowardSide}, ultra={ultrasonicMin:F2}m, hard={sideEmergencyHardDistance:F2}m)";
             }
         }
 

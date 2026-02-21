@@ -80,3 +80,5 @@ yolov8s.pt
 /Assets/Resources/AI-Game-Developer-Config.json.meta
 /Assets/Resources/RL/rl_episode_report.csv
 /Assets/Resources/RL/rl_episode_report.csv.meta
+
+/Assets/Resources/RL/*

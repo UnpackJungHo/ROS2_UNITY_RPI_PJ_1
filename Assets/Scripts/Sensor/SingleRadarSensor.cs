@@ -89,6 +89,12 @@ public class SingleRadarSensor : MonoBehaviour
     [Header("Collision Detection Layer (감지할 레이어)")]
     public LayerMask detectionLayer = ~0;
 
+    [Header("Self Filtering (자차 감지 제외)")]
+    [Tooltip("true면 레이더가 자기 차량 콜라이더를 감지하지 않음")]
+    public bool ignoreSelfColliders = true;
+    [Tooltip("자차 루트(미할당 시 transform.root 사용)")]
+    public Transform selfRoot;
+
     [Header("Debug (디버그 설정)")]
     public bool showDebugRays = true;
     public Color hitColor = Color.red;
@@ -120,6 +126,8 @@ public class SingleRadarSensor : MonoBehaviour
         horizontalRayNum = Mathf.Max(1, horizontalRayNum);
         verticalRayNum = Mathf.Max(1, verticalRayNum);
         maxRelativeVelocity = Mathf.Max(0.1f, maxRelativeVelocity);
+        if (selfRoot == null)
+            selfRoot = transform.root;
 
         AutoFindEgoVelocitySources();
         lastScanTime = Time.time;
@@ -169,6 +177,8 @@ public class SingleRadarSensor : MonoBehaviour
                 foreach (var hit in hits)
                 {
                     if (acceptedHits >= maxHitsPerRay) break;
+                    if (hit.collider == null) continue;
+                    if (IsSelfCollider(hit.collider)) continue;
                     if (hit.distance < rangeMin || hit.distance > rangeMax) continue;
 
                     RadarDetection candidate = BuildDetection(origin, direction, hAngle, hit);
@@ -239,6 +249,15 @@ public class SingleRadarSensor : MonoBehaviour
             isClutter = false,
             colliderName = hit.collider != null ? hit.collider.name : "unknown"
         };
+    }
+
+    private bool IsSelfCollider(Collider collider)
+    {
+        if (!ignoreSelfColliders || collider == null || selfRoot == null)
+            return false;
+
+        Transform ct = collider.transform;
+        return ct == selfRoot || ct.IsChildOf(selfRoot);
     }
 
     private void AddOrUpdateDetection(Collider collider, RadarDetection candidate)
