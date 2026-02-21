@@ -38,6 +38,20 @@ public class ProgressRewardProvider : MonoBehaviour
     public float zoneRewardWeight = 0.25f;
     [Tooltip("역주행(음의 progress)에 대한 추가 패널티 배율")]
     public float reverseProgressPenaltyScale = 1.4f;
+    [Tooltip("전진 진행이 거의 없을 때 양의 Zone 보상을 이 비율로 축소")]
+    [Range(0f, 1f)] public float zoneRewardNoProgressScale = 0.1f;
+    [Tooltip("이 값(m) 이상의 step 전진이 있을 때만 Zone 보상을 100% 반영")]
+    public float zoneRewardFullScaleProgressMeters = 0.03f;
+
+    [Header("Progress Continuity Guard")]
+    [Tooltip("경로 투영 점프로 인한 비정상 deltaS를 차량 속도 기반으로 클램프")]
+    public bool clampProgressDeltaBySpeed = true;
+    [Tooltip("허용 deltaS 계산 시 속도 배수 (speed * dt * multiplier)")]
+    public float progressDeltaSpeedMultiplier = 2.0f;
+    [Tooltip("허용 deltaS에 추가할 절대 여유값(m)")]
+    public float progressDeltaClampMarginMeters = 0.05f;
+    [Tooltip("step당 절대 최대 허용 deltaS(m) 상한")]
+    public float progressDeltaAbsoluteMaxMeters = 0.5f;
 
     [Header("Trigger Target")]
     [Tooltip("트리거 감지할 대상 (base_link 등). 미할당 시 자기 자신의 OnTrigger 사용")]
@@ -57,6 +71,11 @@ public class ProgressRewardProvider : MonoBehaviour
     public float redViolationSpeedThreshold = 0.2f;
     public float redViolationPenaltyPerSec = 0.6f;
 
+    [Header("Episode Guard")]
+    [Tooltip("RLEpisodeEvaluator가 활성 상태일 때만 보상을 누적")]
+    public bool accumulateOnlyWhenEpisodeActive = true;
+    public RLEpisodeEvaluator episodeEvaluator;
+
     [Header("Debug (Read Only)")]
     [SerializeField] private float currentPathS = 0f;
     [SerializeField] private float currentLateralError = 0f;
@@ -73,6 +92,10 @@ public class ProgressRewardProvider : MonoBehaviour
     [SerializeField] private float currentZoneScore = 0f;
     [SerializeField] private float lastStepReward = 0f;
     [SerializeField] private float cumulativeReward = 0f;
+    [SerializeField] private float lastZoneProgressScale = 1f;
+    [SerializeField] private float lastRawDeltaS = 0f;
+    [SerializeField] private float lastUsedDeltaS = 0f;
+    [SerializeField] private bool lastDeltaSClamped = false;
 
     private readonly List<float> cumulativeLengths = new List<float>();
     private readonly HashSet<RewardZone> activeZones = new HashSet<RewardZone>();
@@ -85,6 +108,8 @@ public class ProgressRewardProvider : MonoBehaviour
     {
         if (wheelController == null)
             wheelController = FindObjectOfType<WheelTest>();
+        if (episodeEvaluator == null)
+            episodeEvaluator = FindObjectOfType<RLEpisodeEvaluator>();
 
         if (triggerTarget != null && triggerTarget != gameObject)
         {
@@ -107,6 +132,13 @@ public class ProgressRewardProvider : MonoBehaviour
     {
         if (!initialized)
             return;
+
+        if (accumulateOnlyWhenEpisodeActive &&
+            episodeEvaluator != null &&
+            !episodeEvaluator.IsEpisodeActive())
+        {
+            return;
+        }
 
         float dt = Time.fixedDeltaTime;
         UpdateZoneScore();
@@ -419,16 +451,47 @@ public class ProgressRewardProvider : MonoBehaviour
                 deltaS += totalPathLength;
         }
 
+        float rawDeltaS = deltaS;
+        bool deltaSClamped = false;
+        if (clampProgressDeltaBySpeed)
+        {
+            float speedAbs = wheelController != null ? Mathf.Abs(wheelController.GetSpeedMS()) : 0f;
+            float dynamicMaxDelta = speedAbs * dt * Mathf.Max(1f, progressDeltaSpeedMultiplier) +
+                                    Mathf.Max(0f, progressDeltaClampMarginMeters);
+            float safeAbsoluteMax = Mathf.Max(0.01f, progressDeltaAbsoluteMaxMeters);
+            float maxDeltaThisStep = Mathf.Clamp(dynamicMaxDelta, 0.01f, safeAbsoluteMax);
+
+            if (Mathf.Abs(deltaS) > maxDeltaThisStep)
+            {
+                deltaS = Mathf.Clamp(deltaS, -maxDeltaThisStep, maxDeltaThisStep);
+                deltaSClamped = true;
+            }
+        }
+
+        lastRawDeltaS = rawDeltaS;
+        lastUsedDeltaS = deltaS;
+        lastDeltaSClamped = deltaSClamped;
+
         float progressReward = progressRewardPerMeter * deltaS;
         if (deltaS < 0f)
             progressReward *= reverseProgressPenaltyScale;
 
         float zoneReward = zoneRewardWeight * currentZoneScore * dt;
+        float zoneScale = 1f;
+        if (zoneReward > 0f)
+        {
+            float safeFullProgress = Mathf.Max(1e-4f, zoneRewardFullScaleProgressMeters);
+            float forwardRatio = Mathf.Clamp01(deltaS / safeFullProgress);
+            zoneScale = Mathf.Lerp(zoneRewardNoProgressScale, 1f, forwardRatio);
+            zoneReward *= zoneScale;
+        }
+
         float safetyPenalty = ComputeSafetyPenalty(dt);
         float trafficPenalty = ComputeTrafficPenalty(dt);
 
         lastProgressReward = progressReward;
         lastZoneReward = zoneReward;
+        lastZoneProgressScale = zoneScale;
         lastSafetyPenalty = safetyPenalty;
         lastTrafficPenalty = trafficPenalty;
 
@@ -531,6 +594,10 @@ public class ProgressRewardProvider : MonoBehaviour
 
     public float PeekStepReward() => unconsumedStepReward;
     public float GetLastStepReward() => lastStepReward;
+    public float GetLastZoneProgressScale() => lastZoneProgressScale;
+    public float GetLastRawDeltaS() => lastRawDeltaS;
+    public float GetLastUsedDeltaS() => lastUsedDeltaS;
+    public bool WasLastDeltaSClamped() => lastDeltaSClamped;
     public float GetCumulativeReward() => cumulativeReward;
     public float GetLastProgressReward() => lastProgressReward;
     public float GetLastZoneReward() => lastZoneReward;
@@ -569,10 +636,14 @@ public class ProgressRewardProvider : MonoBehaviour
 
         lastProgressReward = 0f;
         lastZoneReward = 0f;
+        lastZoneProgressScale = 1f;
         lastSafetyPenalty = 0f;
         lastTrafficPenalty = 0f;
         lastStepReward = 0f;
         unconsumedStepReward = 0f;
+        lastRawDeltaS = 0f;
+        lastUsedDeltaS = 0f;
+        lastDeltaSClamped = false;
 
         cumulativeProgressReward = 0f;
         cumulativeZoneReward = 0f;

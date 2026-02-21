@@ -43,6 +43,10 @@ public class AutoDriverRLAgent : Agent
     public bool resetRootArticulationVelocity = true;
     [Tooltip("미할당 시 Agent 현재 위치/회전을 시작 포즈로 사용")]
     public Transform episodeStartTransform;
+    [Tooltip("episodeStartTransform 사용 시 Y축 높이도 그대로 쓸지 여부 (false면 차량 현재 높이 유지)")]
+    public bool useEpisodeStartTransformHeight = false;
+    [Tooltip("episodeStartTransform 사용 시 회전도 그대로 쓸지 여부 (false면 차량 현재 회전 유지)")]
+    public bool useEpisodeStartTransformRotation = true;
 
     [Header("Residual RL")]
     [Tooltip("RL 보정값의 최대 크기 (steering)")]
@@ -50,12 +54,21 @@ public class AutoDriverRLAgent : Agent
     [Tooltip("RL 보정값의 최대 크기 (accel)")]
     [Range(0.01f, 1f)] public float residualAccelScale = 0.3f;
 
+    [Header("Training Stability Tuning")]
+    [Tooltip("학습 안정화를 위해 residual/safety 파라미터를 권장 범위로 자동 보정")]
+    public bool applyTrainingStabilityTuning = true;
+    [Range(0.12f, 0.2f)] public float tunedResidualSteerScale = 0.16f;
+    [Range(0.1f, 0.15f)] public float tunedResidualAccelScale = 0.12f;
+    [Range(0.1f, 0.2f)] public float tunedWarningBrake = 0.15f;
+
     [Header("Action Mapping")]
     [Tooltip("false면 음수 accel은 브레이크로 처리")]
     public bool allowReverse = false;
     public bool enableSafetyOverride = true;
     [Range(0f, 1f)] public float cautionThrottleScale = 0.55f;
     [Range(0f, 1f)] public float warningBrake = 0.35f;
+    [Tooltip("Warning 단계에서 brake를 적용할 최소 속도 (m/s). 저속에서는 크리핑을 허용")]
+    public float warningBrakeMinSpeed = 0.6f;
     [Range(0f, 1f)] public float brakeLevelBrake = 0.8f;
     [Range(0f, 1f)] public float emergencyBrake = 1f;
 
@@ -96,6 +109,7 @@ public class AutoDriverRLAgent : Agent
         if (autoFindReferences)
             AutoFindReferences();
 
+        ApplyTrainingStabilityTuning();
         CacheStartPose();
         RefreshTerminalSubscription();
         EnableResidualMode();
@@ -132,19 +146,59 @@ public class AutoDriverRLAgent : Agent
         if (autoFindReferences)
             AutoFindReferences();
 
+        ApplyTrainingStabilityTuning();
         RefreshTerminalSubscription();
         SyncToFollowTarget();
 
         if (resetVehicleTransformOnEpisodeBegin)
+        {
+            bool forceStartRotationForResidualRl =
+                episodeStartTransform != null &&
+                regressionDrivingController != null &&
+                regressionDrivingController.predictionOnlyMode;
+
+            if (episodeStartTransform != null && !useEpisodeStartTransformRotation)
+            {
+                if (forceStartRotationForResidualRl)
+                {
+                    Debug.Log(
+                        "[AutoDriverRLAgent] useEpisodeStartTransformRotation=False 이지만 " +
+                        "Residual RL 모드에서는 시작 회전을 강제 적용합니다."
+                    );
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        "[AutoDriverRLAgent] episodeStartTransform은 지정되었지만 회전 리셋이 꺼져 있습니다. " +
+                        "재시작 시 실패 시점 헤딩이 유지되어 시작 직후 교착이 발생할 수 있습니다."
+                    );
+                }
+            }
             ResetVehicleState();
+        }
 
         EnableResidualMode();
 
-        if (progressRewardProvider != null)
-            progressRewardProvider.ResetRewardState();
+        // [DEBUG] ResetForEpisodeRestart 전후 base값 확인
+        // forceInference: false → TeleportRoot 직후 카메라 Transform이 아직 이전 위치(사고 장면)를
+        // 가리킬 수 있으므로 즉시 추론하지 않고, 다음 Update()에서 물리 정착 후 추론하게 함.
+        if (regressionDrivingController != null)
+        {
+            Debug.Log($"[RLAgent.OnEpisodeBegin] BEFORE ResetForEpisodeRestart: base steer={regressionDrivingController.GetPredictedSteering():F4}, throttle={regressionDrivingController.GetPredictedThrottle():F4}");
+            regressionDrivingController.ResetForEpisodeRestart(forceInference: false);
+            Debug.Log($"[RLAgent.OnEpisodeBegin] AFTER  ResetForEpisodeRestart: base steer={regressionDrivingController.GetPredictedSteering():F4}, throttle={regressionDrivingController.GetPredictedThrottle():F4}");
+        }
 
+        // Episode reset must have a single owner to avoid double-reset and index drift.
         if (episodeEvaluator != null)
-            episodeEvaluator.BeginEpisode();
+        {
+            if (!episodeEvaluator.IsEpisodeActive() || episodeEvaluator.IsTerminalReached())
+                episodeEvaluator.BeginEpisode();
+        }
+        else if (progressRewardProvider != null)
+        {
+            progressRewardProvider.ResetRewardState();
+        }
 
         lastTerminalReason = "None";
         lastConsumedStepReward = 0f;
@@ -247,11 +301,17 @@ public class AutoDriverRLAgent : Agent
         if (decisionRequester == null)
             decisionRequester = GetComponent<DecisionRequester>();
 
-        if (rootArticulation == null)
-            rootArticulation = GetComponentInParent<ArticulationBody>();
-
         if (followTargetTransform == null && wheelController != null)
             followTargetTransform = wheelController.transform;
+
+        if (rootArticulation == null)
+            rootArticulation = ResolveArticulationRoot(wheelController != null ? wheelController.transform : null);
+
+        if (rootArticulation == null)
+            rootArticulation = ResolveArticulationRoot(followTargetTransform);
+
+        if (rootArticulation == null)
+            rootArticulation = ResolveArticulationRoot(transform);
     }
 
     void RefreshTerminalSubscription()
@@ -310,13 +370,41 @@ public class AutoDriverRLAgent : Agent
             wheelController.externalControlEnabled = true;
     }
 
+    void ApplyTrainingStabilityTuning()
+    {
+        if (!applyTrainingStabilityTuning)
+            return;
+
+        residualSteerScale = Mathf.Clamp(tunedResidualSteerScale, 0.12f, 0.2f);
+        residualAccelScale = Mathf.Clamp(tunedResidualAccelScale, 0.1f, 0.15f);
+        warningBrake = Mathf.Clamp(tunedWarningBrake, 0.1f, 0.2f);
+    }
+
     void CacheStartPose()
     {
-        Transform pose = episodeStartTransform != null
-            ? episodeStartTransform
-            : (followTargetTransform != null ? followTargetTransform : transform);
-        startPosition = pose.position;
-        startRotation = pose.rotation;
+        Transform follow = followTargetTransform != null ? followTargetTransform : transform;
+        bool forceStartRotationForResidualRl =
+            episodeStartTransform != null &&
+            regressionDrivingController != null &&
+            regressionDrivingController.predictionOnlyMode;
+
+        if (episodeStartTransform != null)
+        {
+            startPosition = episodeStartTransform.position;
+            if (!useEpisodeStartTransformHeight && follow != null)
+                startPosition.y = follow.position.y;
+
+            if (forceStartRotationForResidualRl || useEpisodeStartTransformRotation || follow == null)
+                startRotation = episodeStartTransform.rotation;
+            else
+                startRotation = follow.rotation;
+        }
+        else
+        {
+            startPosition = follow.position;
+            startRotation = follow.rotation;
+        }
+
         hasStartPose = true;
     }
 
@@ -325,13 +413,41 @@ public class AutoDriverRLAgent : Agent
         if (!hasStartPose)
             CacheStartPose();
 
-        if (hasStartPose)
-            transform.SetPositionAndRotation(startPosition, startRotation);
+        Transform resetTarget = followTargetTransform != null
+            ? followTargetTransform
+            : (wheelController != null ? wheelController.transform : transform);
 
-        if (resetRootArticulationVelocity && rootArticulation != null)
+        ArticulationBody articulationRoot = ResolveArticulationRoot(resetTarget);
+        if (hasStartPose)
         {
-            rootArticulation.velocity = Vector3.zero;
-            rootArticulation.angularVelocity = Vector3.zero;
+            if (articulationRoot != null)
+                articulationRoot.TeleportRoot(startPosition, startRotation);
+            else
+                resetTarget.SetPositionAndRotation(startPosition, startRotation);
+
+            // TeleportRoot 후 카메라 등 자식 Transform이 즉시 반영되도록 동기화.
+            // 이 호출 없이는 즉시 RunInference()할 때 카메라가 이전 위치(사고 장면)를 볼 수 있음.
+            Physics.SyncTransforms();
+        }
+
+        if (resetRootArticulationVelocity)
+        {
+            ArticulationBody velocityRoot = articulationRoot != null ? articulationRoot : rootArticulation;
+            if (velocityRoot == null)
+                velocityRoot = ResolveArticulationRoot(resetTarget);
+
+            if (velocityRoot != null)
+            {
+                ArticulationBody[] bodies = velocityRoot.GetComponentsInChildren<ArticulationBody>(true);
+                for (int i = 0; i < bodies.Length; i++)
+                {
+                    if (bodies[i] == null)
+                        continue;
+
+                    bodies[i].velocity = Vector3.zero;
+                    bodies[i].angularVelocity = Vector3.zero;
+                }
+            }
         }
 
         if (wheelController != null)
@@ -340,6 +456,20 @@ public class AutoDriverRLAgent : Agent
             wheelController.SetThrottle(0f);
             wheelController.SetBrake(0f);
         }
+
+        SyncToFollowTarget();
+    }
+
+    ArticulationBody ResolveArticulationRoot(Transform target)
+    {
+        if (target == null)
+            return null;
+
+        ArticulationBody node = target.GetComponent<ArticulationBody>() ?? target.GetComponentInParent<ArticulationBody>();
+        while (node != null && !node.isRoot)
+            node = node.transform.parent != null ? node.transform.parent.GetComponent<ArticulationBody>() : null;
+
+        return node;
     }
 
     void ApplyResidualAction(ActionBuffers actions)
@@ -355,9 +485,14 @@ public class AutoDriverRLAgent : Agent
         float baseSteering = regressionDrivingController != null ? regressionDrivingController.GetPredictedSteering() : 0f;
         float baseThrottle = regressionDrivingController != null ? regressionDrivingController.GetPredictedThrottle() : 0f;
 
+        // [DEBUG] base값이 고정값인지 확인 (매 스텝 출력은 과도하므로 의심 범위에서만)
+        if (Mathf.Abs(baseSteering - (-0.384f)) < 0.005f && Mathf.Abs(baseThrottle - 0.185f) < 0.005f)
+            Debug.LogWarning($"[RLAgent.Action] ⚠️ STALE BASE DETECTED! steer={baseSteering:F4}, throttle={baseThrottle:F4} | delta=({deltaSteer:F4},{deltaAccel:F4})");
+
         // Residual: base + delta
         float finalSteer = Mathf.Clamp(baseSteering + deltaSteer, -1f, 1f);
-        float finalAccel = Mathf.Clamp(baseThrottle + deltaAccel, allowReverse ? -1f : -1f, 1f);
+        float accelMin = allowReverse ? -1f : 0f;
+        float finalAccel = Mathf.Clamp(baseThrottle + deltaAccel, accelMin, 1f);
 
         float throttle;
         float brake;
@@ -414,7 +549,9 @@ public class AutoDriverRLAgent : Agent
             else if (level >= CollisionWarningPublisher.WarningLevel.Warning)
             {
                 throttle = Mathf.Min(throttle, 0.15f);
-                brake = Mathf.Max(brake, warningBrake);
+                float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
+                if (Mathf.Abs(speed) >= Mathf.Max(0f, warningBrakeMinSpeed))
+                    brake = Mathf.Max(brake, warningBrake);
             }
             else if (level >= CollisionWarningPublisher.WarningLevel.SlowDown)
             {
@@ -526,6 +663,22 @@ public class AutoDriverRLAgent : Agent
 
         float safeRange = Mathf.Max(1e-4f, maxRange);
         return Mathf.Clamp01(value / safeRange);
+    }
+
+    public float GetLastBaseSteering() => lastBaseSteering;
+    public float GetLastBaseThrottle() => lastBaseThrottle;
+    public float GetLastDeltaSteering() => lastDeltaSteering;
+    public float GetLastDeltaAccel() => lastDeltaAccel;
+    public float GetLastAppliedSteer() => lastAppliedSteer;
+    public float GetLastAppliedThrottle() => lastAppliedThrottle;
+    public float GetLastAppliedBrake() => lastAppliedBrake;
+    public string GetActionDebugSummary()
+    {
+        return
+            $"base=({lastBaseSteering:F3},{lastBaseThrottle:F3}) " +
+            $"delta=({lastDeltaSteering:F3},{lastDeltaAccel:F3}) " +
+            $"final=({lastAppliedSteer:F3},{lastAppliedThrottle:F3},{lastAppliedBrake:F3}) " +
+            $"stepReward={lastConsumedStepReward:F3}";
     }
 
     void SyncToFollowTarget()
