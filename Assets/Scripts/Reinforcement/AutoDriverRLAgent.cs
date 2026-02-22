@@ -78,6 +78,8 @@ public class AutoDriverRLAgent : Agent
     [Header("ROS Command Output (Topic-Driven Actuation)")]
     [Tooltip("true면 외부 ROS cmd 토픽만 사용하고, Agent/Regression의 내부 제어 출력을 차량에 적용하지 않음")]
     public bool externalRosCmdInputOnly = false;
+    [Tooltip("학습 Communicator가 연결되면 externalRosCmdInputOnly를 무시하고 내부 Residual RL 제어를 강제 사용")]
+    public bool forceInternalControlWhenTraining = true;
     [Tooltip("true면 RL 최종 제어를 /vehicle/cmd(Twist)로 발행")]
     public bool outputViaVehicleCmdTopic = true;
     [Tooltip("VehicleCmdSubscriber가 있으면 direct 제어 대신 토픽 경유 제어를 우선 사용")]
@@ -121,6 +123,7 @@ public class AutoDriverRLAgent : Agent
     [SerializeField] private float lastPublishedCmdLinearX = 0f;
     [SerializeField] private float lastPublishedCmdAngularZ = 0f;
     [SerializeField] private bool lastActionPublishedToRos = false;
+    [SerializeField] private bool runtimeForceInternalControlActive = false;
 
     private Vector3 startPosition;
     private Quaternion startRotation;
@@ -151,7 +154,7 @@ public class AutoDriverRLAgent : Agent
 
     protected override void OnDisable()
     {
-        if (publishZeroCmdOnDisable && !externalRosCmdInputOnly)
+        if (publishZeroCmdOnDisable && !IsExternalRosCmdInputActive())
             PublishVehicleCmdFromAction(0f, 0f, 1f);
 
         UnsubscribeTerminalEvent();
@@ -167,7 +170,7 @@ public class AutoDriverRLAgent : Agent
     {
         SyncToFollowTarget();
 
-        if (externalRosCmdInputOnly)
+        if (IsExternalRosCmdInputActive())
         {
             if (regressionDrivingController != null && !regressionDrivingController.predictionOnlyMode)
                 regressionDrivingController.predictionOnlyMode = true;
@@ -176,7 +179,7 @@ public class AutoDriverRLAgent : Agent
                 wheelController.externalControlEnabled = true;
         }
 
-        if (!externalRosCmdInputOnly &&
+        if (!IsExternalRosCmdInputActive() &&
             requestDecisionInFixedUpdateWithoutRequester &&
             decisionRequester == null)
             RequestDecision();
@@ -404,7 +407,7 @@ public class AutoDriverRLAgent : Agent
     /// </summary>
     void EnableResidualMode()
     {
-        if (externalRosCmdInputOnly)
+        if (IsExternalRosCmdInputActive())
         {
             if (regressionDrivingController != null)
             {
@@ -534,7 +537,7 @@ public class AutoDriverRLAgent : Agent
         if (wheelController == null)
             return;
 
-        if (externalRosCmdInputOnly)
+        if (IsExternalRosCmdInputActive())
         {
             wheelController.externalControlEnabled = true;
             lastActionPublishedToRos = false;
@@ -603,6 +606,13 @@ public class AutoDriverRLAgent : Agent
         lastAppliedThrottle = clampedThrottle;
         lastAppliedBrake = clampedBrake;
         lastActionPublishedToRos = publishedToRos;
+    }
+
+    bool IsExternalRosCmdInputActive()
+    {
+        bool communicatorOn = Academy.Instance != null && Academy.Instance.IsCommunicatorOn;
+        runtimeForceInternalControlActive = forceInternalControlWhenTraining && communicatorOn;
+        return externalRosCmdInputOnly && !runtimeForceInternalControlActive;
     }
 
     bool ShouldUseTopicActuation()
@@ -823,6 +833,16 @@ public class AutoDriverRLAgent : Agent
     public float GetLastAppliedSteer() => lastAppliedSteer;
     public float GetLastAppliedThrottle() => lastAppliedThrottle;
     public float GetLastAppliedBrake() => lastAppliedBrake;
+    public float GetLastHeadingErrorDeg() => lastHeadingErrorDeg;
+    public float GetLastSignedLateralError() => lastSignedLateralError;
+    public float GetCurrentHeadingErrorDeg(out float signedLateralError)
+    {
+        SyncToFollowTarget();
+        float headingErrorDeg = ComputeHeadingErrorDeg(out signedLateralError);
+        lastHeadingErrorDeg = headingErrorDeg;
+        lastSignedLateralError = signedLateralError;
+        return headingErrorDeg;
+    }
     public string GetActionDebugSummary()
     {
         return

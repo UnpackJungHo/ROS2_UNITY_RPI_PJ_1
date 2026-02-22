@@ -41,7 +41,7 @@ public class TrafficLightStateSubscriber : MonoBehaviour
 
         if (newState != currentState)
         {
-            Debug.Log($"[TrafficLight] State changed: {currentState} -> {newState}");
+            //Debug.Log($"[TrafficLight] State changed: {currentState} -> {newState}");
             previousState = currentState;
             currentState = newState;
         }

@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 using Unity.Robotics.ROSTCPConnector;
+using Unity.MLAgents;
 using RosMessageTypes.Std;
 
 /// <summary>
@@ -20,6 +21,8 @@ public class DrivingStatusUIController : MonoBehaviour
     public float externalCollisionTimeoutSec = 0.5f;
     [Tooltip("외부 토픽이 stale이면 기존 CollisionWarningPublisher 값으로 fallback")]
     public bool fallbackToLocalCollisionPublisher = true;
+    [Tooltip("ML-Agents 학습 Communicator 연결 시 외부 토픽 미수신이어도 로컬 Collision 값을 UI에 표시")]
+    public bool forceLocalCollisionUiWhenTraining = true;
 
     [Header("Source References")]
     public CollisionWarningPublisher collisionWarningPublisher;
@@ -28,6 +31,7 @@ public class DrivingStatusUIController : MonoBehaviour
     public WheelTest wheelController;
     public TrafficLightStateSubscriber trafficLightSubscriber;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
+    public TrafficLight sceneTrafficLight;
     public ProgressRewardProvider progressRewardProvider;
     public RLEpisodeEvaluator rlEpisodeEvaluator;
 
@@ -55,6 +59,7 @@ public class DrivingStatusUIController : MonoBehaviour
 
     [Header("Traffic Light UI")]
     public TextMeshProUGUI trafficLightStateText;
+    public TextMeshProUGUI trafficLightActualColorText;
     public TextMeshProUGUI trafficLightConfidenceText;
     public TextMeshProUGUI trafficLightDecisionValueText;
     public TextMeshProUGUI trafficLightDecisionRelevantText;
@@ -109,7 +114,8 @@ public class DrivingStatusUIController : MonoBehaviour
         if (autoFindReferences &&
             (collisionWarningPublisher == null || dataCollector == null || regressionController == null ||
              wheelController == null ||
-             trafficLightSubscriber == null || trafficLightDecisionEngine == null || progressRewardProvider == null ||
+             trafficLightSubscriber == null || trafficLightDecisionEngine == null || sceneTrafficLight == null ||
+             progressRewardProvider == null ||
              rlEpisodeEvaluator == null))
         {
             AutoFindReferences();
@@ -145,6 +151,9 @@ public class DrivingStatusUIController : MonoBehaviour
 
         if (trafficLightDecisionEngine == null)
             trafficLightDecisionEngine = FindObjectOfType<TrafficLightDecisionEngine>();
+
+        if (sceneTrafficLight == null)
+            sceneTrafficLight = FindObjectOfType<TrafficLight>();
 
         if (progressRewardProvider == null)
             progressRewardProvider = FindObjectOfType<ProgressRewardProvider>();
@@ -270,7 +279,11 @@ public class DrivingStatusUIController : MonoBehaviour
             out float extDistance
         );
 
-        bool useLocal = !externalReady && (!useExternalCollisionTopicForUI || fallbackToLocalCollisionPublisher);
+        bool trainingActive = Academy.Instance != null && Academy.Instance.IsCommunicatorOn;
+        bool allowLocalFallback = !useExternalCollisionTopicForUI ||
+                                  fallbackToLocalCollisionPublisher ||
+                                  (forceLocalCollisionUiWhenTraining && trainingActive);
+        bool useLocal = !externalReady && allowLocalFallback;
         if (!externalReady && !useLocal)
         {
             if (collisionWarningLevelText != null) collisionWarningLevelText.text = "위험도: N/A";
@@ -470,6 +483,10 @@ public class DrivingStatusUIController : MonoBehaviour
 
     void UpdateTrafficLightUI()
     {
+        string sceneColor = sceneTrafficLight != null ? sceneTrafficLight.currentColor : "unknown";
+        if (trafficLightActualColorText != null)
+            trafficLightActualColorText.text = $"실제 신호색(씬): {sceneColor}";
+
         if (trafficLightSubscriber == null && trafficLightDecisionEngine == null)
         {
             if (trafficLightStateText != null) trafficLightStateText.text = "신호상태: none -> none (raw: none)";
@@ -496,7 +513,7 @@ public class DrivingStatusUIController : MonoBehaviour
         float rawConf = trafficLightSubscriber != null ? trafficLightSubscriber.GetRawConfidence() : 0f;
 
         if (trafficLightStateText != null)
-            trafficLightStateText.text = $"신호상태: {prev} -> {current} (raw: {raw})";
+            trafficLightStateText.text = $"신호상태: {prev} -> {current} (raw: {raw}) | scene: {sceneColor}";
 
         if (trafficLightConfidenceText != null)
             trafficLightConfidenceText.text = $"안정 상태비율: {stableRatio:P0}, Raw Conf: {rawConf:F2}";

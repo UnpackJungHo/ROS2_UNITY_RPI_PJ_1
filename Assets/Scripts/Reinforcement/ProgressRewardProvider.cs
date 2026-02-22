@@ -614,6 +614,18 @@ public class ProgressRewardProvider : MonoBehaviour
     public string GetCurrentZoneName() => string.IsNullOrEmpty(currentZoneName) ? "None" : currentZoneName;
     public int GetActiveZoneCount() => activeZoneCount;
     public float GetCurrentZoneScore() => currentZoneScore;
+    public void RefreshTrackingState()
+    {
+        if (!initialized)
+        {
+            if (autoBuildWaypointsFromRoadData && (progressWaypoints == null || progressWaypoints.Length < 2))
+                TryBuildWaypointsFromRoadData();
+
+            InitializePath();
+        }
+
+        currentPathS = ProjectOnPath(GetTrackedPosition(), out currentLateralError);
+    }
 
     public void ResetRewardState()
     {
