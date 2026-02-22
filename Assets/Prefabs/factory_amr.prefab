@@ -4409,6 +4409,7 @@ MonoBehaviour:
   maxReverseSpeed: 1
   maxYawRateForFullSteer: 1.2
   allowReverse: 1
+  preferBrakeForNegativeSpeed: 1
   directionChangeBrakeSpeedThreshold: 0.35
   commandTimeoutSec: 0.35
   holdBrakeOnTimeout: 1
@@ -6908,7 +6909,7 @@ MonoBehaviour:
     m_Bits: 55
   collisionMinRelativeSpeed: 0.1
   stuckGracePeriod: 5
-  stuckTimeWindow: 10
+  stuckTimeWindow: 20
   stuckDistanceThreshold: 1
   finishBonus: 20
   baseFailurePenalty: 10
@@ -9296,6 +9297,7 @@ MonoBehaviour:
   brakeLevelBrake: 0.8
   emergencyBrake: 1
   externalRosCmdInputOnly: 1
+  forceInternalControlWhenTraining: 1
   outputViaVehicleCmdTopic: 1
   preferTopicActuationWhenSubscriberPresent: 1
   vehicleCmdTopicName: /vehicle/cmd
@@ -10069,8 +10071,8 @@ MonoBehaviour:
   stopLineNearNorm: 0.05
   stopLineFarNorm: 0.7
   maxStopLinePerceptionDistance: 30
-  maxRedReactionDistance: 12
-  maxYellowReactionDistance: 18
+  maxRedReactionDistance: 6
+  maxYellowReactionDistance: 9
   stopDistanceBuffer: 0.8
   reactionTime: 0.6
   comfortableDeceleration: 1.2
@@ -10197,6 +10199,7 @@ MonoBehaviour:
   ttcBrake: 1
   emergencyStopDistance: 0.3
   minEmergencyStopConfidence: 0.55
+  hardEmergencyStopDistance: 0.12
   radarMinSafeDistance: 0.5
   suppressRearEmergencyWhenNotReversing: 1
   lowSpeedThreshold: 0.5

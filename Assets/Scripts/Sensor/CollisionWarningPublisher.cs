@@ -38,6 +38,8 @@ public class CollisionWarningPublisher : MonoBehaviour
     [Tooltip("긴급정지로 인정할 최소 초음파 confidence")]
     [Range(0f, 1f)]
     public float minEmergencyStopConfidence = 0.55f;
+    [Tooltip("이 거리 이하면 confidence와 무관하게 EmergencyStop (초근접 거리 우선)")]
+    public float hardEmergencyStopDistance = 0.12f;
     [Tooltip("레이더 최소 안전거리 (m) - 정지 상태에서도 이 거리 이하면 경고")]
     public float radarMinSafeDistance = 0.5f;
     [Tooltip("경로분리 모드에서 후방 초음파만 근접한 경우(Ego 비후진) EmergencyStop 승격을 막음")]
@@ -366,7 +368,11 @@ public class CollisionWarningPublisher : MonoBehaviour
         float ultrasonicClosestConfidence = CurrentSensorData.ultrasonicClosestConfidence;
 
         // ========== Layer 1: 초음파 긴급정지 (최우선 - 속도와 무관한 최종 안전장치) ==========
-        if (ultrasonicMin <= emergencyStopDistance && ultrasonicClosestConfidence >= minEmergencyStopConfidence)
+        float safeEmergencyDistance = Mathf.Max(0.01f, emergencyStopDistance);
+        float safeHardEmergencyDistance = Mathf.Clamp(hardEmergencyStopDistance, 0.01f, safeEmergencyDistance);
+        bool hardDistanceEmergency = ultrasonicMin <= safeHardEmergencyDistance;
+        bool confidenceEmergency = ultrasonicClosestConfidence >= minEmergencyStopConfidence;
+        if (ultrasonicMin <= safeEmergencyDistance && (confidenceEmergency || hardDistanceEmergency))
         {
             bool isRearClosest = CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearLeft ||
                                  CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearRight ||
@@ -393,7 +399,10 @@ public class CollisionWarningPublisher : MonoBehaviour
                 currentWarningLevel = WarningLevel.EmergencyStop;
                 detectionSource = "Ultrasonic";
                 detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
-                debugDecisionTrace = $"Layer1 EmergencyStop (ultra={ultrasonicMin:F2}m <= {emergencyStopDistance:F2}m, conf={ultrasonicClosestConfidence:F2} >= {minEmergencyStopConfidence:F2})";
+                string trigger = hardDistanceEmergency
+                    ? $"hardDist({ultrasonicMin:F2}m <= {safeHardEmergencyDistance:F2}m)"
+                    : $"conf({ultrasonicClosestConfidence:F2} >= {minEmergencyStopConfidence:F2})";
+                debugDecisionTrace = $"Layer1 EmergencyStop (ultra={ultrasonicMin:F2}m <= {safeEmergencyDistance:F2}m, {trigger})";
                 lastTtcLevel = WarningLevel.Safe;
                 lastLowSpeedLevel = WarningLevel.Safe;
                 return; // 즉시 반환 - 다른 판단 불필요
@@ -419,6 +428,9 @@ public class CollisionWarningPublisher : MonoBehaviour
             lowSpeedLevel = EvaluateLowSpeedWarning(lowSpeedPrimary, radarMin);
         }
         lastLowSpeedLevel = lowSpeedLevel;
+
+        // TTC 기반 판단이 누락될 수 있는 근접 상황을 보완하기 위한 거리 우선 하한 레벨
+        WarningLevel distancePriorityLevel = EvaluateDistancePriorityWarning(currentMinDistance);
 
         // 두 판단 중 더 높은 위험도 채택
         if (ttcLevel >= lowSpeedLevel)
@@ -452,6 +464,25 @@ public class CollisionWarningPublisher : MonoBehaviour
                 detectionSource = "Radar";
                 detectionSensor = CurrentSensorData.radarClosest.ToString();
             }
+        }
+
+        if (distancePriorityLevel > currentWarningLevel)
+        {
+            currentWarningLevel = distancePriorityLevel;
+            if (!float.IsInfinity(ultrasonicMin) && (float.IsInfinity(radarMin) || ultrasonicMin <= radarMin))
+            {
+                detectionSource = "Ultrasonic";
+                detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
+            }
+            else if (!float.IsInfinity(radarMin))
+            {
+                detectionSource = "Radar";
+                detectionSensor = CurrentSensorData.radarClosest.ToString();
+            }
+
+            debugDecisionTrace =
+                $"DistancePriority(min={currentMinDistance:F2}m -> level={distancePriorityLevel}, " +
+                $"ttcLevel={ttcLevel}, lowSpeedLevel={lowSpeedLevel})";
         }
 
         // 측면 근접은 기본적으로 보조 정보.
@@ -611,6 +642,26 @@ public class CollisionWarningPublisher : MonoBehaviour
         if (minDistance <= lowSpeedWarningDistance)
             return WarningLevel.Warning;
         if (minDistance <= lowSpeedCautionDistance)
+            return WarningLevel.Caution;
+
+        return WarningLevel.Safe;
+    }
+
+    WarningLevel EvaluateDistancePriorityWarning(float primaryDistance)
+    {
+        if (float.IsInfinity(primaryDistance))
+            return WarningLevel.Safe;
+
+        float safeEmergencyDistance = Mathf.Max(0.01f, emergencyStopDistance);
+        float safeHardEmergencyDistance = Mathf.Clamp(hardEmergencyStopDistance, 0.01f, safeEmergencyDistance);
+
+        if (primaryDistance <= safeHardEmergencyDistance)
+            return WarningLevel.EmergencyStop;
+        if (primaryDistance <= safeEmergencyDistance)
+            return WarningLevel.Brake;
+        if (primaryDistance <= lowSpeedWarningDistance)
+            return WarningLevel.Warning;
+        if (primaryDistance <= lowSpeedCautionDistance)
             return WarningLevel.Caution;
 
         return WarningLevel.Safe;

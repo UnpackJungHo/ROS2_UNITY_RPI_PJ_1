@@ -175,6 +175,14 @@ class PolicyCmdPublisher(Node):
         self.obs_signed_lateral_error: float = 0.0
         self.obs_heading_error_deg: float = 0.0
         self.obs_progress_ratio: float = 0.0
+        self.obs_last_update_sec: Dict[str, float] = {
+            "lateral_abs": -1e9,
+            "lateral_signed": -1e9,
+            "heading_deg": -1e9,
+            "progress_ratio": -1e9,
+        }
+        self.obs_topic_names: Dict[str, str] = {}
+        self.last_obs_health_warn_sec: float = -1e9
 
         self.last_cmd_steer: float = 0.0
         self.last_cmd_throttle: float = 0.0
@@ -232,30 +240,38 @@ class PolicyCmdPublisher(Node):
         self.create_subscription(Float32MultiArray, stop_line_perception_topic, self._on_stop_line_perception, 10)
 
         if args.lateral_error_topic:
+            resolved = resolve_topic(args.namespace, args.lateral_error_topic)
+            self.obs_topic_names["lateral_abs"] = resolved
             self.create_subscription(
                 Float32,
-                resolve_topic(args.namespace, args.lateral_error_topic),
+                resolved,
                 lambda msg: self._set_obs_value("lateral_abs", msg.data),
                 10,
             )
         if args.signed_lateral_error_topic:
+            resolved = resolve_topic(args.namespace, args.signed_lateral_error_topic)
+            self.obs_topic_names["lateral_signed"] = resolved
             self.create_subscription(
                 Float32,
-                resolve_topic(args.namespace, args.signed_lateral_error_topic),
+                resolved,
                 lambda msg: self._set_obs_value("lateral_signed", msg.data),
                 10,
             )
         if args.heading_error_topic:
+            resolved = resolve_topic(args.namespace, args.heading_error_topic)
+            self.obs_topic_names["heading_deg"] = resolved
             self.create_subscription(
                 Float32,
-                resolve_topic(args.namespace, args.heading_error_topic),
+                resolved,
                 lambda msg: self._set_obs_value("heading_deg", msg.data),
                 10,
             )
         if args.progress_ratio_topic:
+            resolved = resolve_topic(args.namespace, args.progress_ratio_topic)
+            self.obs_topic_names["progress_ratio"] = resolved
             self.create_subscription(
                 Float32,
-                resolve_topic(args.namespace, args.progress_ratio_topic),
+                resolved,
                 lambda msg: self._set_obs_value("progress_ratio", msg.data),
                 10,
             )
@@ -281,6 +297,14 @@ class PolicyCmdPublisher(Node):
         if args.collision_mode in ("topic", "hybrid"):
             self.get_logger().info(f"Collision warning topic | {collision_topic}")
         self.get_logger().info(f"Collision UI topic | {collision_ui_topic}")
+        if self.obs_topic_names:
+            self.get_logger().info(
+                "RL obs topics | "
+                f"lateral={self.obs_topic_names.get('lateral_abs', '(none)')} "
+                f"signed_lateral={self.obs_topic_names.get('lateral_signed', '(none)')} "
+                f"heading={self.obs_topic_names.get('heading_deg', '(none)')} "
+                f"progress={self.obs_topic_names.get('progress_ratio', '(none)')}"
+            )
 
     def _resolve_regression_inputs(self) -> Tuple[str, str]:
         input_names = [x.name for x in self.regression_session.get_inputs()]
@@ -333,6 +357,7 @@ class PolicyCmdPublisher(Node):
         v = float(value)
         if not math.isfinite(v):
             return
+        self.obs_last_update_sec[key] = self._now_sec()
         if key == "lateral_abs":
             self.obs_lateral_error_abs = abs(v)
         elif key == "lateral_signed":
@@ -341,6 +366,35 @@ class PolicyCmdPublisher(Node):
             self.obs_heading_error_deg = v
         elif key == "progress_ratio":
             self.obs_progress_ratio = clamp(v, 0.0, 1.0)
+
+    def _warn_if_obs_topics_stale(self) -> None:
+        if not self.args.warn_missing_obs_topics:
+            return
+
+        if not self.obs_topic_names:
+            return
+
+        now_sec = self._now_sec()
+        timeout = max(0.05, self.args.obs_topic_timeout_sec)
+        stale_items: List[str] = []
+
+        for key, topic in self.obs_topic_names.items():
+            stamp_sec = self.obs_last_update_sec.get(key, -1e9)
+            age_sec = now_sec - stamp_sec
+            if age_sec > timeout:
+                stale_items.append(f"{key}:{topic} age={age_sec:.2f}s")
+
+        if not stale_items:
+            return
+
+        if (now_sec - self.last_obs_health_warn_sec) < max(1.0, self.args.log_interval_sec):
+            return
+
+        self.last_obs_health_warn_sec = now_sec
+        self.get_logger().warning(
+            "RL observation topics are stale/missing; lateral/heading/progress may be near zero | "
+            + ", ".join(stale_items)
+        )
 
     def _on_image(self, msg: Image) -> None:
         try:
@@ -558,6 +612,23 @@ class PolicyCmdPublisher(Node):
             return 2
         return 0
 
+    def _evaluate_distance_priority_warning(self, primary_distance: float) -> int:
+        if not math.isfinite(primary_distance):
+            return 0
+
+        safe_emergency = max(0.01, self.args.collision_emergency_stop_distance)
+        safe_hard_emergency = clamp(self.args.collision_hard_emergency_distance, 0.01, safe_emergency)
+
+        if primary_distance <= safe_hard_emergency:
+            return 6
+        if primary_distance <= safe_emergency:
+            return 5
+        if primary_distance <= self.args.collision_low_speed_warning_distance:
+            return 4
+        if primary_distance <= self.args.collision_low_speed_caution_distance:
+            return 2
+        return 0
+
     @staticmethod
     def _compute_path_min_distance(
         ultra_dist: Dict[str, float],
@@ -622,7 +693,11 @@ class PolicyCmdPublisher(Node):
         use_path_aware = bool(self.args.collision_enable_path_aware_risk_split)
         min_distance = path_min if (use_path_aware and math.isfinite(path_min)) else global_min
 
-        ego_speed = abs(self.current_speed_mps)
+        # Keep both signed and absolute speed:
+        # - absolute speed is used for TTC/low-speed gating
+        # - signed speed is required to detect reversing for rear-emergency logic
+        signed_speed = self.current_speed_mps if math.isfinite(self.current_speed_mps) else 0.0
+        ego_speed = abs(signed_speed)
         closing_speed = self._estimate_closing_speed(min_distance, now_sec)
         ttc = self._compute_ttc_value(min_distance, closing_speed, ego_speed)
         ttc_level = self._evaluate_ttc_warning(ttc)
@@ -631,14 +706,20 @@ class PolicyCmdPublisher(Node):
         if ego_speed <= self.args.collision_low_speed_threshold:
             low_speed_primary = min_distance if use_path_aware else ultrasonic_min
             low_speed_level = self._evaluate_low_speed_warning(low_speed_primary, radar_min)
+        distance_level = self._evaluate_distance_priority_warning(min_distance)
 
         warning_level = max(ttc_level, low_speed_level)
         source_id = 0
 
+        safe_emergency = max(0.01, self.args.collision_emergency_stop_distance)
+        safe_hard_emergency = clamp(self.args.collision_hard_emergency_distance, 0.01, safe_emergency)
+        hard_distance_emergency = math.isfinite(ultrasonic_min) and ultrasonic_min <= safe_hard_emergency
+        confidence_emergency = ultrasonic_confidence >= self.args.collision_min_emergency_confidence
+
         if (
             math.isfinite(ultrasonic_min)
-            and ultrasonic_min <= self.args.collision_emergency_stop_distance
-            and ultrasonic_confidence >= self.args.collision_min_emergency_confidence
+            and ultrasonic_min <= safe_emergency
+            and (confidence_emergency or hard_distance_emergency)
         ):
             closest_ultrasonic_id = ULTRASONIC_ID_MAP.get(ultrasonic_min_key, 0)
             is_rear_closest = closest_ultrasonic_id in ULTRASONIC_REAR_IDS
@@ -647,7 +728,7 @@ class PolicyCmdPublisher(Node):
                 (not use_path_aware)
                 or (not self.args.collision_suppress_rear_emergency_when_not_reversing)
                 or (not is_rear_closest)
-                or (ego_speed < -0.05)
+                or (signed_speed < -0.05)
             )
             allow_side_emergency = True
             if use_path_aware and is_side_closest:
@@ -678,6 +759,13 @@ class PolicyCmdPublisher(Node):
         else:
             warning_level = low_speed_level
             if ultrasonic_min <= radar_min:
+                source_id = 1
+            elif math.isfinite(radar_min):
+                source_id = 2
+
+        if distance_level > warning_level:
+            warning_level = distance_level
+            if math.isfinite(ultrasonic_min) and (not math.isfinite(radar_min) or ultrasonic_min <= radar_min):
                 source_id = 1
             elif math.isfinite(radar_min):
                 source_id = 2
@@ -1039,6 +1127,7 @@ class PolicyCmdPublisher(Node):
         try:
             self._refresh_collision_state()
             self._publish_collision_warning()
+            self._warn_if_obs_topics_stale()
             base_steer, base_throttle = self._run_regression()
             stop_line_distance = self._compute_stop_line_distance_m()
             if not math.isfinite(stop_line_distance) and self.args.use_collision_distance_for_stopline_proxy:
@@ -1136,10 +1225,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--traffic-light-state-topic", type=str, default="/traffic_light/state")
     parser.add_argument("--traffic-light-perception-topic", type=str, default="/traffic_light/perception")
     parser.add_argument("--stop-line-perception-topic", type=str, default="/stop_line/perception")
-    parser.add_argument("--lateral-error-topic", type=str, default="")
-    parser.add_argument("--signed-lateral-error-topic", type=str, default="")
-    parser.add_argument("--heading-error-topic", type=str, default="")
-    parser.add_argument("--progress-ratio-topic", type=str, default="")
+    parser.add_argument("--lateral-error-topic", type=str, default="/rl/lateral_error")
+    parser.add_argument("--signed-lateral-error-topic", type=str, default="/rl/signed_lateral_error")
+    parser.add_argument("--heading-error-topic", type=str, default="/rl/heading_error_deg")
+    parser.add_argument("--progress-ratio-topic", type=str, default="/rl/progress_ratio")
+    parser.add_argument("--obs-topic-timeout-sec", type=float, default=0.5)
+    parser.add_argument("--warn-missing-obs-topics", action=argparse.BooleanOptionalAction, default=True)
 
     parser.add_argument(
         "--regression-model",
@@ -1176,6 +1267,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--brake-level-brake", type=float, default=0.8)
     parser.add_argument("--emergency-brake", type=float, default=1.0)
     parser.add_argument("--collision-emergency-stop-distance", type=float, default=0.3)
+    parser.add_argument("--collision-hard-emergency-distance", type=float, default=0.12)
     parser.add_argument("--collision-min-emergency-confidence", type=float, default=0.55)
     parser.add_argument("--collision-low-speed-threshold", type=float, default=0.5)
     parser.add_argument("--collision-low-speed-caution-distance", type=float, default=1.5)
@@ -1212,8 +1304,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stop-line-far-norm", type=float, default=0.70)
     parser.add_argument("--max-stop-line-distance-m", type=float, default=30.0)
 
-    parser.add_argument("--max-red-reaction-distance", type=float, default=12.0)
-    parser.add_argument("--max-yellow-reaction-distance", type=float, default=18.0)
+    parser.add_argument("--max-red-reaction-distance", type=float, default=6.0)
+    parser.add_argument("--max-yellow-reaction-distance", type=float, default=9.0)
     parser.add_argument("--stop-distance-buffer", type=float, default=0.8)
     parser.add_argument("--reaction-time", type=float, default=0.6)
     parser.add_argument("--comfortable-deceleration", type=float, default=1.2)

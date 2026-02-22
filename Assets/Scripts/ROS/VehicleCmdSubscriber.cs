@@ -33,6 +33,8 @@ public class VehicleCmdSubscriber : MonoBehaviour
     public float maxYawRateForFullSteer = 1.2f;
     [Tooltip("true면 음수 속도 명령을 후진(throttle<0)으로 전달")]
     public bool allowReverse = false;
+    [Tooltip("true면 음수 linear.x 명령을 후진 대신 제동으로 해석(안전 우선)")]
+    public bool preferBrakeForNegativeSpeed = true;
     [Tooltip("allowReverse=true일 때 방향 전환 전 브레이크를 우선 적용할 속도 임계값(m/s)")]
     public float directionChangeBrakeSpeedThreshold = 0.35f;
 
@@ -141,7 +143,7 @@ public class VehicleCmdSubscriber : MonoBehaviour
         else
         {
             float reverseCmd = Mathf.Clamp01((-targetSpeed) / safeMaxReverse);
-            if (!allowReverse)
+            if (preferBrakeForNegativeSpeed || !allowReverse)
             {
                 throttle = 0f;
                 brake = reverseCmd;

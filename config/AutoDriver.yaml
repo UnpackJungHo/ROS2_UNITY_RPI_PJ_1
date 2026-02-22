@@ -34,3 +34,7 @@ behaviors:
     keep_checkpoints: 5
     checkpoint_interval: 50000
     threaded: true
+
+env_settings:
+  # Unity Editor가 초기화/리셋 응답을 늦게 보내도 타임아웃으로 학습이 끊기지 않도록 크게 설정
+  timeout_wait: 86400

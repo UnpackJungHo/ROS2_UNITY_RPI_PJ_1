@@ -161,10 +161,47 @@ class StopLineDetector(Node):
         # ===== Contour / fitting =====
         self.declare_parameter(
             "min_contour_area",
-            220.0,
+            120.0,
             ParameterDescriptor(
                 description="유효 stripe 최소 contour 면적",
                 floating_point_range=[FloatingPointRange(from_value=10.0, to_value=50000.0, step=1.0)],
+            ),
+        )
+        self.declare_parameter(
+            "use_stripe_shape_filter",
+            False,
+            ParameterDescriptor(description="stripe 형상 필터(높이/세로가로비/extent/폭) 사용 여부"),
+        )
+        self.declare_parameter(
+            "min_stripe_height_px",
+            6,
+            ParameterDescriptor(
+                description="유효 stripe 최소 높이(px)",
+                integer_range=[IntegerRange(from_value=2, to_value=300, step=1)],
+            ),
+        )
+        self.declare_parameter(
+            "min_stripe_h_over_w",
+            0.8,
+            ParameterDescriptor(
+                description="유효 stripe의 최소 세로/가로 비율",
+                floating_point_range=[FloatingPointRange(from_value=0.5, to_value=10.0, step=0.05)],
+            ),
+        )
+        self.declare_parameter(
+            "min_stripe_extent",
+            0.15,
+            ParameterDescriptor(
+                description="유효 stripe의 최소 extent(area / bbox area)",
+                floating_point_range=[FloatingPointRange(from_value=0.05, to_value=1.0, step=0.01)],
+            ),
+        )
+        self.declare_parameter(
+            "max_stripe_width_ratio",
+            0.50,
+            ParameterDescriptor(
+                description="유효 stripe 최대 폭 비율(이미지 폭 대비)",
+                floating_point_range=[FloatingPointRange(from_value=0.05, to_value=1.0, step=0.01)],
             ),
         )
         self.declare_parameter(
@@ -210,6 +247,14 @@ class StopLineDetector(Node):
             ParameterDescriptor(
                 description="BEV 경계점 x coverage 최소 비율(0~1)",
                 floating_point_range=[FloatingPointRange(from_value=0.05, to_value=1.0, step=0.01)],
+            ),
+        )
+        self.declare_parameter(
+            "bev_max_boundary_y_std_norm",
+            0.14,
+            ParameterDescriptor(
+                description="BEV 경계점 y 표준편차 상한(정규화, 낮을수록 수평선만 통과)",
+                floating_point_range=[FloatingPointRange(from_value=0.005, to_value=0.3, step=0.005)],
             ),
         )
 
@@ -363,6 +408,11 @@ class StopLineDetector(Node):
         contours, _ = cv2.findContours(white_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         min_area = float(self.get_parameter("min_contour_area").value)
+        min_h_px = int(self.get_parameter("min_stripe_height_px").value)
+        min_h_over_w = float(self.get_parameter("min_stripe_h_over_w").value)
+        min_extent = float(self.get_parameter("min_stripe_extent").value)
+        max_width_ratio = float(self.get_parameter("max_stripe_width_ratio").value)
+        use_shape_filter = bool(self.get_parameter("use_stripe_shape_filter").value)
         near_band = int(self.get_parameter("near_edge_band_px").value)
         near_band = max(1, near_band)
 
@@ -373,6 +423,25 @@ class StopLineDetector(Node):
             area = cv2.contourArea(cnt)
             if area < min_area:
                 continue
+
+            if use_shape_filter:
+                x, y, bw, bh = cv2.boundingRect(cnt)
+                if bw <= 0 or bh <= 0:
+                    continue
+
+                if bh < max(2, min_h_px):
+                    continue
+
+                if bw > max(2.0, max_width_ratio * w):
+                    continue
+
+                h_over_w = float(bh) / float(max(1, bw))
+                if h_over_w < min_h_over_w:
+                    continue
+
+                extent = float(area) / float(max(1, bw * bh))
+                if extent < min_extent:
+                    continue
 
             pts = cnt.reshape(-1, 2)
             max_y = int(np.max(pts[:, 1]))
@@ -589,6 +658,11 @@ class StopLineDetector(Node):
         if x_cov < min_cov:
             return None
 
+        y_std_norm = float(np.std(ys) / max(1.0, (h - 1)))
+        max_y_std_norm = float(self.get_parameter("bev_max_boundary_y_std_norm").value)
+        if max_y_std_norm > 0.0 and y_std_norm > max(1e-4, max_y_std_norm):
+            return None
+
         # BEV에서 stop line은 거의 수평 -> robust 중앙값 사용
         y_line = float(np.median(ys))
         x_min = float(np.min(xs))
@@ -608,7 +682,9 @@ class StopLineDetector(Node):
         )
 
         col_score = min(1.0, len(boundary_points) / max(1.0, (w / col_step) * 0.75))
-        conf = 0.55 * x_cov + 0.45 * col_score
+        safe_std = max(1e-4, max_y_std_norm) if max_y_std_norm > 0.0 else 0.14
+        spread_score = 1.0 - min(1.0, y_std_norm / safe_std)
+        conf = 0.45 * x_cov + 0.35 * col_score + 0.20 * spread_score
 
         return {
             "line_points_px": (p1, p2),
