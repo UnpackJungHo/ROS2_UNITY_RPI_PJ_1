@@ -1,5 +1,8 @@
 using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
+using UGUI = UnityEngine.GUI;
 
 namespace FastMesh_Example
 {
@@ -11,47 +14,49 @@ namespace FastMesh_Example
         Color backgroundColor = Color.white;
         Color textColor = Color.black; 
     
+#if UNITY_EDITOR
         private void OnEnable()
         {
             SceneView.duringSceneGui += OnSceneGUI;
         }
-    
+
         private void OnDisable()
         {
             SceneView.duringSceneGui -= OnSceneGUI;
         }
-    
+
         private void OnSceneGUI(SceneView sceneView)
         {
             if (isShow == false) return;
-            
+
             Handles.BeginGUI();
-            GUIStyle style = new GUIStyle(GUI.skin.label);
+            GUIStyle style = new GUIStyle(UGUI.skin.label);
             style.alignment = TextAnchor.MiddleCenter;
             style.fontSize = 20;
             style.normal.textColor = textColor;
             style.wordWrap = true;
-    
+
             float width = 420f;
             float height = 50f;
             float x = (sceneView.position.width - width) / 2f;
             // float y = (sceneView.position.height - height) / 2f;
             float y = 10f;
-    
-            GUI.color = backgroundColor;
-            GUI.DrawTexture(new Rect(x - 10, y - 10, width + 20, height + 20), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            
-            if (GUI.Button(new Rect(x, y, width, height), text2, style))
+
+            UGUI.color = backgroundColor;
+            UGUI.DrawTexture(new Rect(x - 10, y - 10, width + 20, height + 20), Texture2D.whiteTexture);
+            UGUI.color = Color.white;
+
+            if (UGUI.Button(new Rect(x, y, width, height), text2, style))
             {
                 Application.OpenURL("https://assetstore.unity.com/packages/slug/288711");
             }
-    
+
             // GUILayout.BeginArea(new Rect(x, y, width, height));
             // GUILayout.Label(text, style);
             // GUILayout.EndArea();
             Handles.EndGUI();
         }
+#endif
     }
 }
 

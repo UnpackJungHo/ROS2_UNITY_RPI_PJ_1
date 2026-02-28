@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
+using UGUI = UnityEngine.GUI;
 
 
 /// <summary>
@@ -162,7 +163,7 @@ public class RoadCreator : EditorWindow
                     LoadRoad(road);
                 }
                 
-                GUI.backgroundColor = Color.red;
+                UGUI.backgroundColor = Color.red;
                 if (GUILayout.Button("X", EditorStyles.miniButtonRight, GUILayout.Width(25)))
                 {
                     if (EditorUtility.DisplayDialog("도로 삭제", $"'{road.name}' 도로를 정말 삭제하시겠습니까?", "삭제", "취소"))
@@ -172,7 +173,7 @@ public class RoadCreator : EditorWindow
                         if (currentRoadObject == road.gameObject) ClearAll();
                     }
                 }
-                GUI.backgroundColor = Color.white;
+                UGUI.backgroundColor = Color.white;
                 EditorGUILayout.EndHorizontal();
             }
         }
@@ -264,12 +265,12 @@ public class RoadCreator : EditorWindow
             RefreshRoadList(); // 저장 후 목록 갱신
         }
         
-        GUI.backgroundColor = Color.red;
+        UGUI.backgroundColor = Color.red;
         if (GUILayout.Button("초기화", GUILayout.Height(30), GUILayout.Width(80)))
         {
             ClearAll();
         }
-        GUI.backgroundColor = Color.white;
+        UGUI.backgroundColor = Color.white;
         EditorGUILayout.EndHorizontal();
         
         EditorGUILayout.Space(5);
@@ -281,15 +282,15 @@ public class RoadCreator : EditorWindow
         }
         
         // 루프 닫기 버튼
-        GUI.enabled = controlPoints.Count >= 3;
-        GUI.backgroundColor = isLooped ? Color.green : Color.yellow;
+        UGUI.enabled = controlPoints.Count >= 3;
+        UGUI.backgroundColor = isLooped ? Color.green : Color.yellow;
         if (GUILayout.Button(isLooped ? "✓ 루프 완성됨" : "🔗 루프 닫기", GUILayout.Height(25)))
         {
             isLooped = !isLooped;
             UpdateRoadMesh(true);
         }
-        GUI.backgroundColor = Color.white;
-        GUI.enabled = true;
+        UGUI.backgroundColor = Color.white;
+        UGUI.enabled = true;
         EditorGUILayout.EndHorizontal();
         
         if (isLooped)
@@ -308,19 +309,19 @@ public class RoadCreator : EditorWindow
 
         EditorGUILayout.BeginHorizontal();
 
-        GUI.enabled = currentRoadObject != null;
+        UGUI.enabled = currentRoadObject != null;
         if (GUILayout.Button("현재 도로를 Prefab으로 저장", GUILayout.Height(24)))
         {
             SaveCurrentRoadAsPrefab();
         }
 
-        GUI.enabled = reusableRoadPrefab != null;
+        UGUI.enabled = reusableRoadPrefab != null;
         if (GUILayout.Button("Prefab을 현재 씬에 불러오기", GUILayout.Height(24)))
         {
             InstantiateRoadPrefabInScene();
         }
 
-        GUI.enabled = true;
+        UGUI.enabled = true;
         EditorGUILayout.EndHorizontal();
         EditorGUILayout.HelpBox("RoadCreator로 만든 도로를 Prefab으로 저장하면 다른 Scene에서도 동일 도로를 바로 재사용할 수 있습니다.", MessageType.None);
     }
@@ -1485,12 +1486,12 @@ public class RoadCreator : EditorWindow
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField($"구역 {i}", EditorStyles.boldLabel, GUILayout.Width(60));
 
-            GUI.backgroundColor = Color.red;
+            UGUI.backgroundColor = Color.red;
             if (GUILayout.Button("X", GUILayout.Width(25)))
             {
                 removeIndex = i;
             }
-            GUI.backgroundColor = Color.white;
+            UGUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
 
             // 이름/점수
