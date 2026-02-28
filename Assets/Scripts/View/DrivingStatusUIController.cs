@@ -407,8 +407,8 @@ public class DrivingStatusUIController : MonoBehaviour
             {
                 if (regressionModeText != null)
                     regressionModeText.text = residualMode
-                        ? "<color=#00FF00>● AUTONOMOUS (Regression Base + RL Final)</color>"
-                        : "<color=#00FF00>● AUTONOMOUS (Regression)</color>";
+                        ? "<color=#00FF00>● AUTONOMOUS \n (Regression Base + RL Final)</color>"
+                        : "<color=#00FF00>● AUTONOMOUS \n (Regression)</color>";
 
                 if (regressionActionText != null)
                 {
