@@ -30806,7 +30806,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2079015559847074402, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: m_Enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2079015559847074402, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: episodeStartTransform
@@ -60190,7 +60190,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 702309230}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b7b503018925fd2489d08c3900944477, type: 3}
   m_Name: 
@@ -96464,7 +96464,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -27.999939}
+  m_AnchoredPosition: {x: 0, y: -27.999878}
   m_SizeDelta: {x: 0, y: -56}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1888509083742966581

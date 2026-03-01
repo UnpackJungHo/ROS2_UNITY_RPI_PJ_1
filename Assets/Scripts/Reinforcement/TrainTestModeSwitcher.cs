@@ -175,8 +175,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
         {
             autoDriverRLAgent.externalRosCmdInputOnly = false;
             autoDriverRLAgent.forceInternalControlWhenTraining = true;
-            autoDriverRLAgent.outputViaVehicleCmdTopic = false;
-            autoDriverRLAgent.preferTopicActuationWhenSubscriberPresent = false;
         }
 
         if (behaviorParameters != null)
@@ -221,8 +219,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
         {
             autoDriverRLAgent.externalRosCmdInputOnly = true;
             autoDriverRLAgent.forceInternalControlWhenTraining = true;
-            autoDriverRLAgent.outputViaVehicleCmdTopic = false;
-            autoDriverRLAgent.preferTopicActuationWhenSubscriberPresent = false;
         }
 
         if (behaviorParameters != null)
