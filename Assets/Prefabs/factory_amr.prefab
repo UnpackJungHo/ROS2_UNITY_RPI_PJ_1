@@ -377,6 +377,19 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 1
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &271253308158053647
 GameObject:
   m_ObjectHideFlags: 0
@@ -3846,6 +3859,19 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 1
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &3524306593440407515
 GameObject:
   m_ObjectHideFlags: 0
@@ -4244,6 +4270,7 @@ GameObject:
   - component: {fileID: 127900819456268115}
   - component: {fileID: 2396941261833620371}
   - component: {fileID: 5956527516674499999}
+  - component: {fileID: 518754990752515046}
   m_Layer: 11
   m_Name: factory_amr
   m_TagString: robot
@@ -4422,6 +4449,27 @@ MonoBehaviour:
   lastAppliedSteering: 0
   lastAppliedThrottle: 0
   lastAppliedBrake: 0
+--- !u!114 &518754990752515046
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3775507998252672659}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a25ab61a8badfd88b196b18bb6f1d88, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  vehicleId: Vehicle
+  cameraPublisher: {fileID: 4616583320479726781}
+  frontViewCameraOverride: {fileID: 0}
+  followTarget: {fileID: 3677516862083987071}
+  autoFindReferences: 1
+  topViewHeight: 5
+  backViewDistance: 3
+  backViewHeight: 1.5
+  smoothTime: 0.1
 --- !u!1 &3781307098237865052
 GameObject:
   m_ObjectHideFlags: 0
@@ -4603,6 +4651,19 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 1
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &4017405983540260673
 GameObject:
   m_ObjectHideFlags: 0
@@ -6557,6 +6618,20 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 0.9
+  defaultExternalRcs: 8
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &5679595972798803626
 GameObject:
   m_ObjectHideFlags: 0
@@ -6898,7 +6973,6 @@ MonoBehaviour:
   autoFindReferences: 1
   autoBeginOnStart: 1
   stopVehicleOnTerminal: 1
-  disableAutonomousOnTerminal: 1
   maxEpisodeSeconds: 180
   dangerLevelThreshold: 6
   dangerStopHoldSeconds: 0.7
@@ -7202,6 +7276,20 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 0.9
+  defaultExternalRcs: 8
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &5836217413976328855
 GameObject:
   m_ObjectHideFlags: 0
@@ -8117,6 +8205,8 @@ MonoBehaviour:
   imageHeight: 640
   cameraXRotation: 0
   cameraTransform: {fileID: 4747072183245349857}
+  frontViewCamera: {fileID: 0}
+  preferDedicatedRuntimeCamera: 1
   enableStabilization: 1
   positionSmoothTime: 0.5
   rotationSmoothTime: 0.5
@@ -8814,6 +8904,19 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 1
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &7144717321665591384
 GameObject:
   m_ObjectHideFlags: 0
@@ -9293,18 +9396,11 @@ MonoBehaviour:
   enableSafetyOverride: 1
   cautionThrottleScale: 0.55
   warningBrake: 0.35
-  warningBrakeMinSpeed: 0.6
   brakeLevelBrake: 0.8
   emergencyBrake: 1
+  warningBrakeMinSpeed: 0.6
   externalRosCmdInputOnly: 1
   forceInternalControlWhenTraining: 1
-  outputViaVehicleCmdTopic: 1
-  preferTopicActuationWhenSubscriberPresent: 1
-  vehicleCmdTopicName: /vehicle/cmd
-  cmdTopicMaxForwardSpeed: 2
-  cmdTopicMaxReverseSpeed: 1
-  cmdTopicMaxYawRateForFullSteer: 1.2
-  publishZeroCmdOnDisable: 1
   speedNormalize: 3
   lateralErrorNormalize: 2
   headingErrorNormalizeDeg: 45
@@ -9324,10 +9420,7 @@ MonoBehaviour:
   lastHeadingErrorDeg: 0
   lastSignedLateralError: 0
   lastTerminalReason: None
-  resolvedCmdTopicName: 
-  lastPublishedCmdLinearX: 0
-  lastPublishedCmdAngularZ: 0
-  lastActionPublishedToRos: 0
+  runtimeForceInternalControlActive: 0
 --- !u!1 &7593888128540673980
 GameObject:
   m_ObjectHideFlags: 0
@@ -9917,6 +10010,19 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 1
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &8372780708402788081
 GameObject:
   m_ObjectHideFlags: 0
@@ -10057,8 +10163,17 @@ MonoBehaviour:
   trafficLightSubscriber: {fileID: 4221297073554992589}
   stopLineSubscriber: {fileID: 911008970626249567}
   wheelController: {fileID: 6089124739900913193}
+  useSceneTrafficLightState: 1
+  sceneTrafficLight: {fileID: 0}
+  sceneTrafficLights: []
+  maxSceneSignalLateralOffset: 8
+  fallbackToRosSubscriberState: 1
   egoTransform: {fileID: 3677516862083987071}
   stopLineTransform: {fileID: 0}
+  stopLineTransforms: []
+  maxStopLineLateralOffset: 4
+  autoFindStopLinesByName: 1
+  autoStopLineNameKeyword: StopLineRef
   autoFindReferences: 1
   minStateConfidence: 0.35
   minBBoxAreaNormalized: 0.0012
@@ -10081,6 +10196,8 @@ MonoBehaviour:
   gateStateConfidence: 0
   gateBBoxArea: 0
   gateLaneOk: 0
+  activeSceneTrafficLightName: none
+  activeStopLineName: none
   stopLineDistance: Infinity
   stopLineDistancePerception: Infinity
   stopLineDistanceSource: none
@@ -10650,6 +10767,19 @@ MonoBehaviour:
   showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
+  useExternalTopicInput: 0
+  autoTopicFromSensorPosition: 1
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 1
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
+  publishRawTopic: 1
+  autoOutputTopicFromSensorPosition: 1
+  outputTopicName: 
+  resolvedOutputTopicName: 
 --- !u!1 &8792771558440183247
 GameObject:
   m_ObjectHideFlags: 0

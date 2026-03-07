@@ -27,6 +27,9 @@ public class CameraPublisher : MonoBehaviour
     [Tooltip("FrontView/ROS 퍼블리싱에 사용할 카메라. 비워두면 Main Camera를 자동 사용합니다.")]
     public Camera frontViewCamera;
 
+    [Tooltip("true면 Main Camera를 직접 재사용하지 않고 런타임 전용 front camera를 생성합니다.")]
+    public bool preferDedicatedRuntimeCamera = true;
+
     [Header("Camera Stabilization (흔들림 방지)")]
     [Tooltip("카메라 안정화 활성화 - 물리 시뮬레이션 흔들림 방지")]
     public bool enableStabilization = true;
@@ -53,6 +56,7 @@ public class CameraPublisher : MonoBehaviour
     private float lastPublishTime;
     private CameraStabilizer stabilizer;
     private bool createdStabilizerAtRuntime;
+    private bool createdRuntimeFrontCameraAtRuntime;
 
     void Start()
     {
@@ -95,6 +99,15 @@ public class CameraPublisher : MonoBehaviour
 
     void ResolveFrontViewCamera()
     {
+        Camera templateCamera = frontViewCamera != null ? frontViewCamera : Camera.main;
+
+        if (preferDedicatedRuntimeCamera && cameraTransform != null)
+        {
+            frontViewCamera = GetOrCreateRuntimeFrontCamera(templateCamera);
+            cam = frontViewCamera;
+            return;
+        }
+
         if (frontViewCamera == null && Camera.main != null)
             frontViewCamera = Camera.main;
 
@@ -167,6 +180,38 @@ public class CameraPublisher : MonoBehaviour
 
         texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
         cam.targetTexture = renderTexture;
+        cam.enabled = false;
+    }
+
+    Camera GetOrCreateRuntimeFrontCamera(Camera templateCamera)
+    {
+        string runtimeCameraName = $"{gameObject.name}_PublishedFrontCamera";
+        GameObject runtimeCameraObject = GameObject.Find(runtimeCameraName);
+
+        if (runtimeCameraObject == null)
+        {
+            runtimeCameraObject = new GameObject(runtimeCameraName);
+            createdRuntimeFrontCameraAtRuntime = true;
+        }
+
+        Camera runtimeCamera = runtimeCameraObject.GetComponent<Camera>();
+        if (runtimeCamera == null)
+            runtimeCamera = runtimeCameraObject.AddComponent<Camera>();
+
+        runtimeCamera.enabled = false;
+        runtimeCamera.depth = -50f;
+
+        if (templateCamera != null)
+        {
+            runtimeCamera.nearClipPlane = templateCamera.nearClipPlane;
+            runtimeCamera.farClipPlane = templateCamera.farClipPlane;
+            runtimeCamera.fieldOfView = templateCamera.fieldOfView;
+            runtimeCamera.clearFlags = templateCamera.clearFlags;
+            runtimeCamera.backgroundColor = templateCamera.backgroundColor;
+            runtimeCamera.cullingMask = templateCamera.cullingMask;
+        }
+
+        return runtimeCamera;
     }
 
     void Update()
@@ -278,5 +323,8 @@ public class CameraPublisher : MonoBehaviour
 
         if (createdStabilizerAtRuntime && stabilizer != null)
             Destroy(stabilizer);
+
+        if (createdRuntimeFrontCameraAtRuntime && cam != null)
+            Destroy(cam.gameObject);
     }
 }
