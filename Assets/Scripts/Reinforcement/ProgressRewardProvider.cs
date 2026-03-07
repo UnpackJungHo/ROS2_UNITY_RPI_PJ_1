@@ -104,6 +104,10 @@ public class ProgressRewardProvider : MonoBehaviour
     private bool initialized = false;
     private float unconsumedStepReward = 0f;
 
+    /// <summary>
+    /// 참조 자동 연결, 트리거 프록시 구성, 필요 시 RoadData 기반 waypoint 자동 생성,
+    /// 그리고 초기 경로 상태를 준비한다.
+    /// </summary>
     void Start()
     {
         if (wheelController == null)
@@ -128,6 +132,10 @@ public class ProgressRewardProvider : MonoBehaviour
             InitializePath();
     }
 
+    /// <summary>
+    /// 물리 프레임마다 zone/progress를 갱신하고 step reward를 누적한다.
+    /// 에피소드 비활성 구간에서는 보상 누적을 중단한다.
+    /// </summary>
     void FixedUpdate()
     {
         if (!initialized)
@@ -146,6 +154,10 @@ public class ProgressRewardProvider : MonoBehaviour
         CalculateStepReward(dt);
     }
 
+    /// <summary>
+    /// waypoint 누적 거리 테이블과 total path length를 초기화하고
+    /// 현재 추적 위치를 경로에 투영해 path-s 기준 상태를 동기화한다.
+    /// </summary>
     public void InitializePath()
     {
         cumulativeLengths.Clear();
@@ -179,6 +191,9 @@ public class ProgressRewardProvider : MonoBehaviour
         initialized = true;
     }
 
+    /// <summary>
+    /// RoadData에서 waypoint를 재구성한 뒤 경로 투영 상태를 다시 초기화한다.
+    /// </summary>
     [ContextMenu("Rebuild Waypoints From RoadData")]
     public void RebuildWaypointsFromRoadData()
     {
@@ -186,6 +201,10 @@ public class ProgressRewardProvider : MonoBehaviour
             InitializePath();
     }
 
+    /// <summary>
+    /// RoadData(controlPoints/isLooped/curveResolution)를 reflection으로 읽어
+    /// 스플라인 샘플링 -> stride 추출 -> waypoint Transform 생성까지 수행한다.
+    /// </summary>
     bool TryBuildWaypointsFromRoadData()
     {
         GameObject sourceRoad = roadObject != null ? roadObject : GameObject.Find(roadObjectName);
@@ -231,6 +250,9 @@ public class ProgressRewardProvider : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// world 좌표 waypoint 목록을 씬 Transform 배열로 생성하고 progressWaypoints에 바인딩한다.
+    /// </summary>
     void BuildWaypointTransforms(List<Vector3> worldPositions)
     {
         ClearGeneratedWaypointRoot();
@@ -252,6 +274,9 @@ public class ProgressRewardProvider : MonoBehaviour
         generatedWaypointCount = built.Length;
     }
 
+    /// <summary>
+    /// 이전 자동 생성 waypoint 루트를 정리한다.
+    /// </summary>
     void ClearGeneratedWaypointRoot()
     {
         if (generatedWaypointRoot == null)
@@ -266,6 +291,9 @@ public class ProgressRewardProvider : MonoBehaviour
         generatedWaypointCount = 0;
     }
 
+    /// <summary>
+    /// reflection으로 Vector3 리스트 필드를 안전하게 읽는다.
+    /// </summary>
     List<Vector3> ReadVector3ListField(Component component, string fieldName)
     {
         FieldInfo field = component.GetType().GetField(fieldName);
@@ -285,6 +313,9 @@ public class ProgressRewardProvider : MonoBehaviour
         return result;
     }
 
+    /// <summary>
+    /// reflection으로 bool 필드를 읽고 실패 시 fallback을 반환한다.
+    /// </summary>
     bool ReadBoolField(Component component, string fieldName, bool fallback)
     {
         FieldInfo field = component.GetType().GetField(fieldName);
@@ -293,6 +324,9 @@ public class ProgressRewardProvider : MonoBehaviour
         return value is bool b ? b : fallback;
     }
 
+    /// <summary>
+    /// reflection으로 int 필드를 읽고 실패 시 fallback을 반환한다.
+    /// </summary>
     int ReadIntField(Component component, string fieldName, int fallback)
     {
         FieldInfo field = component.GetType().GetField(fieldName);
@@ -301,6 +335,9 @@ public class ProgressRewardProvider : MonoBehaviour
         return value is int i ? i : fallback;
     }
 
+    /// <summary>
+    /// 제어점을 Catmull-Rom 곡선으로 샘플링해 부드러운 경로 포인트를 생성한다.
+    /// </summary>
     List<Vector3> GenerateSplinePoints(List<Vector3> points, int resolution, bool looped)
     {
         List<Vector3> result = new List<Vector3>();
@@ -354,6 +391,9 @@ public class ProgressRewardProvider : MonoBehaviour
         return result;
     }
 
+    /// <summary>
+    /// Catmull-Rom 보간식으로 t 시점의 곡선 좌표를 계산한다.
+    /// </summary>
     Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
     {
         float t2 = t * t;
@@ -366,6 +406,9 @@ public class ProgressRewardProvider : MonoBehaviour
         );
     }
 
+    /// <summary>
+    /// 샘플 포인트를 stride 간격으로 줄여 waypoint 밀도를 제어한다.
+    /// </summary>
     List<Vector3> SampleByStride(List<Vector3> input, int stride, bool looped)
     {
         List<Vector3> sampled = new List<Vector3>();
@@ -392,16 +435,25 @@ public class ProgressRewardProvider : MonoBehaviour
         return sampled;
     }
 
+    /// <summary>
+    /// 보상/진행 계산에 사용할 추적 대상 위치를 반환한다.
+    /// </summary>
     Vector3 GetTrackedPosition()
     {
         return (triggerTarget != null) ? triggerTarget.transform.position : transform.position;
     }
 
+    /// <summary>
+    /// 현재 추적 위치를 경로에 투영해 path-s와 횡오차를 갱신한다.
+    /// </summary>
     void UpdatePathProgress()
     {
         currentPathS = ProjectOnPath(GetTrackedPosition(), out currentLateralError);
     }
 
+    /// <summary>
+    /// 경로의 모든 segment 중 최근접 투영점을 찾아 path-s(누적 진행거리)와 횡오차를 계산한다.
+    /// </summary>
     float ProjectOnPath(Vector3 position, out float lateralError)
     {
         lateralError = 0f;
@@ -438,6 +490,10 @@ public class ProgressRewardProvider : MonoBehaviour
         return bestS;
     }
 
+    /// <summary>
+    /// 진행/zone/안전/신호 보상을 합성해 step reward를 생성하고
+    /// last/cumulative 통계를 함께 갱신한다.
+    /// </summary>
     void CalculateStepReward(float dt)
     {
         float deltaS = currentPathS - previousPathS;
@@ -505,6 +561,9 @@ public class ProgressRewardProvider : MonoBehaviour
         cumulativeReward += lastStepReward;
     }
 
+    /// <summary>
+    /// 충돌 경고 레벨별 시간 비례 패널티를 계산한다.
+    /// </summary>
     float ComputeSafetyPenalty(float dt)
     {
         if (collisionWarningPublisher == null)
@@ -521,6 +580,9 @@ public class ProgressRewardProvider : MonoBehaviour
         };
     }
 
+    /// <summary>
+    /// 정지 지시 상태에서 속도 기준을 초과하면 신호 위반 패널티를 적용한다.
+    /// </summary>
     float ComputeTrafficPenalty(float dt)
     {
         if (trafficLightDecisionEngine == null || wheelController == null)
@@ -536,6 +598,9 @@ public class ProgressRewardProvider : MonoBehaviour
         return 0f;
     }
 
+    /// <summary>
+    /// 현재 겹친 RewardZone 중 최대 score zone을 선택해 zone 보상 입력을 결정한다.
+    /// </summary>
     void UpdateZoneScore()
     {
         float maxScore = 0f;
@@ -559,6 +624,9 @@ public class ProgressRewardProvider : MonoBehaviour
         currentZoneScore = hasZone ? maxScore : 0f;
     }
 
+    /// <summary>
+    /// 보상 zone 진입 이벤트를 수신해 active zone 집합에 등록한다.
+    /// </summary>
     public void NotifyTriggerEnter(Collider other)
     {
         RewardZone zone = other.GetComponent<RewardZone>();
@@ -566,6 +634,9 @@ public class ProgressRewardProvider : MonoBehaviour
             activeZones.Add(zone);
     }
 
+    /// <summary>
+    /// 보상 zone 체류 이벤트를 수신해 active zone 집합을 유지한다.
+    /// </summary>
     public void NotifyTriggerStay(Collider other)
     {
         RewardZone zone = other.GetComponent<RewardZone>();
@@ -573,6 +644,9 @@ public class ProgressRewardProvider : MonoBehaviour
             activeZones.Add(zone);
     }
 
+    /// <summary>
+    /// 보상 zone 이탈 이벤트를 수신해 active zone 집합에서 제거한다.
+    /// </summary>
     public void NotifyTriggerExit(Collider other)
     {
         RewardZone zone = other.GetComponent<RewardZone>();
@@ -585,6 +659,9 @@ public class ProgressRewardProvider : MonoBehaviour
     void OnTriggerStay(Collider other) { if (triggerTarget == null || triggerTarget == gameObject) NotifyTriggerStay(other); }
     void OnTriggerExit(Collider other) { if (triggerTarget == null || triggerTarget == gameObject) NotifyTriggerExit(other); }
 
+    /// <summary>
+    /// Agent가 pull 방식으로 가져갈 step reward를 소비하고 내부 버퍼를 비운다.
+    /// </summary>
     public float ConsumeStepReward()
     {
         float reward = unconsumedStepReward;
@@ -614,6 +691,10 @@ public class ProgressRewardProvider : MonoBehaviour
     public string GetCurrentZoneName() => string.IsNullOrEmpty(currentZoneName) ? "None" : currentZoneName;
     public int GetActiveZoneCount() => activeZoneCount;
     public float GetCurrentZoneScore() => currentZoneScore;
+
+    /// <summary>
+    /// 현재 추적 상태(path-s, lateral error)를 강제로 최신화한다.
+    /// </summary>
     public void RefreshTrackingState()
     {
         if (!initialized)
@@ -627,6 +708,9 @@ public class ProgressRewardProvider : MonoBehaviour
         currentPathS = ProjectOnPath(GetTrackedPosition(), out currentLateralError);
     }
 
+    /// <summary>
+    /// 에피소드 재시작 시 path/zone/last/cumulative 보상 상태를 모두 초기화한다.
+    /// </summary>
     public void ResetRewardState()
     {
         // Start() 실행 순서와 무관하게 waypoint가 없으면 자동 빌드 시도
