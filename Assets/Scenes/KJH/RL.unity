@@ -30812,6 +30812,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 127900819456268115, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
+      propertyPath: modelAsset
+      value: 
+      objectReference: {fileID: 5022602860645237092, guid: c1da72427794be34d9cfba2f69809bcd, type: 3}
+    - target: {fileID: 127900819456268115, guid: bab742e93f1903c148dc86d9e2e0a432, type: 3}
       propertyPath: isAutonomousMode
       value: 1
       objectReference: {fileID: 0}
