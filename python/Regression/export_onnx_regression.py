@@ -9,6 +9,8 @@ import torch
 import torch.onnx
 from pathlib import Path
 import sys
+import argparse
+import json
 
 # Ensure local imports work regardless of current working directory.
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -31,10 +33,26 @@ def _check_onnx_dependency() -> bool:
         return False
 
 
+def resolve_front_size(checkpoint: dict, front_size: tuple = None) -> tuple:
+    if front_size is not None:
+        return front_size
+
+    front_size_from_meta = checkpoint.get('front_size')
+    if isinstance(front_size_from_meta, (list, tuple)) and len(front_size_from_meta) == 2:
+        return int(front_size_from_meta[0]), int(front_size_from_meta[1])
+
+    image_height = checkpoint.get('image_height')
+    image_width = checkpoint.get('image_width')
+    if image_height is not None and image_width is not None:
+        return int(image_height), int(image_width)
+
+    return 66, 200
+
+
 def export_regression_to_onnx(
     checkpoint_path: str,
     output_path: str,
-    front_size: tuple = (66, 200),
+    front_size: tuple = None,
 ):
     """회귀 모델을 ONNX로 변환"""
     if not _check_onnx_dependency():
@@ -50,9 +68,14 @@ def export_regression_to_onnx(
     backbone = checkpoint.get('backbone', 'resnet18')
     speed_normalize = checkpoint.get('speed_normalize', 5.0)
     steering_loss_weight = checkpoint.get('steering_loss_weight', 5.0)
+    image_type = checkpoint.get('image_type', 'unknown')
+    freeze_backbone = checkpoint.get('freeze_backbone', False)
+    front_size = resolve_front_size(checkpoint, front_size)
 
     print(f"  Model version: {model_version}")
     print(f"  Backbone: {backbone}")
+    print(f"  Image type: {image_type}")
+    print(f"  Freeze backbone: {freeze_backbone}")
     print(f"  Speed normalize: {speed_normalize}")
     print(f"  Steering loss weight: {steering_loss_weight}")
     print(f"  Epoch: {checkpoint['epoch']}, Val steer MAE: {checkpoint.get('val_steer_mae', 0):.4f}")
@@ -132,14 +155,17 @@ def export_regression_to_onnx(
 
     # 메타데이터 저장
     meta_path = output_path.replace('.onnx', '_meta.json')
-    import json
     with open(meta_path, 'w') as f:
         json.dump({
             'model_version': model_version,
             'model_type': 'regression',
             'backbone': backbone,
+            'freeze_backbone': freeze_backbone,
             'speed_normalize': speed_normalize,
             'steering_loss_weight': steering_loss_weight,
+            'image_type': image_type,
+            'image_width': front_size[1],
+            'image_height': front_size[0],
             'output_names': ['steering', 'throttle'],
             'output_ranges': [[-1.0, 1.0], [0.0, 1.0]],
             'front_size': front_size,
@@ -154,18 +180,33 @@ if __name__ == "__main__":
     unity_assets = PROJECT_ROOT / "Assets" / "Models" / "ONNX"
     unity_assets.mkdir(parents=True, exist_ok=True)
 
-    checkpoint = checkpoint_dir / "driving_regression.pth"
+    default_checkpoint_candidates = [
+        checkpoint_dir / "driving_regression_3.pth",
+        checkpoint_dir / "driving_regression.pth",
+    ]
+    default_checkpoint = next((p for p in default_checkpoint_candidates if p.exists()), default_checkpoint_candidates[0])
+
+    parser = argparse.ArgumentParser(description="Export regression checkpoint to ONNX")
+    parser.add_argument("--checkpoint", type=str, default=str(default_checkpoint))
+    parser.add_argument("--output", type=str, default=str(unity_assets / "driving_regression.onnx"))
+    parser.add_argument("--front_height", type=int, default=None)
+    parser.add_argument("--front_width", type=int, default=None)
+    args = parser.parse_args()
+
+    checkpoint = Path(args.checkpoint)
+    front_size = None
+    if args.front_height is not None and args.front_width is not None:
+        front_size = (args.front_height, args.front_width)
 
     if checkpoint.exists():
         print("=== Speed-Aware Regression Model Export ===")
-        output_path = unity_assets / "driving_regression.onnx"
-
         export_regression_to_onnx(
             checkpoint_path=str(checkpoint),
-            output_path=str(output_path)
+            output_path=str(args.output),
+            front_size=front_size,
         )
 
-        print(f"\nONNX model saved to: {output_path}")
+        print(f"\nONNX model saved to: {args.output}")
         print("Unity RegressionDrivingController의 Model Asset에 이 파일을 할당하세요.")
     else:
         print(f"Error: No checkpoint found at {checkpoint}")

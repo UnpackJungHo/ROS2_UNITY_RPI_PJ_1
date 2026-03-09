@@ -33,6 +33,48 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
+DEFAULT_IMAGE_TYPE = "front_3"
+
+IMAGE_TYPE_SPECS = {
+    "front_1": {"width": 200, "height": 66, "format": "jpeg", "extension": ".jpg"},
+    "front_2": {"width": 320, "height": 120, "format": "jpeg", "extension": ".jpg"},
+    "front_3": {"width": 200, "height": 66, "format": "png", "extension": ".png"},
+    "front_4": {"width": 320, "height": 120, "format": "png", "extension": ".png"},
+}
+
+
+def get_image_spec(image_type: str) -> dict:
+    spec = IMAGE_TYPE_SPECS.get(image_type)
+    if spec is None:
+        raise ValueError(f"Unknown image_type: {image_type}")
+    return dict(spec)
+
+
+def build_experiment_name(image_type: str, freeze_backbone: bool) -> str:
+    suffix = image_type.replace("front_", "")
+    if freeze_backbone:
+        suffix = f"f_{suffix}"
+    return f"driving_regression_{suffix}"
+
+
+def save_checkpoint_atomic(checkpoint_path: Path, state: dict) -> Path:
+    checkpoint_path = checkpoint_path.resolve()
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_checkpoint_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".tmp")
+
+    try:
+        torch.save(state, temp_checkpoint_path)
+        os.replace(temp_checkpoint_path, checkpoint_path)
+    finally:
+        if temp_checkpoint_path.exists():
+            temp_checkpoint_path.unlink()
+
+    if not checkpoint_path.exists():
+        raise RuntimeError(f"Checkpoint save failed: {checkpoint_path}")
+
+    return checkpoint_path
+
+
 class SpeedAwareRegressionNet(nn.Module):
     """
     Speed-Aware 단일 뷰 회귀 모델
@@ -112,10 +154,11 @@ class RegressionDrivingDataset(Dataset):
     """
 
     def __init__(self, data_dirs: list, augment: bool = True,
-                 speed_normalize: float = 5.0, image_type: str = "front_1"):
+                 speed_normalize: float = 5.0, image_type: str = DEFAULT_IMAGE_TYPE):
         self.augment = augment
         self.speed_normalize = speed_normalize
         self.image_type = image_type
+        self.image_spec = get_image_spec(image_type)
         self.data = []
         self.intervention_count = 0
 
@@ -203,7 +246,9 @@ class RegressionDrivingDataset(Dataset):
             front_image = np.array(pil_image)
         except Exception as e:
             print(f"Error loading image: {item['front_path']} - {e}")
-            front_image = np.zeros((66, 200, 3), dtype=np.uint8)
+            front_image = np.zeros(
+                (self.image_spec['height'], self.image_spec['width'], 3), dtype=np.uint8
+            )
 
         steering = item['steering']
         throttle = item['throttle']
@@ -290,6 +335,7 @@ def train_regression(
     epochs: int = 50,
     batch_size: int = 32,
     learning_rate: float = 3e-4,
+    backbone_learning_rate: float = 3e-5,
     weight_decay: float = 1e-4,
     dropout: float = 0.5,
     backbone: str = "resnet18",
@@ -301,7 +347,7 @@ def train_regression(
     use_intervention_weighting: bool = True,
     device: str = "cuda",
     graph_save_dir: str = None,
-    image_type: str = "front_1"
+    image_type: str = DEFAULT_IMAGE_TYPE
 ):
     """
     Speed-Aware 회귀 학습 (Single View)
@@ -311,12 +357,18 @@ def train_regression(
             throttle은 대부분 1.0이라 쉽게 수렴하므로
             steering에 더 높은 가중치를 부여 (기본 5.0)
     """
+    image_spec = get_image_spec(image_type)
+    experiment_name = build_experiment_name(image_type, freeze_backbone)
+
     print("=" * 60)
     print("Speed-Aware Single View Regression Training")
-    print(f"Image Source: {image_type}")
+    print(f"Experiment: {experiment_name}")
+    print(f"Image Source: {image_type} ({image_spec['width']}x{image_spec['height']} {image_spec['format'].upper()})")
     print(f"Steering loss weight: {steering_loss_weight}")
     print(f"Intervention weighting: {'ON' if use_intervention_weighting else 'OFF'} "
           f"(intervention loss weight={intervention_loss_weight:.2f})")
+    print(f"Head LR: {learning_rate:.2e}")
+    print(f"Backbone LR: {'FROZEN' if freeze_backbone else f'{backbone_learning_rate:.2e}'}")
     print("=" * 60)
 
     # 세션 단위 Train/Val 분할
@@ -368,15 +420,95 @@ def train_regression(
     # 손실 함수: steering 가중 + (선택) intervention 샘플 가중
     intervention_loss_weight = max(1.0, float(intervention_loss_weight))
 
-    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    backbone_params = [p for p in model.front_encoder.parameters() if p.requires_grad]
+    head_params = [
+        p for name, p in model.named_parameters()
+        if not name.startswith("front_encoder.") and p.requires_grad
+    ]
+
+    optimizer_param_groups = []
+    if head_params:
+        optimizer_param_groups.append({"params": head_params, "lr": learning_rate})
+    if backbone_params:
+        optimizer_param_groups.append({"params": backbone_params, "lr": backbone_learning_rate})
+
+    optimizer = optim.AdamW(optimizer_param_groups, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5,
                                                       patience=5, min_lr=1e-6)
     early_stopping = EarlyStopping(patience=early_stopping_patience)
 
     train_losses, val_losses = [], []
     train_steer_maes, val_steer_maes = [], []
-    best_val_loss = float('inf')
-    best_epoch = 0
+    best_loss_value = float('inf')
+    best_loss_epoch = 0
+    best_loss_steer_mae = float('inf')
+    best_steer_value = float('inf')
+    best_steer_epoch = 0
+    best_steer_loss = float('inf')
+
+    checkpoint_path = Path(model_save_path).resolve()
+    checkpoint_paths = {
+        "best_loss": checkpoint_path,
+        "best_steer_mae": checkpoint_path.with_name(
+            f"{checkpoint_path.stem}_best_steer_mae{checkpoint_path.suffix}"
+        ),
+    }
+    verified_checkpoint_paths = {}
+
+    training_metadata = {
+        'experiment_name': experiment_name,
+        'model_version': 'speed_aware_regression_v2',
+        'backbone': backbone,
+        'freeze_backbone': freeze_backbone,
+        'speed_normalize': speed_normalize,
+        'steering_loss_weight': steering_loss_weight,
+        'intervention_loss_weight': intervention_loss_weight,
+        'use_intervention_weighting': use_intervention_weighting,
+        'image_type': image_type,
+        'image_width': image_spec['width'],
+        'image_height': image_spec['height'],
+        'image_format': image_spec['format'],
+        'front_size': [image_spec['height'], image_spec['width']],
+        'head_learning_rate': learning_rate,
+        'backbone_learning_rate': 0.0 if freeze_backbone else backbone_learning_rate,
+        'weight_decay': weight_decay,
+        'batch_size': batch_size,
+        'val_ratio': val_ratio,
+        'train_session_count': len(train_dirs),
+        'val_session_count': len(val_dirs),
+        'train_sample_count': len(train_dataset),
+        'val_sample_count': len(val_dataset),
+    }
+
+    def build_checkpoint_state(epoch_index: int, val_loss_value: float, val_steer_mae_value: float,
+                               selection_metric: str, selection_value: float) -> dict:
+        state = {
+            'epoch': epoch_index,
+            'epoch_1based': epoch_index + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'val_loss': float(val_loss_value),
+            'val_steer_mae': float(val_steer_mae_value),
+            'selection_metric': selection_metric,
+            'selection_value': float(selection_value),
+            'best_epoch': best_loss_epoch,
+            'best_val_loss': float(best_loss_value),
+            'best_val_steer_mae': float(best_loss_steer_mae),
+            'best_by_loss': {
+                'epoch': best_loss_epoch,
+                'val_loss': float(best_loss_value),
+                'val_steer_mae': float(best_loss_steer_mae),
+                'checkpoint_path': str(checkpoint_paths['best_loss']),
+            },
+            'best_by_steer_mae': {
+                'epoch': best_steer_epoch,
+                'val_loss': float(best_steer_loss),
+                'val_steer_mae': float(best_steer_value),
+                'checkpoint_path': str(checkpoint_paths['best_steer_mae']),
+            },
+        }
+        state.update(training_metadata)
+        return state
 
     print(f"\n[Training] Starting...")
     print("-" * 60)
@@ -468,7 +600,8 @@ def train_regression(
         val_steer_mae = val_steer_ae_sum / val_total
 
         scheduler.step(val_loss)
-        current_lr = optimizer.param_groups[0]['lr']
+        current_head_lr = optimizer.param_groups[0]['lr']
+        current_backbone_lr = 0.0 if freeze_backbone else optimizer.param_groups[-1]['lr']
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
@@ -476,28 +609,43 @@ def train_regression(
         val_steer_maes.append(val_steer_mae)
 
         print(f"Epoch {epoch+1:3d}: Train Loss={train_loss:.4f}, Steer MAE={train_steer_mae:.4f} | "
-              f"Val Loss={val_loss:.4f}, Steer MAE={val_steer_mae:.4f} | LR={current_lr:.2e}")
+              f"Val Loss={val_loss:.4f}, Steer MAE={val_steer_mae:.4f} | "
+              f"Head LR={current_head_lr:.2e}, Backbone LR={current_backbone_lr:.2e}")
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_val_steer_mae = val_steer_mae
-            best_epoch = epoch + 1
+        improved_loss = val_loss < best_loss_value
+        improved_steer = val_steer_mae < best_steer_value
 
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'val_loss': val_loss,
-                'val_steer_mae': val_steer_mae,
-                'backbone': backbone,
-                'speed_normalize': speed_normalize,
-                'steering_loss_weight': steering_loss_weight,
-                'intervention_loss_weight': intervention_loss_weight,
-                'use_intervention_weighting': use_intervention_weighting,
-                'image_type': image_type,
-                'model_version': 'speed_aware_regression_v1',
-            }, model_save_path)
-            print(f"  -> Best model saved! (val_loss: {val_loss:.4f}, steer_mae: {val_steer_mae:.4f})")
+        if improved_loss:
+            best_loss_value = val_loss
+            best_loss_epoch = epoch + 1
+            best_loss_steer_mae = val_steer_mae
+
+        if improved_steer:
+            best_steer_value = val_steer_mae
+            best_steer_epoch = epoch + 1
+            best_steer_loss = val_loss
+
+        if improved_loss:
+            best_loss_path = save_checkpoint_atomic(
+                checkpoint_paths['best_loss'],
+                build_checkpoint_state(epoch, val_loss, val_steer_mae, 'val_loss', val_loss)
+            )
+            verified_checkpoint_paths['best_loss'] = best_loss_path
+            checkpoint_size_mb = best_loss_path.stat().st_size / (1024 * 1024)
+            print(f"  -> Best-by-loss saved: {best_loss_path.name} "
+                  f"(epoch={best_loss_epoch}, val_loss={val_loss:.4f}, steer_mae={val_steer_mae:.4f}, "
+                  f"{checkpoint_size_mb:.1f} MB)")
+
+        if improved_steer:
+            best_steer_path = save_checkpoint_atomic(
+                checkpoint_paths['best_steer_mae'],
+                build_checkpoint_state(epoch, val_loss, val_steer_mae, 'val_steer_mae', val_steer_mae)
+            )
+            verified_checkpoint_paths['best_steer_mae'] = best_steer_path
+            checkpoint_size_mb = best_steer_path.stat().st_size / (1024 * 1024)
+            print(f"  -> Best-by-steer-mae saved: {best_steer_path.name} "
+                  f"(epoch={best_steer_epoch}, val_loss={val_loss:.4f}, steer_mae={val_steer_mae:.4f}, "
+                  f"{checkpoint_size_mb:.1f} MB)")
 
         if early_stopping(val_loss):
             print(f"\n[Early Stopping] No improvement for {early_stopping_patience} epochs.")
@@ -505,34 +653,51 @@ def train_regression(
 
     print("=" * 60)
     print(f"Training Complete!")
-    print(f"  Best epoch: {best_epoch}")
-    print(f"  Best val_loss: {best_val_loss:.4f}")
-    print(f"  Best val_steer_mae: {best_val_steer_mae:.4f}")
-    print(f"  Model saved: {model_save_path}")
+    print(f"  Best-by-loss epoch: {best_loss_epoch}")
+    print(f"  Best-by-loss val_loss: {best_loss_value:.4f}")
+    print(f"  Best-by-loss steer_mae: {best_loss_steer_mae:.4f}")
+    print(f"  Best-by-steer-mae epoch: {best_steer_epoch}")
+    print(f"  Best-by-steer-mae val_loss: {best_steer_loss:.4f}")
+    print(f"  Best-by-steer-mae steer_mae: {best_steer_value:.4f}")
+    for key, path in verified_checkpoint_paths.items():
+        checkpoint_size_mb = path.stat().st_size / (1024 * 1024)
+        print(f"  {key} checkpoint: {path} ({checkpoint_size_mb:.1f} MB)")
     print("=" * 60)
 
     if graph_save_dir:
         os.makedirs(graph_save_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        graph_path = os.path.join(graph_save_dir, f"regression_graph_{image_type}_{timestamp}.png")
+        graph_path = os.path.join(graph_save_dir, f"regression_graph_{experiment_name}_{timestamp}.png")
         save_training_graph(
             train_losses, val_losses, train_steer_maes, val_steer_maes, graph_path,
-            title=f"Regression ({image_type}) (Best: Epoch {best_epoch}, Val Loss: {best_val_loss:.4f}, Steer MAE: {best_val_steer_mae:.4f})"
+            title=(
+                f"Regression ({experiment_name}) "
+                f"(Best Loss: E{best_loss_epoch} {best_loss_value:.4f}, "
+                f"Best Steer: E{best_steer_epoch} {best_steer_value:.4f})"
+            )
         )
 
-        result_path = os.path.join(graph_save_dir, f"regression_result_{timestamp}.json")
+        result_path = os.path.join(graph_save_dir, f"regression_result_{experiment_name}_{timestamp}.json")
         with open(result_path, 'w') as f:
             json.dump({
-                'best_epoch': best_epoch,
-                'best_val_loss': float(best_val_loss),
-                'best_val_steer_mae': float(best_val_steer_mae),
+                'experiment_name': experiment_name,
+                'best_epoch': best_loss_epoch,
+                'best_val_loss': float(best_loss_value),
+                'best_val_steer_mae': float(best_loss_steer_mae),
+                'best_by_loss': {
+                    'epoch': best_loss_epoch,
+                    'val_loss': float(best_loss_value),
+                    'val_steer_mae': float(best_loss_steer_mae),
+                    'checkpoint_path': str(checkpoint_paths['best_loss']),
+                },
+                'best_by_steer_mae': {
+                    'epoch': best_steer_epoch,
+                    'val_loss': float(best_steer_loss),
+                    'val_steer_mae': float(best_steer_value),
+                    'checkpoint_path': str(checkpoint_paths['best_steer_mae']),
+                },
                 'total_epochs': len(train_losses),
-                'backbone': backbone,
-                'speed_normalize': speed_normalize,
-                'steering_loss_weight': steering_loss_weight,
-                'intervention_loss_weight': intervention_loss_weight,
-                'use_intervention_weighting': use_intervention_weighting,
-                'image_type': image_type,
+                **training_metadata,
                 'train_losses': [float(l) for l in train_losses],
                 'val_losses': [float(l) for l in val_losses],
                 'train_steer_maes': [float(m) for m in train_steer_maes],
@@ -550,6 +715,8 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--backbone_lr", type=float, default=3e-5,
+                        help="freeze_backbone=False일 때 backbone에 적용할 학습률")
     parser.add_argument("--weight_decay", type=float, default=1e-5)
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--val_ratio", type=float, default=0.3)
@@ -564,7 +731,7 @@ if __name__ == "__main__":
     parser.add_argument("--no_intervention_weighting", action="store_true",
                         help="intervention 샘플 가중치 비활성화")
     parser.add_argument("--freeze_backbone", action="store_true")
-    parser.add_argument("--image_type", type=str, default="front_1",
+    parser.add_argument("--image_type", type=str, default=DEFAULT_IMAGE_TYPE,
                         choices=["front_1", "front_2", "front_3", "front_4"])
     parser.add_argument("--test", action="store_true", help="테스트 모드")
     args = parser.parse_args()
@@ -598,6 +765,8 @@ if __name__ == "__main__":
 
     checkpoint_dir = Path(__file__).parent / "checkpoints"
     checkpoint_dir.mkdir(exist_ok=True)
+    experiment_name = build_experiment_name(args.image_type, args.freeze_backbone)
+    model_save_path = checkpoint_dir / f"{experiment_name}.pth"
 
     graph_dir = base_path / "loss_graph"
     graph_dir.mkdir(exist_ok=True)
@@ -605,10 +774,11 @@ if __name__ == "__main__":
     model = train_regression(
         data_dirs=data_dirs,
         val_ratio=args.val_ratio,
-        model_save_path=str(checkpoint_dir / "driving_regression.pth"),
+        model_save_path=str(model_save_path),
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.lr,
+        backbone_learning_rate=args.backbone_lr,
         weight_decay=args.weight_decay,
         dropout=args.dropout,
         backbone=args.backbone,
