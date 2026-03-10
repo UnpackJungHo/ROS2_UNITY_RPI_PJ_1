@@ -55,10 +55,10 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     [Tooltip("회귀 자율주행 컨트롤러 (AI 모드 및 개입 상태 확인)")]
     public RegressionDrivingController aiController;
 
-    [Header("Image Settings")]
-    [Tooltip("JPEG 품질 (front_1, front_2에 적용)")]
-    [Range(0, 100)]
-    public int jpegQuality = 85;
+    // [Header("Image Settings")]
+    // [Tooltip("JPEG 품질 (front_1, front_2에 적용)")]
+    // [Range(0, 100)]
+    // public int jpegQuality = 85;
 
     [Header("Collection Settings")]
     public KeyCode recordKey = KeyCode.R;
@@ -76,21 +76,21 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     private Camera frontCamera;
 
     // ============================================================
-    // 4가지 이미지 조건용 렌더 텍스처
-    // front_1: 200x66 (JPEG 85)
-    // front_2: 320x120 (JPEG 85)
-    // front_3: 200x66 (PNG)
-    // front_4: 320x120 (PNG)
+    // front_3 전용 렌더 텍스처 (200x66 PNG)
+    // front_1: 200x66 (JPEG 85) -- 비활성화
+    // front_2: 320x120 (JPEG 85) -- 비활성화
+    // front_3: 200x66 (PNG)     -- 활성화
+    // front_4: 320x120 (PNG)    -- 비활성화
     // ============================================================
-    private RenderTexture rt_small;      // 200x66
-    private RenderTexture rt_large;      // 320x120
-    private Texture2D tex_small;         // 200x66
-    private Texture2D tex_large;         // 320x120
+    private RenderTexture rt_small;      // 200x66 (front_3용)
+    // private RenderTexture rt_large;   // 320x120 (front_2, front_4용) -- 비활성화
+    private Texture2D tex_small;         // 200x66 (front_3용)
+    // private Texture2D tex_large;      // 320x120 (front_2, front_4용) -- 비활성화
 
     private const int SMALL_WIDTH = 200;
     private const int SMALL_HEIGHT = 66;
-    private const int LARGE_WIDTH = 320;
-    private const int LARGE_HEIGHT = 120;
+    // private const int LARGE_WIDTH = 320;   // front_2, front_4용 -- 비활성화
+    // private const int LARGE_HEIGHT = 120;  // front_2, front_4용 -- 비활성화
 
     // 데이터 저장
     private string sessionFolder;
@@ -136,15 +136,15 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     void Start()
     {
         // ============================================================
-        // 4가지 조건용 렌더 텍스처 초기화
+        // front_3 전용 렌더 텍스처 초기화 (200x66 PNG)
         // ============================================================
-        // Small (200x66)
+        // Small (200x66) - front_3용
         rt_small = new RenderTexture(SMALL_WIDTH, SMALL_HEIGHT, 24);
         tex_small = new Texture2D(SMALL_WIDTH, SMALL_HEIGHT, TextureFormat.RGB24, false);
-        
-        // Large (320x120)
-        rt_large = new RenderTexture(LARGE_WIDTH, LARGE_HEIGHT, 24);
-        tex_large = new Texture2D(LARGE_WIDTH, LARGE_HEIGHT, TextureFormat.RGB24, false);
+
+        // Large (320x120) - front_2, front_4용 -- 비활성화
+        // rt_large = new RenderTexture(LARGE_WIDTH, LARGE_HEIGHT, 24);
+        // tex_large = new Texture2D(LARGE_WIDTH, LARGE_HEIGHT, TextureFormat.RGB24, false);
 
         AutoFindReferences();
         ValidateReferences();
@@ -155,11 +155,11 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         writeThread.IsBackground = true;
         writeThread.Start();
 
-        Debug.Log($"[DataCollectorV2] Ready! (분류 기반, 4가지 이미지 조건)");
-        Debug.Log($"  front_1: {SMALL_WIDTH}x{SMALL_HEIGHT} JPEG(Q{jpegQuality})");
-        Debug.Log($"  front_2: {LARGE_WIDTH}x{LARGE_HEIGHT} JPEG(Q{jpegQuality})");
-        Debug.Log($"  front_3: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG");
-        Debug.Log($"  front_4: {LARGE_WIDTH}x{LARGE_HEIGHT} PNG");
+        Debug.Log($"[DataCollectorV2] Ready! (front_3 단독 모드: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG)");
+        // Debug.Log($"  front_1: {SMALL_WIDTH}x{SMALL_HEIGHT} JPEG(Q{{jpegQuality}})");  // 비활성화
+        // Debug.Log($"  front_2: {LARGE_WIDTH}x{LARGE_HEIGHT} JPEG(Q{{jpegQuality}})");  // 비활성화
+        Debug.Log($"  front_3: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG  <-- 활성");
+        // Debug.Log($"  front_4: {LARGE_WIDTH}x{LARGE_HEIGHT} PNG");                     // 비활성화
         Debug.Log($"  '{recordKey}' 키: 녹화 시작/중지");
         Debug.Log($"  '{saveKey}' 키: 데이터 저장");
     }
@@ -295,12 +295,12 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         sessionFolder = Path.Combine(basePath, $"session_{DateTime.Now:yyyyMMdd_HHmmss}");
 
         Directory.CreateDirectory(sessionFolder);
-        
-        // 4가지 이미지 조건별 폴더 생성
-        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_1"));  // 200x66 JPEG
-        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_2"));  // 320x120 JPEG
-        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_3"));  // 200x66 PNG
-        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_4"));  // 320x120 PNG
+
+        // front_3 전용 폴더 생성 (200x66 PNG)
+        // Directory.CreateDirectory(Path.Combine(sessionFolder, "front_1"));  // 200x66 JPEG -- 비활성화
+        // Directory.CreateDirectory(Path.Combine(sessionFolder, "front_2"));  // 320x120 JPEG -- 비활성화
+        Directory.CreateDirectory(Path.Combine(sessionFolder, "front_3"));  // 200x66 PNG  <-- 활성
+        // Directory.CreateDirectory(Path.Combine(sessionFolder, "front_4"));  // 320x120 PNG -- 비활성화
 
         frameBuffer.Clear();
         frameCount = 0;
@@ -309,7 +309,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         recordingStartTime = Time.time;
 
         Debug.Log($"[DataCollectorV2] ● 녹화 시작: {sessionFolder}");
-        Debug.Log($"  4가지 이미지 조건으로 동시 저장");
+        Debug.Log($"  front_3 단독 저장 (200x66 PNG)");
     }
 
     void StopRecording()
@@ -334,23 +334,23 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         string frameNum = $"{frameCount:D6}";
         RenderTexture originalTarget = frontCamera.targetTexture;
 
-        // 텍스처 캡처 (메인 스레드에서 수행)
+        // front_3 전용 텍스처 캡처 (메인 스레드에서 수행)
         CaptureToTexture(frontCamera, rt_small, tex_small);
-        CaptureToTexture(frontCamera, rt_large, tex_large);
+        // CaptureToTexture(frontCamera, rt_large, tex_large);  // front_2, front_4용 -- 비활성화
 
         // 인코딩 (메인 스레드에서 수행 - Unity API 제약)
-        byte[] jpgSmall = tex_small.EncodeToJPG(jpegQuality);
-        byte[] jpgLarge = tex_large.EncodeToJPG(jpegQuality);
-        byte[] pngSmall = tex_small.EncodeToPNG();
-        byte[] pngLarge = tex_large.EncodeToPNG();
+        // byte[] jpgSmall = tex_small.EncodeToJPG(jpegQuality);  // front_1용 -- 비활성화
+        // byte[] jpgLarge = tex_large.EncodeToJPG(jpegQuality);  // front_2용 -- 비활성화
+        byte[] pngSmall = tex_small.EncodeToPNG();               // front_3용 <-- 활성
+        // byte[] pngLarge = tex_large.EncodeToPNG();             // front_4용 -- 비활성화
 
         frontCamera.targetTexture = originalTarget;
 
         // 비동기 파일 쓰기 큐에 추가 (백그라운드 스레드에서 처리)
-        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_1", $"frame_{frameNum}.jpg"), data = jpgSmall });
-        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_2", $"frame_{frameNum}.jpg"), data = jpgLarge });
-        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_3", $"frame_{frameNum}.png"), data = pngSmall });
-        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_4", $"frame_{frameNum}.png"), data = pngLarge });
+        // writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_1", $"frame_{frameNum}.jpg"), data = jpgSmall });  // 비활성화
+        // writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_2", $"frame_{frameNum}.jpg"), data = jpgLarge });  // 비활성화
+        writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_3", $"frame_{frameNum}.png"), data = pngSmall });    // 활성
+        // writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_4", $"frame_{frameNum}.png"), data = pngLarge }); // 비활성화
 
         // WheelTest에서 회귀 학습용 데이터 추출
         float steeringInput = wheelController != null ? wheelController.GetSteeringInput() : 0f;
@@ -363,7 +363,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         DrivingFrameV2 frame = new DrivingFrameV2
         {
             // 분류 학습용
-            frontImagePath = $"front_1/frame_{frameNum}.jpg",
+            frontImagePath = $"front_3/frame_{frameNum}.png",
             keyAction = (int)action,
             keyActionName = KeyActionNames[(int)action],
             speed = speed,
@@ -385,7 +385,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         frameCount++;
 
         if (frameCount % 100 == 0)
-            Debug.Log($"[DataCollectorV2] {frameCount} frames captured (x4 formats)");
+            Debug.Log($"[DataCollectorV2] {frameCount} frames captured (front_3 PNG only)");
     }
 
     /// <summary>
@@ -499,11 +499,9 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     ""num_classes"": 7,
     ""class_names"": [""FORWARD"", ""FORWARD_LEFT"", ""FORWARD_RIGHT"", ""LEFT"", ""RIGHT"", ""BACKWARD"", ""NONE""],
     ""image_conditions"": {{
-        ""front_1"": {{ ""width"": {SMALL_WIDTH}, ""height"": {SMALL_HEIGHT}, ""format"": ""JPEG"", ""quality"": {jpegQuality} }},
-        ""front_2"": {{ ""width"": {LARGE_WIDTH}, ""height"": {LARGE_HEIGHT}, ""format"": ""JPEG"", ""quality"": {jpegQuality} }},
-        ""front_3"": {{ ""width"": {SMALL_WIDTH}, ""height"": {SMALL_HEIGHT}, ""format"": ""PNG"" }},
-        ""front_4"": {{ ""width"": {LARGE_WIDTH}, ""height"": {LARGE_HEIGHT}, ""format"": ""PNG"" }}
+        ""front_3"": {{ ""width"": {SMALL_WIDTH}, ""height"": {SMALL_HEIGHT}, ""format"": ""PNG"" }}
     }},
+    ""disabled_conditions"": [""front_1"", ""front_2"", ""front_4""],
     ""capture_fps"": {1f / captureInterval:F1},
     ""created"": ""{DateTime.Now:yyyy-MM-dd HH:mm:ss}"",
     ""class_distribution"": {{
@@ -587,9 +585,9 @@ public class DrivingDataCollectorV2 : MonoBehaviour
             writeThread.Join(3000);
 
         if (rt_small != null) Destroy(rt_small);
-        if (rt_large != null) Destroy(rt_large);
+        // if (rt_large != null) Destroy(rt_large);   // 비활성화
         if (tex_small != null) Destroy(tex_small);
-        if (tex_large != null) Destroy(tex_large);
+        // if (tex_large != null) Destroy(tex_large); // 비활성화
     }
 
     void WriteThreadLoop()

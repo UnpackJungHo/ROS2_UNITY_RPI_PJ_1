@@ -8200,9 +8200,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   topicName: /camera/image_raw
   frameId: camera_link
-  publishRate: 30
-  imageWidth: 800
-  imageHeight: 640
+  publishRate: 15
+  imageWidth: 640
+  imageHeight: 480
   cameraXRotation: 0
   cameraTransform: {fileID: 4747072183245349857}
   frontViewCamera: {fileID: 0}
