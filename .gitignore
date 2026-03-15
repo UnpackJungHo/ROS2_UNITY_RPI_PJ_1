@@ -84,3 +84,4 @@ yolov8s.pt
 /Assets/Resources/RL/*
 
 /analysis/*
+/.mcp.json
