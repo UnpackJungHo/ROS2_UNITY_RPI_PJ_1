@@ -368,7 +368,7 @@ public class RegressionDrivingController : MonoBehaviour
     bool EnsureInferenceReady()
     {
         if (cameraPublisher == null)
-            cameraPublisher = FindObjectOfType<CameraPublisher>();
+            cameraPublisher = GetComponentInChildren<CameraPublisher>();
 
         if (frontCamera == null && cameraPublisher != null)
             frontCamera = cameraPublisher.GetCamera();

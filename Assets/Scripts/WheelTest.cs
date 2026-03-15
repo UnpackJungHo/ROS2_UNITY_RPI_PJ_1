@@ -88,8 +88,10 @@ public class WheelTest : MonoBehaviour
     public bool externalControlEnabled = false;
 
     [Header("Debug Info (Read Only)")]
-    [SerializeField] private float currentSpeed_ms;      // 현재 속도 (m/s)
-    [SerializeField] private float currentSpeed_kmh;     // 현재 속도 (km/h)
+    [SerializeField] private float currentSpeed_ms;      // 실제 물리 속도 (m/s) — RL 에이전트 관찰값
+    [SerializeField] private float currentSpeed_kmh;     // 실제 물리 속도 (km/h)
+    [SerializeField] private float commandedSpeed_ms;    // 스크립트 명령 속도 (m/s) — 바퀴 targetVelocity 소스
+    [SerializeField] private float physicsSpeed_ms;      // PhysX 속도 raw (= currentSpeed_ms)
     [SerializeField] private float currentMotorRPM;      // 현재 모터 RPM
     [SerializeField] private float currentAcceleration;  // 현재 가속도 (m/s²)
     [SerializeField] private float currentDriveForce;    // 현재 구동력 (N)
@@ -103,6 +105,7 @@ public class WheelTest : MonoBehaviour
     private float brakeInput = 0f;
     private float steeringInput = 0f;
     private const float GRAVITY = 9.81f;
+    private ArticulationBody rootBody;
 
     void Start()
     {
@@ -110,6 +113,8 @@ public class WheelTest : MonoBehaviour
         {
             FindReferences();
         }
+
+        CacheRootArticulationBody();
 
         // 토크 커브 기본값 설정 (전기모터 특성: 저속에서 최대 토크)
         if (torqueCurve == null || torqueCurve.keys.Length == 0)
@@ -125,6 +130,30 @@ public class WheelTest : MonoBehaviour
         float totalWeight = vehicleMass * GRAVITY;
         frontAxleLoad = totalWeight * 0.5f;
         rearAxleLoad = totalWeight * 0.5f;
+    }
+
+    void CacheRootArticulationBody()
+    {
+        // URDF 임포트 구조에서 isRoot == true인 ArticulationBody가 물리 계층의 루트
+        // (base_footprint 또는 base_link). velocity는 루트 바디에서 읽어야 정확하다.
+        ArticulationBody[] bodies = GetComponentsInChildren<ArticulationBody>(true);
+        foreach (ArticulationBody body in bodies)
+        {
+            if (body.isRoot)
+            {
+                rootBody = body;
+                break;
+            }
+        }
+
+        if (rootBody == null)
+        {
+            rootBody = GetComponentInParent<ArticulationBody>();
+            Debug.LogWarning("[WheelTest] isRoot ArticulationBody를 찾지 못해 부모 탐색으로 폴백합니다.");
+        }
+
+        if (rootBody == null)
+            Debug.LogError("[WheelTest] ArticulationBody 루트를 찾지 못했습니다. Physics Velocity Feedback 비활성화.");
     }
 
     void FindReferences()
@@ -210,13 +239,14 @@ public class WheelTest : MonoBehaviour
             }
         }
 
-        // 조향 업데이트 (Update에서 수행 - 시각적 반응성)
-        UpdateSteering(steeringInput);
+        // 입력값만 Update에서 수집. ArticulationBody xDrive 수정은 FixedUpdate에서 수행.
     }
 
     void FixedUpdate()
     {
-        // 물리 연산은 FixedUpdate에서 수행
+        // 조향과 물리 연산을 모두 FixedUpdate에서 수행하여 PhysX와 완전 동기화.
+        // Update에서 xDrive를 수정하면 물리 스텝 사이에 비동기 충격이 발생한다.
+        UpdateSteering(steeringInput);
         UpdateVehiclePhysics();
     }
 
@@ -228,10 +258,14 @@ public class WheelTest : MonoBehaviour
     {
         float dt = Time.fixedDeltaTime;
 
+        // [방법 B] commandedSpeed_ms를 currentSpeed_ms에 복원 —
+        // 헬퍼 메서드들이 currentSpeed_ms를 참조하므로 키네마틱 계산 동안만 교체한다.
+        currentSpeed_ms = commandedSpeed_ms;
+
         // 1. 무게 이동 계산
         CalculateWeightTransfer();
 
-        // 2. 모터 RPM 계산 (현재 속도 기반)
+        // 2. 모터 RPM 계산 (commandedSpeed 기반)
         CalculateMotorRPM();
 
         // 3. 구동력 계산
@@ -248,14 +282,10 @@ public class WheelTest : MonoBehaviour
         // 6. 회생 제동 (스로틀 해제 시 자연 감속)
         float regenBrake = 0f;
         if (Mathf.Abs(throttleInput) < 0.1f && Mathf.Abs(currentSpeed_ms) > 0.1f)
-        {
             regenBrake = engineBrakeForce * Mathf.Sign(currentSpeed_ms);
-        }
 
         // 7. 타이어 그립 한계 계산
         float maxTractionForce = CalculateMaxTractionForce();
-
-        // 구동력을 그립 한계로 제한
         float effectiveDriveForce = Mathf.Sign(driveForce) *
             Mathf.Min(Mathf.Abs(driveForce), maxTractionForce);
 
@@ -263,40 +293,41 @@ public class WheelTest : MonoBehaviour
         float netForce;
         if (Mathf.Abs(currentSpeed_ms) < 0.05f && Mathf.Abs(throttleInput) < 0.1f && brakeInput < 0.1f)
         {
-            // 정지 상태 유지
             netForce = 0f;
             currentSpeed_ms = 0f;
         }
         else
         {
             netForce = effectiveDriveForce - totalResistance - brakeForce - regenBrake;
-
-            // 브레이크 중 속도가 거의 0이면 완전 정지
             if (brakeInput > 0.5f && Mathf.Abs(currentSpeed_ms) < 0.2f)
-            {
-                netForce = -currentSpeed_ms * 100f;  // 강제 정지력
-            }
+                netForce = -currentSpeed_ms * 100f;
         }
 
-        // 9. 가속도 계산 (F = ma → a = F/m)
-        currentAcceleration = netForce / vehicleMass;
+        // 9-10. 가속도 계산 및 제한
+        currentAcceleration = Mathf.Clamp(netForce / vehicleMass, -maxDeceleration, maxAcceleration);
 
-        // 10. 가속도 제한 (부드러운 주행)
-        currentAcceleration = Mathf.Clamp(currentAcceleration, -maxDeceleration, maxAcceleration);
-
-        // 11. 속도 적분 (v = v0 + a*t)
+        // 11. commandedSpeed 적분 및 클램프
         currentSpeed_ms += currentAcceleration * dt;
-
-        // 12. 최고속도 제한
         currentSpeed_ms = Mathf.Clamp(currentSpeed_ms, -maxSpeed * 0.5f, maxSpeed);
+        commandedSpeed_ms = currentSpeed_ms;  // 다음 프레임을 위해 저장
 
-        // 디버그 정보 업데이트
+        // 13. 바퀴 속도 적용 (commandedSpeed 기반 — 충분한 속도 오차로 구동력 확보)
+        ApplyWheelVelocities();
+
+        // 12. physicsSpeed 읽기 → currentSpeed_ms 교체 (RL 에이전트 관찰값으로)
+        if (rootBody != null)
+        {
+            physicsSpeed_ms = Vector3.Dot(rootBody.velocity, rootBody.transform.forward);
+            currentSpeed_ms = physicsSpeed_ms;
+        }
+        else
+        {
+            currentSpeed_ms = commandedSpeed_ms;
+        }
+
         currentSpeed_kmh = currentSpeed_ms * 3.6f;
         currentDriveForce = effectiveDriveForce;
         currentResistForce = totalResistance + brakeForce + regenBrake;
-
-        // 13. 바퀴 속도 적용
-        ApplyWheelVelocities();
     }
 
     // ============================================
@@ -483,9 +514,11 @@ public class WheelTest : MonoBehaviour
 
         ArticulationDrive drive = wheel.xDrive;
         drive.stiffness = 0f;
-        drive.damping = 100f;
+        // forceLimit: 100 N·m — commandedSpeed가 실제 물리 속도보다 항상 높으므로
+        // 충분한 구동력을 확보해야 maxSpeed(2 m/s)까지 도달 가능
+        drive.damping = 10f;
         drive.targetVelocity = velocity;
-        drive.forceLimit = 10000f;
+        drive.forceLimit = 120f;
         wheel.xDrive = drive;
     }
 
@@ -512,7 +545,7 @@ public class WheelTest : MonoBehaviour
         }
 
         float targetAngle = -input * effectiveMaxSteeringAngle;
-        currentSteeringAngle = Mathf.MoveTowards(currentSteeringAngle, targetAngle, steeringSpeed * Time.deltaTime);
+        currentSteeringAngle = Mathf.MoveTowards(currentSteeringAngle, targetAngle, steeringSpeed * Time.fixedDeltaTime);
 
         CalculateAckermannAngles(currentSteeringAngle, out float leftAngle, out float rightAngle);
 
@@ -554,9 +587,11 @@ public class WheelTest : MonoBehaviour
         if (steering == null) return;
 
         ArticulationDrive drive = steering.xDrive;
-        drive.stiffness = 10000f;
-        drive.damping = 1000f;
-        drive.forceLimit = 10000f;
+        // stiffness: 과도하면 목표각 도달 시 반동 진동 발생. AMR 소형 서보 기준 현실값.
+        // forceLimit: AMR 조향 액추에이터 최대 토크 ≈ 10~15Nm
+        drive.stiffness = 1200f;
+        drive.damping = 120f;
+        drive.forceLimit = 12f;
         drive.target = angle;
         steering.xDrive = drive;
     }

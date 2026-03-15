@@ -137,8 +137,8 @@ public class TrainTestModeSwitcher : MonoBehaviour
                 behaviorParameters = FindOne<BehaviorParameters>(includeInactiveObjects);
         }
 
-        ultrasonicSensors = FindAll<SingleUltrasonicSensor>(includeInactiveObjects);
-        radarSensors = FindAll<SingleRadarSensor>(includeInactiveObjects);
+        ultrasonicSensors = GetComponentsInChildren<SingleUltrasonicSensor>(includeInactiveObjects);
+        radarSensors = GetComponentsInChildren<SingleRadarSensor>(includeInactiveObjects);
 
         if (modeText == null)
         {
