@@ -1,24 +1,36 @@
 using UnityEngine;
-using Unity.Robotics.ROSTCPConnector;
-using RosMessageTypes.Std;
 
 /// <summary>
-/// 초음파 센서와 레이더 센서의 데이터를 융합하여 충돌 위험을 감지하고 경고를 발행하는 클래스입니다.
-/// 다양한 거리 단계(주의, 경고, 위험)에 따라 위험 수준을 판단하며,
-/// 현재 속도를 기반으로 충돌 예상 시간(TTC)을 계산하여 ROS 2로 전송합니다.
+/// 초음파 센서와 레이더 센서의 데이터를 융합하여 충돌 위험을 감지하고 경고 레벨을 계산하는 엔진.
+/// ROS 발행은 CollisionWarningRosBridge가 담당한다.
 /// </summary>
-public class CollisionWarningPublisher : MonoBehaviour
+[AddComponentMenu("Sensor/Collision Warning Engine")]
+public class CollisionWarningEngine : MonoBehaviour
 {
-    [Header("ROS Settings (ROS 설정)")]
-    public string warningTopicName = "/collision_warning"; // 종합 충돌 경고 토픽
-    public string distanceTopicName = "/obstacle_distance"; // 가장 가까운 장애물 거리 단순 토픽
-    public float publishRate = 20f; // 발행 주기 (Hz)
+    [Header("Update Rate")]
+    public float updateRate = 20f;
 
-    [Header("Sensor Manager References (센서 관리자 참조)")]
-    [Tooltip("초음파 센서 매니저 (근거리 정밀 감지 담당)")]
-    public UltrasonicSensorPublisher ultrasonicManager;
-    [Tooltip("레이더 센서 매니저 (중장거리 감지 담당)")]
-    public RadarSensorPublisher radarManager;
+    [Header("Individual Sensor References (개별 센서 직접 참조)")]
+    [Tooltip("전방 좌측 초음파")]
+    public SingleUltrasonicSensor sensorFL;
+    [Tooltip("전방 우측 초음파")]
+    public SingleUltrasonicSensor sensorFR;
+    [Tooltip("전방 중앙 초음파")]
+    public SingleUltrasonicSensor sensorFC;
+    [Tooltip("후방 좌측 초음파")]
+    public SingleUltrasonicSensor sensorRL;
+    [Tooltip("후방 우측 초음파")]
+    public SingleUltrasonicSensor sensorRR;
+    [Tooltip("후방 중앙 초음파")]
+    public SingleUltrasonicSensor sensorRC;
+    [Tooltip("전방 레이더")]
+    public SingleRadarSensor radarFront;
+    [Tooltip("후방 레이더")]
+    public SingleRadarSensor radarRear;
+
+    // 편의 배열 (Start에서 초기화)
+    private SingleUltrasonicSensor[] allUltrasonicSensors;
+    private SingleRadarSensor[] allRadarSensors;
 
     [Header("TTC 기반 임계값 (Time To Collision - 충돌까지 남은 시간)")]
     [Tooltip("인지 단계 TTC (초) - 이 시간 이하면 Awareness")]
@@ -122,9 +134,8 @@ public class CollisionWarningPublisher : MonoBehaviour
 
     public SensorData CurrentSensorData { get; private set; }
 
-    private ROSConnection ros;
-    private float publishInterval;
-    private float lastPublishTime;
+    private float updateInterval;
+    private float lastUpdateTime;
     private float currentSpeed = 0f;
 
     // 상대속도(Closing Speed) 계산을 위한 변수들
@@ -146,60 +157,111 @@ public class CollisionWarningPublisher : MonoBehaviour
     [Tooltip("최소 유효 상대속도 (m/s) - 이 이하는 노이즈로 간주")]
     public float minValidClosingSpeed = 0.05f;
 
-    // ros 연결 및 퍼블리셔 및 발행 주기 초기화
     void Start()
     {
-        ros = ROSConnection.GetOrCreateInstance();
-        warningTopicName = RosTopicNamespace.Resolve(gameObject, warningTopicName);
-        distanceTopicName = RosTopicNamespace.Resolve(gameObject, distanceTopicName);
-        // 배열 메시지(상세 정보)와 단일 값 메시지(가장 가까운 거리) 퍼블리셔 등록
-        ros.RegisterPublisher<Float32MultiArrayMsg>(warningTopicName);
-        ros.RegisterPublisher<Float32Msg>(distanceTopicName);
-
-        // 참조되어야 할 센서 매니저 유효성 검증
         if (wheelController == null)
             wheelController = FindObjectOfType<WheelTest>();
         ValidateSensorReferences();
+        SyncScanIntervals();
 
-        publishInterval = 1f / publishRate;
-        lastPublishTime = Time.time;
+        updateInterval = 1f / updateRate;
+        lastUpdateTime = Time.time;
 
-        Debug.Log($"[CollisionWarning] Initialized with Closing Speed based TTC system (Real ADAS style)");
-        Debug.Log($"[CollisionWarning] TTC thresholds - Brake: {ttcBrake}s, Warning: {ttcWarning}s, SlowDown: {ttcSlowDown}s, Caution: {ttcCaution}s, Awareness: {ttcAwareness}s");
-        Debug.Log($"[CollisionWarning] Emergency stop distance (Ultrasonic): {emergencyStopDistance}m | Closing speed smoothing: {closingSpeedSmoothFactor}");
+        Debug.Log($"[CollisionWarningEngine] Initialized with Closing Speed based TTC system (Real ADAS style)");
+        Debug.Log($"[CollisionWarningEngine] TTC thresholds - Brake: {ttcBrake}s, Warning: {ttcWarning}s, SlowDown: {ttcSlowDown}s, Caution: {ttcCaution}s, Awareness: {ttcAwareness}s");
+        Debug.Log($"[CollisionWarningEngine] Emergency stop distance (Ultrasonic): {emergencyStopDistance}m | Closing speed smoothing: {closingSpeedSmoothFactor}");
     }
 
-    // 센서 매니저 참조 유효성 검증
+    /// <summary>
+    /// 개별 센서 참조를 검증하고, 미할당 시 GameObject.Find로 자동 탐색
+    /// </summary>
     void ValidateSensorReferences()
     {
-        if (ultrasonicManager == null)
-            Debug.LogWarning("[CollisionWarning] UltrasonicSensorPublisher가 할당되지 않았습니다.");
-        if (radarManager == null)
-            Debug.LogWarning("[CollisionWarning] RadarSensorPublisher가 할당되지 않았습니다.");
+        // 초음파 센서 자동 탐색
+        TryFindUltrasonicSensor(ref sensorFL, "ultrasonic_fl_link", "FL");
+        TryFindUltrasonicSensor(ref sensorFR, "ultrasonic_fr_link", "FR");
+        TryFindUltrasonicSensor(ref sensorFC, "ultrasonic_fc_link", "FC");
+        TryFindUltrasonicSensor(ref sensorRL, "ultrasonic_rl_link", "RL");
+        TryFindUltrasonicSensor(ref sensorRR, "ultrasonic_rr_link", "RR");
+        TryFindUltrasonicSensor(ref sensorRC, "ultrasonic_rc_link", "RC");
+
+        // 레이더 센서 자동 탐색
+        TryFindRadarSensor(ref radarFront, "radar_front_link", "Front");
+        TryFindRadarSensor(ref radarRear, "radar_rear_link", "Rear");
+
+        // 편의 배열 초기화
+        allUltrasonicSensors = new[] { sensorFL, sensorFR, sensorFC, sensorRL, sensorRR, sensorRC };
+        allRadarSensors = new[] { radarFront, radarRear };
+
         if (useVelocityForTTC && velocitySource == null)
             Debug.LogWarning("[CollisionWarning] velocitySource가 할당되지 않았습니다. TTC 계산이 비활성화됩니다.");
         if (enablePathAwareRiskSplit && wheelController == null)
             Debug.LogWarning("[CollisionWarning] wheelController가 없어 측면-조향 연동 제어가 제한됩니다.");
     }
 
+    void TryFindUltrasonicSensor(ref SingleUltrasonicSensor sensor, string gameObjectName, string label)
+    {
+        if (sensor != null) return;
+        GameObject go = GameObject.Find(gameObjectName);
+        if (go != null)
+        {
+            sensor = go.GetComponent<SingleUltrasonicSensor>();
+            if (sensor != null)
+                Debug.Log($"[CollisionWarning] 초음파 센서 {label} 자동 탐색 완료: {gameObjectName}");
+            else
+                Debug.LogWarning($"[CollisionWarning] {gameObjectName} 오브젝트에 SingleUltrasonicSensor 컴포넌트가 없습니다.");
+        }
+        else
+        {
+            Debug.LogWarning($"[CollisionWarning] 초음파 센서 {label} ({gameObjectName})를 찾을 수 없습니다.");
+        }
+    }
+
+    void TryFindRadarSensor(ref SingleRadarSensor sensor, string gameObjectName, string label)
+    {
+        if (sensor != null) return;
+        GameObject go = GameObject.Find(gameObjectName);
+        if (go != null)
+        {
+            sensor = go.GetComponent<SingleRadarSensor>();
+            if (sensor != null)
+                Debug.Log($"[CollisionWarning] 레이더 센서 {label} 자동 탐색 완료: {gameObjectName}");
+            else
+                Debug.LogWarning($"[CollisionWarning] {gameObjectName} 오브젝트에 SingleRadarSensor 컴포넌트가 없습니다.");
+        }
+        else
+        {
+            Debug.LogWarning($"[CollisionWarning] 레이더 센서 {label} ({gameObjectName})를 찾을 수 없습니다.");
+        }
+    }
+
+    /// <summary>
+    /// 개별 센서의 스캔 주기를 updateRate에 맞춤
+    /// </summary>
+    void SyncScanIntervals()
+    {
+        float interval = 1f / updateRate;
+        foreach (var s in allUltrasonicSensors)
+            if (s != null) s.SetScanInterval(interval);
+        foreach (var s in allRadarSensors)
+            if (s != null) s.SetScanInterval(interval);
+    }
+
     void Update()
     {
-        UpdateCurrentSpeed(); // 실시간 속도 갱신
+        UpdateCurrentSpeed();
 
-        if (Time.time - lastPublishTime >= publishInterval)
+        if (Time.time - lastUpdateTime >= updateInterval)
         {
-            CollectSensorData();       // 1. 모든 센서 데이터 취합
-            UpdateCurrentMinDistance(); // 2. 최신 최소 거리 갱신
-            CalculateClosingSpeed();    // 3. 상대속도 계산 (거리 변화율)
-            CalculateWarningLevel();    // 4. 위험도 판단 (상대속도 기반 TTC 사용)
-            CalculateTTC();             // 5. 최종 TTC 값 갱신 (ROS 발행용)
-            PublishWarning();           // 6. ROS 메시지 전송
-            lastPublishTime = Time.time;
+            CollectSensorData();
+            UpdateCurrentMinDistance();
+            CalculateClosingSpeed();
+            CalculateWarningLevel();
+            CalculateTTC();
+            lastUpdateTime = Time.time;
 
             if (showDebugInfo)
-            {
                 PrintDebugInfo();
-            }
         }
     }
 
@@ -219,52 +281,69 @@ public class CollisionWarningPublisher : MonoBehaviour
     }
 
     /// <summary>
-    /// 각 매니저로부터 최신 센서 데이터를 수집하여 SensorData 구조체에 저장
+    /// 개별 센서로부터 최신 데이터를 수집하여 SensorData 구조체에 저장
     /// </summary>
     void CollectSensorData()
     {
         SensorData data = new SensorData();
 
-        if (ultrasonicManager != null)
-        {
-            data.ultrasonicFL = ultrasonicManager.FrontLeftDistance;
-            data.ultrasonicFR = ultrasonicManager.FrontRightDistance;
-            data.ultrasonicFC = ultrasonicManager.FrontCenterDistance;
-            data.ultrasonicRL = ultrasonicManager.RearLeftDistance;
-            data.ultrasonicRR = ultrasonicManager.RearRightDistance;
-            data.ultrasonicRC = ultrasonicManager.RearCenterDistance;
-            data.ultrasonicMinFront = ultrasonicManager.MinFrontDistance;
-            data.ultrasonicMinRear = ultrasonicManager.MinRearDistance;
-            data.ultrasonicClosestConfidence = ultrasonicManager.ClosestConfidence;
-            data.ultrasonicClosest = ultrasonicManager.ClosestSensorPosition;
-        }
-        else
-        {
-            // 매니저가 없을 경우 기본값 초기화
-            data.ultrasonicFL = float.PositiveInfinity;
-            data.ultrasonicFR = float.PositiveInfinity;
-            data.ultrasonicFC = float.PositiveInfinity;
-            data.ultrasonicRL = float.PositiveInfinity;
-            data.ultrasonicRR = float.PositiveInfinity;
-            data.ultrasonicRC = float.PositiveInfinity;
-            data.ultrasonicMinFront = float.PositiveInfinity;
-            data.ultrasonicMinRear = float.PositiveInfinity;
-            data.ultrasonicClosestConfidence = 0f;
-        }
+        // 개별 초음파 센서에서 직접 읽기
+        data.ultrasonicFL = sensorFL != null ? sensorFL.Distance : float.PositiveInfinity;
+        data.ultrasonicFR = sensorFR != null ? sensorFR.Distance : float.PositiveInfinity;
+        data.ultrasonicFC = sensorFC != null ? sensorFC.Distance : float.PositiveInfinity;
+        data.ultrasonicRL = sensorRL != null ? sensorRL.Distance : float.PositiveInfinity;
+        data.ultrasonicRR = sensorRR != null ? sensorRR.Distance : float.PositiveInfinity;
+        data.ultrasonicRC = sensorRC != null ? sensorRC.Distance : float.PositiveInfinity;
 
-        if (radarManager != null)
-        {
-            data.radarFront = radarManager.FrontDistance;
-            data.radarRear = radarManager.RearDistance;
-            data.radarClosest = radarManager.ClosestSensorPosition;
-        }
-        else
-        {
-            data.radarFront = float.PositiveInfinity;
-            data.radarRear = float.PositiveInfinity;
-        }
+        // 전방/후방 최소 거리 내부 계산
+        data.ultrasonicMinFront = Mathf.Min(data.ultrasonicFL, Mathf.Min(data.ultrasonicFR, data.ultrasonicFC));
+        data.ultrasonicMinRear = Mathf.Min(data.ultrasonicRL, Mathf.Min(data.ultrasonicRR, data.ultrasonicRC));
+
+        // closest 초음파 추적 (거리 우선, 0.02m 내 confidence 타이브레이크)
+        UpdateClosestUltrasonic(ref data);
+
+        // 개별 레이더 센서에서 직접 읽기
+        data.radarFront = radarFront != null ? radarFront.Distance : float.PositiveInfinity;
+        data.radarRear = radarRear != null ? radarRear.Distance : float.PositiveInfinity;
+        data.radarClosest = data.radarFront <= data.radarRear
+            ? SingleRadarSensor.SensorPosition.Front
+            : SingleRadarSensor.SensorPosition.Rear;
 
         CurrentSensorData = data;
+    }
+
+    /// <summary>
+    /// 6개 초음파 센서 중 가장 가까운 센서를 추적.
+    /// 거리 우선, 0.02m 이내면 confidence가 높은 쪽 선택.
+    /// </summary>
+    void UpdateClosestUltrasonic(ref SensorData data)
+    {
+        float closestDist = float.PositiveInfinity;
+        float closestConf = 0f;
+        SingleUltrasonicSensor.SensorPosition closestPos = default;
+
+        for (int i = 0; i < allUltrasonicSensors.Length; i++)
+        {
+            var s = allUltrasonicSensors[i];
+            if (s == null) continue;
+
+            float dist = s.Distance;
+            if (float.IsInfinity(dist)) continue;
+
+            float conf = s.Confidence;
+            bool isCloser = dist < closestDist;
+            bool isTiedButMoreConfident = Mathf.Abs(dist - closestDist) < 0.02f && conf > closestConf;
+
+            if (isCloser || isTiedButMoreConfident)
+            {
+                closestDist = dist;
+                closestConf = conf;
+                closestPos = s.sensorPosition;
+            }
+        }
+
+        data.ultrasonicClosest = closestPos;
+        data.ultrasonicClosestConfidence = closestConf;
     }
 
     void UpdateCurrentMinDistance()
@@ -512,23 +591,19 @@ public class CollisionWarningPublisher : MonoBehaviour
     }
 
     /// <summary>
-    /// 초음파 센서의 최소 거리를 반환
+    /// 초음파 센서의 최소 거리를 반환 (CurrentSensorData에서 이미 계산된 값 사용)
     /// </summary>
     float GetMinUltrasonicDistance()
     {
-        if (ultrasonicManager == null) return float.PositiveInfinity;
-        // ultrasonicManager에서 최소 거리 계산 후 반환
-        return ultrasonicManager.ClosestDistance;
+        return Mathf.Min(CurrentSensorData.ultrasonicMinFront, CurrentSensorData.ultrasonicMinRear);
     }
 
     /// <summary>
-    /// 레이더 센서의 최소 거리를 반환
+    /// 레이더 센서의 최소 거리를 반환 (CurrentSensorData에서 이미 계산된 값 사용)
     /// </summary>
     float GetMinRadarDistance()
     {
-        if (radarManager == null) return float.PositiveInfinity;
-        // radarManager에서 최소 거리 계산 후 반환
-        return radarManager.ClosestDistance;
+        return Mathf.Min(CurrentSensorData.radarFront, CurrentSensorData.radarRear);
     }
 
     float GetPathMinDistance()
@@ -710,59 +785,6 @@ public class CollisionWarningPublisher : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 계산된 모든 정보를 ROS 메시지로 포장하여 발행
-    /// </summary>
-    void PublishWarning()
-    {
-        Float32MultiArrayMsg warningMsg = new Float32MultiArrayMsg
-        {
-            layout = new MultiArrayLayoutMsg
-            {
-                dim = new MultiArrayDimensionMsg[]
-                {
-                    new MultiArrayDimensionMsg
-                    {
-                        label = "collision_data",
-                        size = 17,
-                        stride = 17
-                    }
-                },
-                data_offset = 0
-            },
-            data = new float[]
-            {
-                // 인덱스별 데이터 매핑
-                float.IsInfinity(currentMinDistance) ? -1f : currentMinDistance, // 0: 최소 거리
-                float.IsInfinity(currentTTC) ? -1f : currentTTC,                 // 1: TTC (상대속도 기반)
-                (float)currentWarningLevel,                                      // 2: 위험 등급 (0-6)
-                currentSpeed,                                                    // 3: 차량 속도 (m/s)
-                smoothedClosingSpeed,                                            // 4: 상대속도 (m/s, 양수=접근, 음수=이탈)
-                float.IsInfinity(CurrentSensorData.ultrasonicFL) ? -1f : CurrentSensorData.ultrasonicFL, // 5-10: 초음파 개별 거리 (6채널)
-                float.IsInfinity(CurrentSensorData.ultrasonicFR) ? -1f : CurrentSensorData.ultrasonicFR,
-                float.IsInfinity(CurrentSensorData.ultrasonicFC) ? -1f : CurrentSensorData.ultrasonicFC,
-                float.IsInfinity(CurrentSensorData.ultrasonicRL) ? -1f : CurrentSensorData.ultrasonicRL,
-                float.IsInfinity(CurrentSensorData.ultrasonicRR) ? -1f : CurrentSensorData.ultrasonicRR,
-                float.IsInfinity(CurrentSensorData.ultrasonicRC) ? -1f : CurrentSensorData.ultrasonicRC,
-                float.IsInfinity(CurrentSensorData.radarFront) ? -1f : CurrentSensorData.radarFront,     // 11-12: 레이더 전/후 거리
-                float.IsInfinity(CurrentSensorData.radarRear) ? -1f : CurrentSensorData.radarRear,
-                detectionSource == "Ultrasonic" ? 1f : (detectionSource == "Radar" ? 2f : 0f),           // 13: 감지 센서 소스 (1:초음파, 2:레이더)
-                (float)CurrentSensorData.ultrasonicClosest,                      // 14: 가장 가까운 초음파 센서 ID
-                (float)CurrentSensorData.radarClosest,                           // 15: 가장 가까운 레이더 센서 ID
-                CurrentSensorData.ultrasonicClosestConfidence                    // 16: 가장 가까운 초음파 confidence
-            }
-        };
-
-        ros.Publish(warningTopicName, warningMsg);
-
-        // 거리 정보만 별도로 간소화된 토픽으로도 발행
-        Float32Msg distanceMsg = new Float32Msg
-        {
-            data = float.IsInfinity(currentMinDistance) ? -1f : currentMinDistance
-        };
-        ros.Publish(distanceTopicName, distanceMsg);
-    }
-
     void PrintDebugInfo()
     {
         bool hasStateChanged = currentWarningLevel != lastLoggedWarningLevel ||
@@ -917,15 +939,19 @@ public class CollisionWarningPublisher : MonoBehaviour
 
     public bool IsFrontClear(float ultrasonicThreshold = 0.5f, float radarThreshold = 2.0f)
     {
-        bool ultrasonicClear = ultrasonicManager == null || ultrasonicManager.IsFrontClear(ultrasonicThreshold);
-        bool radarClear = radarManager == null || radarManager.IsFrontClear(radarThreshold);
+        bool ultrasonicClear = CurrentSensorData.ultrasonicMinFront > ultrasonicThreshold
+                               || float.IsInfinity(CurrentSensorData.ultrasonicMinFront);
+        bool radarClear = CurrentSensorData.radarFront > radarThreshold
+                          || float.IsInfinity(CurrentSensorData.radarFront);
         return ultrasonicClear && radarClear;
     }
 
     public bool IsRearClear(float ultrasonicThreshold = 0.5f, float radarThreshold = 2.0f)
     {
-        bool ultrasonicClear = ultrasonicManager == null || ultrasonicManager.IsRearClear(ultrasonicThreshold);
-        bool radarClear = radarManager == null || radarManager.IsRearClear(radarThreshold);
+        bool ultrasonicClear = CurrentSensorData.ultrasonicMinRear > ultrasonicThreshold
+                               || float.IsInfinity(CurrentSensorData.ultrasonicMinRear);
+        bool radarClear = CurrentSensorData.radarRear > radarThreshold
+                          || float.IsInfinity(CurrentSensorData.radarRear);
         return ultrasonicClear && radarClear;
     }
 

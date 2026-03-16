@@ -4,244 +4,75 @@ using RosMessageTypes.Sensor;
 using RosMessageTypes.Std;
 using RosMessageTypes.BuiltinInterfaces;
 
+/// <summary>
+/// CameraRenderer의 ROS 토픽 발행 브리지.
+/// ImageMsg를 발행한다.
+/// </summary>
 public class CameraPublisher : MonoBehaviour
 {
     [Header("ROS Settings")]
     public string topicName = "/camera/image_raw";
     public string frameId = "camera_link";
-    public float publishRate = 30f;
+    public float publishRate = 10f;
 
-    [Header("Camera Settings")]
-    public int imageWidth = 640;
-    public int imageHeight = 480;
+    [Header("Renderer Reference")]
+    [Tooltip("같은 GameObject 또는 부모에서 자동 탐색")]
+    public CameraRenderer cameraRenderer;
 
-    [Tooltip("카메라 X축 회전 각도 (피치)")]
-    [Range(-90f, 90f)]
-    public float cameraXRotation = 0f;
+    [Header("ROS Publish Control")]
+    [Tooltip("false면 카메라 렌더링은 유지하되 ROS 발행만 차단 (Train 모드 등)")]
+    public bool rosPublishingEnabled = true;
 
-    [Header("Camera Reference")]
-    [Tooltip("카메라가 부착된 Transform을 직접 할당하세요 (camera_link)")]
-    public Transform cameraTransform;
-
-    [Header("FrontView Camera Source")]
-    [Tooltip("FrontView/ROS 퍼블리싱에 사용할 카메라. 비워두면 Main Camera를 자동 사용합니다.")]
-    public Camera frontViewCamera;
-
-    [Tooltip("true면 Main Camera를 직접 재사용하지 않고 런타임 전용 front camera를 생성합니다.")]
-    public bool preferDedicatedRuntimeCamera = true;
-
-    [Header("Camera Stabilization (흔들림 방지)")]
-    [Tooltip("카메라 안정화 활성화 - 물리 시뮬레이션 흔들림 방지")]
-    public bool enableStabilization = true;
-
-    [Tooltip("위치 안정화 강도 (낮을수록 부드러움)")]
-    [Range(0.01f, 0.5f)]
-    public float positionSmoothTime = 0.08f;
-
-    [Tooltip("회전 안정화 강도 (낮을수록 부드러움)")]
-    [Range(0.01f, 0.5f)]
-    public float rotationSmoothTime = 0.06f;
-
-    [Tooltip("수직 흔들림 추가 안정화")]
-    public bool stabilizeVertical = true;
-
-    [Tooltip("롤(좌우 기울기) 안정화")]
-    public bool stabilizeRoll = true;
+    [Header("Performance (Multi-Vehicle)")]
+    [Tooltip("다중 차량 시 발행 시점을 분산")]
+    public bool enablePublishStagger = true;
 
     private ROSConnection ros;
-    private Camera cam;
-    private RenderTexture renderTexture;
-    private Texture2D texture2D;
     private float publishInterval;
     private float lastPublishTime;
-    private CameraStabilizer stabilizer;
-    private bool createdStabilizerAtRuntime;
-    private bool createdRuntimeFrontCameraAtRuntime;
 
     void Start()
     {
-        ros = ROSConnection.GetOrCreateInstance();
-        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
-        ros.RegisterPublisher<ImageMsg>(topicName);
+        if (cameraRenderer == null)
+            cameraRenderer = GetComponent<CameraRenderer>() ?? GetComponentInParent<CameraRenderer>();
 
-        if (cameraTransform == null)
+        if (cameraRenderer == null)
         {
-            Debug.LogError("[CameraPublisher] cameraTransform이 할당되지 않았습니다! Inspector에서 camera_link를 할당하세요.");
-            cameraTransform = transform;
+            Debug.LogError("[CameraPublisher] CameraRenderer를 찾지 못했습니다.");
+            enabled = false;
+            return;
         }
 
-        SetupCamera();
+        ros = ROSConnection.GetOrCreateInstance();
+        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
+        ros.RegisterPublisher<ImageMsg>(topicName, queue_size: 1);
 
         publishInterval = 1f / publishRate;
         lastPublishTime = Time.time;
-    }
 
-    void SetupCamera()
-    {
-        ResolveFrontViewCamera();
-        if (cam == null)
+        if (enablePublishStagger)
         {
-            Debug.LogError("[CameraPublisher] 사용할 Camera를 찾지 못했습니다. frontViewCamera 또는 Main Camera를 확인하세요.");
-            return;
+            float stagger = Mathf.Abs(gameObject.GetInstanceID() % 97) / 97f * publishInterval;
+            lastPublishTime = Time.time + stagger - publishInterval;
         }
-
-        cam.nearClipPlane = 0.1f;
-        cam.farClipPlane = 100f;
-        cam.fieldOfView = 60f;
-
-        SetupStabilization();
-        SetupRenderResources();
-
-        int vehicleLayer = LayerMask.NameToLayer("RLVehicle");
-        if (vehicleLayer >= 0)
-            cam.cullingMask &= ~(1 << vehicleLayer);
-    }
-
-    void ResolveFrontViewCamera()
-    {
-        Camera templateCamera = frontViewCamera != null ? frontViewCamera : Camera.main;
-
-        if (preferDedicatedRuntimeCamera && cameraTransform != null)
-        {
-            frontViewCamera = GetOrCreateRuntimeFrontCamera(templateCamera);
-            cam = frontViewCamera;
-            return;
-        }
-
-        if (frontViewCamera == null && Camera.main != null)
-            frontViewCamera = Camera.main;
-
-        if (frontViewCamera == null)
-        {
-            GameObject mainCameraObj = GameObject.Find("Main Camera");
-            if (mainCameraObj != null)
-                frontViewCamera = mainCameraObj.GetComponent<Camera>();
-        }
-
-        if (frontViewCamera == null && cameraTransform != null)
-            frontViewCamera = cameraTransform.GetComponent<Camera>();
-
-        cam = frontViewCamera;
-    }
-
-    void SetupStabilization()
-    {
-        if (cam == null)
-            return;
-
-        if (enableStabilization)
-        {
-            stabilizer = cam.GetComponent<CameraStabilizer>();
-            if (stabilizer == null)
-            {
-                stabilizer = cam.gameObject.AddComponent<CameraStabilizer>();
-                createdStabilizerAtRuntime = true;
-            }
-
-            stabilizer.enabled = true;
-            stabilizer.targetTransform = cameraTransform;
-            stabilizer.positionSmoothTime = positionSmoothTime;
-            stabilizer.rotationSmoothTime = rotationSmoothTime;
-            stabilizer.stabilizeVertical = stabilizeVertical;
-            stabilizer.stabilizeRoll = stabilizeRoll;
-            stabilizer.stabilizePitch = false;
-            stabilizer.targetXRotation = cameraXRotation;
-        }
-        else
-        {
-            if (stabilizer != null)
-                stabilizer.enabled = false;
-
-            if (cameraTransform != null)
-            {
-                cam.transform.position = cameraTransform.position;
-                cam.transform.rotation = cameraTransform.rotation * Quaternion.Euler(cameraXRotation, 0f, 0f);
-            }
-        }
-    }
-
-    void SetupRenderResources()
-    {
-        if (renderTexture != null)
-        {
-            renderTexture.Release();
-            Destroy(renderTexture);
-            renderTexture = null;
-        }
-
-        if (texture2D != null)
-        {
-            Destroy(texture2D);
-            texture2D = null;
-        }
-
-        renderTexture = new RenderTexture(imageWidth, imageHeight, 24, RenderTextureFormat.ARGB32);
-        renderTexture.Create();
-
-        texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
-        cam.targetTexture = renderTexture;
-        cam.enabled = false;
-    }
-
-    Camera GetOrCreateRuntimeFrontCamera(Camera templateCamera)
-    {
-        string runtimeCameraName = $"{gameObject.name}_PublishedFrontCamera";
-        GameObject runtimeCameraObject = GameObject.Find(runtimeCameraName);
-
-        if (runtimeCameraObject == null)
-        {
-            runtimeCameraObject = new GameObject(runtimeCameraName);
-            createdRuntimeFrontCameraAtRuntime = true;
-        }
-
-        Camera runtimeCamera = runtimeCameraObject.GetComponent<Camera>();
-        if (runtimeCamera == null)
-            runtimeCamera = runtimeCameraObject.AddComponent<Camera>();
-
-        runtimeCamera.enabled = false;
-        runtimeCamera.depth = -50f;
-
-        if (templateCamera != null)
-        {
-            runtimeCamera.nearClipPlane = templateCamera.nearClipPlane;
-            runtimeCamera.farClipPlane = templateCamera.farClipPlane;
-            runtimeCamera.fieldOfView = templateCamera.fieldOfView;
-            runtimeCamera.clearFlags = templateCamera.clearFlags;
-            runtimeCamera.backgroundColor = templateCamera.backgroundColor;
-            runtimeCamera.cullingMask = templateCamera.cullingMask;
-        }
-
-        return runtimeCamera;
     }
 
     void Update()
     {
         if (Time.time - lastPublishTime >= publishInterval)
         {
-            PublishImage();
+            if (rosPublishingEnabled)
+                PublishImage();
             lastPublishTime = Time.time;
         }
     }
 
     void PublishImage()
     {
-        if (cam == null || renderTexture == null || texture2D == null)
-            return;
+        if (cameraRenderer == null) return;
 
-        RenderTexture prevTarget = cam.targetTexture;
-
-        cam.targetTexture = renderTexture;
-        cam.Render();
-
-        RenderTexture.active = renderTexture;
-        texture2D.ReadPixels(new Rect(0, 0, imageWidth, imageHeight), 0, 0);
-        texture2D.Apply();
-        RenderTexture.active = null;
-
-        cam.targetTexture = prevTarget;
-
-        byte[] imageData = texture2D.GetRawTextureData();
-        byte[] rgbData = ConvertToRGB(imageData);
+        byte[] rgbData = cameraRenderer.ReadRgbData();
+        if (rgbData == null) return;
 
         ImageMsg imageMsg = new ImageMsg
         {
@@ -254,77 +85,41 @@ public class CameraPublisher : MonoBehaviour
                 },
                 frame_id = frameId
             },
-            height = (uint)imageHeight,
-            width = (uint)imageWidth,
+            height = (uint)cameraRenderer.imageHeight,
+            width = (uint)cameraRenderer.imageWidth,
             encoding = "rgb8",
             is_bigendian = 0,
-            step = (uint)(imageWidth * 3),
+            step = (uint)(cameraRenderer.imageWidth * 3),
             data = rgbData
         };
 
         ros.Publish(topicName, imageMsg);
     }
 
-    byte[] ConvertToRGB(byte[] rgbData)
-    {
-        int pixelCount = imageWidth * imageHeight;
-        byte[] flippedData = new byte[pixelCount * 3];
+    // ========== 하위 호환용 프로퍼티/메서드 (VehicleViewProvider, PolicyCameraPublisher 등에서 사용) ==========
 
-        for (int y = 0; y < imageHeight; y++)
-        {
-            int srcRow = (imageHeight - 1 - y) * imageWidth * 3;
-            int dstRow = y * imageWidth * 3;
-
-            for (int x = 0; x < imageWidth * 3; x++)
-                flippedData[dstRow + x] = rgbData[srcRow + x];
-        }
-
-        return flippedData;
-    }
-
-    // ========== 외부 접근용 메서드들 ==========
+    public Transform cameraTransform => cameraRenderer != null ? cameraRenderer.cameraTransform : null;
+    public float cameraXRotation => cameraRenderer != null ? cameraRenderer.cameraXRotation : 0f;
 
     public Camera GetCamera()
     {
-        return cam;
+        return cameraRenderer != null ? cameraRenderer.GetCamera() : null;
     }
 
     public RenderTexture GetRenderTexture()
     {
-        return renderTexture;
+        return cameraRenderer != null ? cameraRenderer.GetRenderTexture() : null;
     }
 
     public void RestoreRenderTexture()
     {
-        if (cam != null && renderTexture != null)
-            cam.targetTexture = renderTexture;
+        if (cameraRenderer != null)
+            cameraRenderer.RestoreRenderTexture();
     }
 
     public void RenderToScreen()
     {
-        if (cam != null)
-            cam.targetTexture = null;
-    }
-
-    void OnDestroy()
-    {
-        if (renderTexture != null)
-        {
-            renderTexture.Release();
-            Destroy(renderTexture);
-            renderTexture = null;
-        }
-
-        if (texture2D != null)
-        {
-            Destroy(texture2D);
-            texture2D = null;
-        }
-
-        if (createdStabilizerAtRuntime && stabilizer != null)
-            Destroy(stabilizer);
-
-        if (createdRuntimeFrontCameraAtRuntime && cam != null)
-            Destroy(cam.gameObject);
+        if (cameraRenderer != null)
+            cameraRenderer.RenderToScreen();
     }
 }

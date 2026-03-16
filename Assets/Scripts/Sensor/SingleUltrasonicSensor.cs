@@ -1,7 +1,5 @@
 using System;
 using UnityEngine;
-using Unity.Robotics.ROSTCPConnector;
-using RosMessageTypes.Std;
 
 /// <summary>
 /// 개별 초음파 센서를 시뮬레이션하는 클래스입니다.
@@ -64,36 +62,10 @@ public class SingleUltrasonicSensor : MonoBehaviour
     public Color hitColor = Color.cyan; // 장애물 감지 시 레이 색상
     public Color missColor = Color.blue; // 미감지 시 레이 색상
 
-    [Header("External Topic Input (실차 센서 토픽 연동)")]
-    [Tooltip("true면 레이캐스트 대신 개별 센서 ROS 토픽을 우선 사용")]
-    public bool useExternalTopicInput = false;
-    [Tooltip("true면 inputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽을 사용")]
-    public bool autoTopicFromSensorPosition = true;
-    [Tooltip("개별 초음파 입력 토픽 (std_msgs/Float32MultiArray: [distance_m, confidence(optional), angle_deg(optional)])")]
-    public string inputTopicName = "";
-    [Tooltip("이 시간(초) 이상 새 메시지가 없으면 stale로 판단")]
-    public float externalDataTimeoutSec = 0.5f;
-    [Tooltip("외부 입력이 stale일 때 시뮬레이션 레이캐스트로 fallback")]
-    public bool fallbackToRaycastWhenExternalStale = true;
+    [Header("External Defaults (Bridge에서 사용)")]
     [Tooltip("confidence가 메시지에 없을 때 사용할 기본값")]
     [Range(0f, 1f)]
     public float defaultExternalConfidence = 1f;
-
-    [Header("External Topic Debug (Read Only)")]
-    [SerializeField] private string resolvedInputTopicName = "";
-    [SerializeField] private bool hasExternalMessage = false;
-    [SerializeField] private float lastExternalMessageTime = -999f;
-
-    [Header("Raw Topic Output (개별 센서 발행)")]
-    [Tooltip("true면 이 센서의 raw 토픽을 발행")]
-    public bool publishRawTopic = true;
-    [Tooltip("true면 outputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽을 사용")]
-    public bool autoOutputTopicFromSensorPosition = true;
-    [Tooltip("개별 초음파 출력 토픽 (std_msgs/Float32MultiArray: [distance_m, confidence, angle_deg])")]
-    public string outputTopicName = "";
-
-    [Header("Raw Topic Output Debug (Read Only)")]
-    [SerializeField] private string resolvedOutputTopicName = "";
 
     // 감지 결과 데이터
     
@@ -143,8 +115,10 @@ public class SingleUltrasonicSensor : MonoBehaviour
     // 내부 동작 제어 변수
     private float scanInterval = 0.05f; // 스캔 주기(초)
     private float lastScanTime;
-    private ROSConnection ros;
-    private bool rawPublisherReady = false;
+
+    // Bridge에서 제어하는 외부 입력 상태
+    private bool externalInputFresh = false;
+    private bool externalFallbackToRaycast = true;
 
     void Start()
     {
@@ -154,12 +128,6 @@ public class SingleUltrasonicSensor : MonoBehaviour
             selfRoot = transform.root;
 
         lastScanTime = Time.time;
-        if (useExternalTopicInput)
-            SetupExternalTopicInput();
-        if (publishRawTopic)
-            SetupRawTopicOutput();
-
-        Debug.Log($"[Ultrasonic-{SensorName}] Initialized - Range: {rangeMin}-{rangeMax}m, FOV: {fieldOfView}°");
     }
 
     void Update()
@@ -167,26 +135,24 @@ public class SingleUltrasonicSensor : MonoBehaviour
         if (Time.time - lastScanTime < scanInterval)
             return;
 
-        if (!useExternalTopicInput)
+        if (!externalInputFresh)
         {
-            PerformScan();
-            PublishRawTopic();
-            lastScanTime = Time.time;
-            return;
-        }
-
-        bool externalFresh = hasExternalMessage &&
-                             (Time.time - lastExternalMessageTime) <= Mathf.Max(0.02f, externalDataTimeoutSec);
-        if (!externalFresh)
-        {
-            if (fallbackToRaycastWhenExternalStale)
+            if (externalFallbackToRaycast)
                 PerformScan();
             else
                 ResetDetection();
         }
 
-        PublishRawTopic();
         lastScanTime = Time.time;
+    }
+
+    /// <summary>
+    /// Bridge가 매 프레임 호출하여 외부 입력 상태를 설정한다.
+    /// </summary>
+    public void SetExternalInputState(bool isFresh, bool fallbackToRaycast)
+    {
+        externalInputFresh = isFresh;
+        externalFallbackToRaycast = fallbackToRaycast;
     }
 
     /// <summary>
@@ -270,106 +236,26 @@ public class SingleUltrasonicSensor : MonoBehaviour
         }
     }
 
-    void SetupExternalTopicInput()
+    /// <summary>
+    /// Bridge가 외부 토픽 데이터를 수신했을 때 호출하여 감지 결과를 주입한다.
+    /// </summary>
+    public void ApplyExternalData(float[] data)
     {
-        ros = ROSConnection.GetOrCreateInstance();
-
-        if (autoTopicFromSensorPosition && string.IsNullOrWhiteSpace(inputTopicName))
-            inputTopicName = GetDefaultInputTopicName();
-
-        if (string.IsNullOrWhiteSpace(inputTopicName))
-        {
-            Debug.LogWarning($"[Ultrasonic-{SensorName}] inputTopicName이 비어 있어 외부 입력 모드를 비활성화합니다.");
-            useExternalTopicInput = false;
-            return;
-        }
-
-        resolvedInputTopicName = RosTopicNamespace.Resolve(gameObject, inputTopicName);
-        ros.Subscribe<Float32MultiArrayMsg>(resolvedInputTopicName, OnExternalData);
-        Debug.Log($"[Ultrasonic-{SensorName}] External topic subscribed: {resolvedInputTopicName}");
-    }
-
-    void SetupRawTopicOutput()
-    {
-        ros = ROSConnection.GetOrCreateInstance();
-
-        if (autoOutputTopicFromSensorPosition && string.IsNullOrWhiteSpace(outputTopicName))
-            outputTopicName = GetDefaultRawTopicName();
-
-        if (string.IsNullOrWhiteSpace(outputTopicName))
-        {
-            Debug.LogWarning($"[Ultrasonic-{SensorName}] outputTopicName이 비어 있어 raw 발행을 비활성화합니다.");
-            return;
-        }
-
-        resolvedOutputTopicName = RosTopicNamespace.Resolve(gameObject, outputTopicName);
-        if (!string.IsNullOrWhiteSpace(resolvedInputTopicName) && resolvedInputTopicName == resolvedOutputTopicName)
-        {
-            Debug.LogWarning($"[Ultrasonic-{SensorName}] input/output topic이 동일({resolvedOutputTopicName})하여 self-loop 방지를 위해 raw 발행을 비활성화합니다.");
-            return;
-        }
-
-        ros.RegisterPublisher<Float32MultiArrayMsg>(resolvedOutputTopicName);
-        rawPublisherReady = true;
-        Debug.Log($"[Ultrasonic-{SensorName}] Raw topic publisher registered: {resolvedOutputTopicName}");
-    }
-
-    string GetDefaultInputTopicName()
-    {
-        return GetDefaultRawTopicName();
-    }
-
-    string GetDefaultRawTopicName()
-    {
-        return sensorPosition switch
-        {
-            SensorPosition.FrontLeft => "/ultrasonic/fl",
-            SensorPosition.FrontRight => "/ultrasonic/fr",
-            SensorPosition.FrontCenter => "/ultrasonic/fc",
-            SensorPosition.RearLeft => "/ultrasonic/rl",
-            SensorPosition.RearRight => "/ultrasonic/rr",
-            SensorPosition.RearCenter => "/ultrasonic/rc",
-            _ => "/ultrasonic/unknown"
-        };
-    }
-
-    void PublishRawTopic()
-    {
-        if (!publishRawTopic || !rawPublisherReady || ros == null)
-            return;
-
-        Float32MultiArrayMsg msg = new Float32MultiArrayMsg
-        {
-            data = new float[]
-            {
-                HasDetection ? Distance : -1f,
-                Confidence,
-                DetectedAngle
-            }
-        };
-        ros.Publish(resolvedOutputTopicName, msg);
-    }
-
-    void OnExternalData(Float32MultiArrayMsg msg)
-    {
-        hasExternalMessage = true;
-        lastExternalMessageTime = Time.time;
-
-        if (msg == null || msg.data == null || msg.data.Length == 0)
+        if (data == null || data.Length == 0)
         {
             ResetDetection();
             return;
         }
 
-        float distance = msg.data[0];
+        float distance = data[0];
         if (!IsValidExternalDistance(distance))
         {
             ResetDetection();
             return;
         }
 
-        float confidence = msg.data.Length > 1 ? msg.data[1] : defaultExternalConfidence;
-        float angle = msg.data.Length > 2 ? msg.data[2] : 0f;
+        float confidence = data.Length > 1 ? data[1] : defaultExternalConfidence;
+        float angle = data.Length > 2 ? data[2] : 0f;
 
         Distance = Mathf.Clamp(distance, rangeMin, rangeMax);
         Confidence = Mathf.Clamp01(confidence);

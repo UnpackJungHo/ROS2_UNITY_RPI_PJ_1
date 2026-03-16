@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using Unity.Robotics.ROSTCPConnector;
-using RosMessageTypes.Std;
 
 /// <summary>
 /// 단일 레이더 센서 시뮬레이터
@@ -101,38 +99,12 @@ public class SingleRadarSensor : MonoBehaviour
     public Color hitColor = Color.red;
     public Color missColor = new Color(1f, 0.5f, 0.5f, 0.3f);
 
-    [Header("External Topic Input (실차 센서 토픽 연동)")]
-    [Tooltip("true면 레이캐스트 대신 개별 레이더 토픽 입력을 우선 사용")]
-    public bool useExternalTopicInput = false;
-    [Tooltip("true면 inputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽 사용")]
-    public bool autoTopicFromSensorPosition = true;
-    [Tooltip("개별 레이더 입력 토픽 (std_msgs/Float32MultiArray 권장)")]
-    public string inputTopicName = "";
-    [Tooltip("이 시간(초) 이상 새 메시지가 없으면 stale로 판단")]
-    public float externalDataTimeoutSec = 0.5f;
-    [Tooltip("외부 입력이 stale일 때 시뮬레이션 레이캐스트로 fallback")]
-    public bool fallbackToRaycastWhenExternalStale = true;
+    [Header("External Defaults (Bridge에서 사용)")]
     [Range(0f, 1f)]
     [Tooltip("confidence 필드가 없거나 비정상일 때 기본값")]
     public float defaultExternalConfidence = 0.9f;
     [Tooltip("RCS 필드가 없을 때 기본값")]
     public float defaultExternalRcs = 8f;
-
-    [Header("External Topic Debug (Read Only)")]
-    [SerializeField] private string resolvedInputTopicName = "";
-    [SerializeField] private bool hasExternalMessage = false;
-    [SerializeField] private float lastExternalMessageTime = -999f;
-
-    [Header("Raw Topic Output (개별 센서 발행)")]
-    [Tooltip("true면 이 센서의 raw 토픽을 발행")]
-    public bool publishRawTopic = true;
-    [Tooltip("true면 outputTopicName이 비어있을 때 sensorPosition 기반 기본 토픽 사용")]
-    public bool autoOutputTopicFromSensorPosition = true;
-    [Tooltip("개별 레이더 출력 토픽 (std_msgs/Float32MultiArray: [distance, angle, radial_vel, rcs, confidence, isGhost, isClutter])")]
-    public string outputTopicName = "";
-
-    [Header("Raw Topic Output Debug (Read Only)")]
-    [SerializeField] private string resolvedOutputTopicName = "";
 
     // Legacy output (기존 호환)
     public float Distance { get; private set; } = float.PositiveInfinity;
@@ -151,8 +123,10 @@ public class SingleRadarSensor : MonoBehaviour
     private float lastScanTime;
     private readonly List<RadarDetection> detections = new List<RadarDetection>();
     private readonly Dictionary<int, int> colliderIndexMap = new Dictionary<int, int>();
-    private ROSConnection ros;
-    private bool rawPublisherReady = false;
+
+    // Bridge에서 제어하는 외부 입력 상태
+    private bool externalInputFresh = false;
+    private bool externalFallbackToRaycast = true;
 
     void Start()
     {
@@ -167,12 +141,6 @@ public class SingleRadarSensor : MonoBehaviour
 
         AutoFindEgoVelocitySources();
         lastScanTime = Time.time;
-        if (useExternalTopicInput)
-            SetupExternalTopicInput();
-        if (publishRawTopic)
-            SetupRawTopicOutput();
-
-        Debug.Log($"[Radar-{SensorName}] Initialized - Range: {rangeMin}-{rangeMax}m, H-FOV: {horizontalFOV}°, V-FOV: {verticalFOV}°");
     }
 
     void Update()
@@ -180,26 +148,25 @@ public class SingleRadarSensor : MonoBehaviour
         if (Time.time - lastScanTime < scanInterval)
             return;
 
-        if (!useExternalTopicInput)
+        if (!externalInputFresh)
         {
-            PerformScan();
-            PublishRawTopic();
-            lastScanTime = Time.time;
-            return;
-        }
-
-        bool externalFresh = hasExternalMessage &&
-                             (Time.time - lastExternalMessageTime) <= Mathf.Max(0.02f, externalDataTimeoutSec);
-        if (!externalFresh)
-        {
-            if (fallbackToRaycastWhenExternalStale)
+            if (externalFallbackToRaycast)
                 PerformScan();
             else
                 ClearAllDetections();
         }
 
-        PublishRawTopic();
         lastScanTime = Time.time;
+    }
+
+    /// <summary>
+    /// Bridge가 매 프레임 호출하여 외부 입력 상태를 설정한다.
+    /// externalInputFresh=false이고 fallback=true이면 레이캐스트 수행.
+    /// </summary>
+    public void SetExternalInputState(bool isFresh, bool fallbackToRaycast)
+    {
+        externalInputFresh = isFresh;
+        externalFallbackToRaycast = fallbackToRaycast;
     }
 
     public void PerformScan()
@@ -457,7 +424,7 @@ public class SingleRadarSensor : MonoBehaviour
         }
     }
 
-    private bool TryGetPrimaryDetection(out RadarDetection primary)
+    public bool TryGetPrimaryDetection(out RadarDetection primary)
     {
         for (int i = 0; i < detections.Count; i++)
         {
@@ -578,99 +545,10 @@ public class SingleRadarSensor : MonoBehaviour
         scanInterval = Mathf.Max(0.005f, interval);
     }
 
-    void SetupExternalTopicInput()
-    {
-        ros = ROSConnection.GetOrCreateInstance();
-
-        if (autoTopicFromSensorPosition && string.IsNullOrWhiteSpace(inputTopicName))
-            inputTopicName = GetDefaultInputTopicName();
-
-        if (string.IsNullOrWhiteSpace(inputTopicName))
-        {
-            Debug.LogWarning($"[Radar-{SensorName}] inputTopicName이 비어 있어 외부 입력 모드를 비활성화합니다.");
-            useExternalTopicInput = false;
-            return;
-        }
-
-        resolvedInputTopicName = RosTopicNamespace.Resolve(gameObject, inputTopicName);
-        ros.Subscribe<Float32MultiArrayMsg>(resolvedInputTopicName, OnExternalDetections);
-        Debug.Log($"[Radar-{SensorName}] External topic subscribed: {resolvedInputTopicName}");
-    }
-
-    void SetupRawTopicOutput()
-    {
-        ros = ROSConnection.GetOrCreateInstance();
-
-        if (autoOutputTopicFromSensorPosition && string.IsNullOrWhiteSpace(outputTopicName))
-            outputTopicName = GetDefaultRawTopicName();
-
-        if (string.IsNullOrWhiteSpace(outputTopicName))
-        {
-            Debug.LogWarning($"[Radar-{SensorName}] outputTopicName이 비어 있어 raw 발행을 비활성화합니다.");
-            return;
-        }
-
-        resolvedOutputTopicName = RosTopicNamespace.Resolve(gameObject, outputTopicName);
-        if (!string.IsNullOrWhiteSpace(resolvedInputTopicName) && resolvedInputTopicName == resolvedOutputTopicName)
-        {
-            Debug.LogWarning($"[Radar-{SensorName}] input/output topic이 동일({resolvedOutputTopicName})하여 self-loop 방지를 위해 raw 발행을 비활성화합니다.");
-            return;
-        }
-
-        ros.RegisterPublisher<Float32MultiArrayMsg>(resolvedOutputTopicName);
-        rawPublisherReady = true;
-        Debug.Log($"[Radar-{SensorName}] Raw topic publisher registered: {resolvedOutputTopicName}");
-    }
-
-    string GetDefaultInputTopicName()
-    {
-        return GetDefaultRawTopicName();
-    }
-
-    string GetDefaultRawTopicName()
-    {
-        return sensorPosition == SensorPosition.Front ? "/radar/front" : "/radar/rear";
-    }
-
-    void PublishRawTopic()
-    {
-        if (!publishRawTopic || !rawPublisherReady || ros == null)
-            return;
-
-        bool hasPrimary = TryGetPrimaryDetection(out RadarDetection primary);
-        float distance = hasPrimary ? primary.distance : -1f;
-        float angle = hasPrimary ? primary.angle : 0f;
-        float radialVelocity = hasPrimary ? primary.radialVelocity : 0f;
-        float rcs = hasPrimary ? primary.rcs : defaultExternalRcs;
-        float confidence = hasPrimary ? primary.confidence : 0f;
-        float isGhost = (hasPrimary && primary.isGhost) ? 1f : 0f;
-        float isClutter = (hasPrimary && primary.isClutter) ? 1f : 0f;
-
-        Float32MultiArrayMsg msg = new Float32MultiArrayMsg
-        {
-            data = new float[]
-            {
-                distance,
-                angle,
-                radialVelocity,
-                rcs,
-                confidence,
-                isGhost,
-                isClutter
-            }
-        };
-        ros.Publish(resolvedOutputTopicName, msg);
-    }
-
-    void OnExternalDetections(Float32MultiArrayMsg msg)
-    {
-        hasExternalMessage = true;
-        lastExternalMessageTime = Time.time;
-
-        ApplyExternalDetections(msg != null ? msg.data : null);
-    }
-
-    void ApplyExternalDetections(float[] data)
+    /// <summary>
+    /// Bridge가 외부 토픽 데이터를 수신했을 때 호출하여 감지 결과를 주입한다.
+    /// </summary>
+    public void ApplyExternalDetections(float[] data)
     {
         detections.Clear();
         colliderIndexMap.Clear();
