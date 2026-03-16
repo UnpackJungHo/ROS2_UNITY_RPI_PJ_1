@@ -58,7 +58,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
     public Transform selfRoot;
 
     [Header("Debug (디버그 설정)")]
-    public bool showDebugRays = true; // Scene 뷰에 레이를 그릴지 여부
+    public bool showDebugRays = false; // Scene 뷰에 레이를 그릴지 여부
     public Color hitColor = Color.cyan; // 장애물 감지 시 레이 색상
     public Color missColor = Color.blue; // 미감지 시 레이 색상
 
@@ -115,6 +115,9 @@ public class SingleUltrasonicSensor : MonoBehaviour
     // 내부 동작 제어 변수
     private float scanInterval = 0.05f; // 스캔 주기(초)
     private float lastScanTime;
+
+    // GC-free raycast: 사전 할당 버퍼
+    private RaycastHit[] _raycastHitBuffer = new RaycastHit[8];
 
     // Bridge에서 제어하는 외부 입력 상태
     private bool externalInputFresh = false;
@@ -184,19 +187,20 @@ public class SingleUltrasonicSensor : MonoBehaviour
 
             bool hitAccepted = false;
             RaycastHit acceptedHit = default;
-            RaycastHit[] hits = Physics.RaycastAll(
+            int hitCount = Physics.RaycastNonAlloc(
                 origin,
                 direction,
+                _raycastHitBuffer,
                 rangeMax,
                 detectionLayer,
                 QueryTriggerInteraction.Ignore
             );
-            if (hits != null && hits.Length > 0)
+            if (hitCount > 0)
             {
-                Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-                for (int h = 0; h < hits.Length; h++)
+                Array.Sort(_raycastHitBuffer, 0, hitCount, SensorPhysicsUtil.HitDistanceComparer);
+                for (int h = 0; h < hitCount; h++)
                 {
-                    RaycastHit hit = hits[h];
+                    RaycastHit hit = _raycastHitBuffer[h];
                     if (hit.collider == null)
                         continue;
                     if (IsSelfCollider(hit.collider))
@@ -267,11 +271,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
     }
 
     bool IsValidExternalDistance(float distance)
-    {
-        if (float.IsNaN(distance) || float.IsInfinity(distance))
-            return false;
-        return distance > 0f;
-    }
+        => SensorPhysicsUtil.IsValidExternalDistance(distance);
 
     void ResetDetection()
     {
@@ -282,13 +282,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
     }
 
     bool IsSelfCollider(Collider collider)
-    {
-        if (!ignoreSelfColliders || collider == null || selfRoot == null)
-            return false;
-
-        Transform ct = collider.transform;
-        return ct == selfRoot || ct.IsChildOf(selfRoot);
-    }
+        => SensorPhysicsUtil.IsSelfCollider(collider, ignoreSelfColliders, selfRoot);
 
     float CalculateDetectionConfidence(float distance, Vector3 rayDirection, Vector3 hitNormal)
     {

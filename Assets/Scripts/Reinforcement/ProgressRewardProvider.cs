@@ -103,6 +103,7 @@ public class ProgressRewardProvider : MonoBehaviour
     private float previousPathS = 0f;
     private bool initialized = false;
     private float unconsumedStepReward = 0f;
+    private int lastNearestSegmentIndex = 0; // 이전 프레임 최근접 세그먼트 캐시
 
     /// <summary>
     /// 참조 자동 연결, 트리거 프록시 구성, 필요 시 RoadData 기반 waypoint 자동 생성,
@@ -459,7 +460,8 @@ public class ProgressRewardProvider : MonoBehaviour
     }
 
     /// <summary>
-    /// 경로의 모든 segment 중 최근접 투영점을 찾아 path-s(누적 진행거리)와 횡오차를 계산한다.
+    /// 경로의 최근접 투영점을 찾아 path-s(누적 진행거리)와 횡오차를 계산한다.
+    /// 이전 프레임 인덱스를 캐시하여 인접 세그먼트만 우선 탐색 (O(1) amortized).
     /// </summary>
     float ProjectOnPath(Vector3 position, out float lateralError)
     {
@@ -469,32 +471,71 @@ public class ProgressRewardProvider : MonoBehaviour
 
         float bestS = 0f;
         float bestDistSq = float.PositiveInfinity;
+        int bestIndex = lastNearestSegmentIndex;
 
         int segCount = isLoopedPath ? progressWaypoints.Length : progressWaypoints.Length - 1;
-        for (int i = 0; i < segCount; i++)
-        {
-            int j = (i + 1) % progressWaypoints.Length;
-            Vector3 a = progressWaypoints[i].position;
-            Vector3 b = progressWaypoints[j].position;
-            Vector3 ab = b - a;
-            float abLenSq = ab.sqrMagnitude;
-            if (abLenSq < 1e-6f)
-                continue;
 
-            float t = Mathf.Clamp01(Vector3.Dot(position - a, ab) / abLenSq);
-            Vector3 proj = a + t * ab;
-            float distSq = (position - proj).sqrMagnitude;
+        // 1단계: 이전 인덱스 주변 +-3 세그먼트만 먼저 탐색
+        const int SEARCH_RADIUS = 3;
+        int startIdx = Mathf.Max(0, lastNearestSegmentIndex - SEARCH_RADIUS);
+        int endIdx = Mathf.Min(segCount, lastNearestSegmentIndex + SEARCH_RADIUS + 1);
+        if (isLoopedPath)
+        {
+            startIdx = lastNearestSegmentIndex - SEARCH_RADIUS;
+            endIdx = lastNearestSegmentIndex + SEARCH_RADIUS + 1;
+        }
+
+        for (int raw = startIdx; raw < endIdx; raw++)
+        {
+            int i = isLoopedPath ? ((raw % segCount) + segCount) % segCount : raw;
+            if (i < 0 || i >= segCount) continue;
+            float distSq = ProjectSegment(position, i, out float s);
             if (distSq < bestDistSq)
             {
                 bestDistSq = distSq;
-                float segStart = (i < cumulativeLengths.Count) ? cumulativeLengths[i] : 0f;
-                float segLen = Mathf.Sqrt(abLenSq);
-                bestS = segStart + (t * segLen);
+                bestS = s;
+                bestIndex = i;
             }
         }
 
+        // 2단계: 근접 탐색 결과가 충분히 가까우면 (횡오차 < 1m) 전체 탐색 스킵
+        if (bestDistSq > 1f)
+        {
+            for (int i = 0; i < segCount; i++)
+            {
+                float distSq = ProjectSegment(position, i, out float s);
+                if (distSq < bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    bestS = s;
+                    bestIndex = i;
+                }
+            }
+        }
+
+        lastNearestSegmentIndex = bestIndex;
         lateralError = Mathf.Sqrt(bestDistSq);
         return bestS;
+    }
+
+    float ProjectSegment(Vector3 position, int segIndex, out float pathS)
+    {
+        int j = (segIndex + 1) % progressWaypoints.Length;
+        Vector3 a = progressWaypoints[segIndex].position;
+        Vector3 b = progressWaypoints[j].position;
+        Vector3 ab = b - a;
+        float abLenSq = ab.sqrMagnitude;
+        if (abLenSq < 1e-6f)
+        {
+            pathS = (segIndex < cumulativeLengths.Count) ? cumulativeLengths[segIndex] : 0f;
+            return (position - a).sqrMagnitude;
+        }
+
+        float t = Mathf.Clamp01(Vector3.Dot(position - a, ab) / abLenSq);
+        Vector3 proj = a + t * ab;
+        float segStart = (segIndex < cumulativeLengths.Count) ? cumulativeLengths[segIndex] : 0f;
+        pathS = segStart + (t * Mathf.Sqrt(abLenSq));
+        return (position - proj).sqrMagnitude;
     }
 
     /// <summary>
@@ -753,5 +794,6 @@ public class ProgressRewardProvider : MonoBehaviour
         cumulativeSafetyPenalty = 0f;
         cumulativeTrafficPenalty = 0f;
         cumulativeReward = 0f;
+        lastNearestSegmentIndex = 0;
     }
 }

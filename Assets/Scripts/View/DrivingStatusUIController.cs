@@ -95,6 +95,9 @@ public class DrivingStatusUIController : MonoBehaviour
 
     private ROSConnection ros;
     private bool externalCollisionSubscribed = false;
+    private bool autoFindCompleted = false;
+    private float lastUiUpdateTime = 0f;
+    private const float UI_UPDATE_INTERVAL = 0.1f; // 10Hz UI 갱신 (60Hz→10Hz)
     private int externalWarningLevel = 0;
     private float externalTtc = float.PositiveInfinity;
     private float externalDistance = float.PositiveInfinity;
@@ -105,24 +108,29 @@ public class DrivingStatusUIController : MonoBehaviour
     void Start()
     {
         if (autoFindReferences)
+        {
             AutoFindReferences();
+            autoFindCompleted = true;
+        }
         SetupExternalCollisionTopicSubscription();
     }
 
     void Update()
     {
-        if (autoFindReferences &&
-            (collisionWarningEngine == null || dataCollector == null || regressionController == null ||
-             wheelController == null ||
-             trafficLightSubscriber == null || trafficLightDecisionEngine == null || sceneTrafficLight == null ||
-             progressRewardProvider == null ||
-             rlEpisodeEvaluator == null))
+        // AutoFindReferences를 Start 직후 1회만 재시도 (매 프레임 FindObjectOfType 방지)
+        if (autoFindReferences && !autoFindCompleted)
         {
             AutoFindReferences();
+            autoFindCompleted = true;
         }
 
         if (useExternalCollisionTopicForUI && !externalCollisionSubscribed)
             SetupExternalCollisionTopicSubscription();
+
+        // UI 갱신을 10Hz로 스로틀 (문자열 GC 압력 대폭 감소)
+        if (Time.time - lastUiUpdateTime < UI_UPDATE_INTERVAL)
+            return;
+        lastUiUpdateTime = Time.time;
 
         UpdateCollisionWarningUI();
         UpdateDataCollectorUI();

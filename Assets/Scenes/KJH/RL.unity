@@ -4109,6 +4109,10 @@ PrefabInstance:
       propertyPath: m_ParentAnchorRotation.y
       value: -0.0000012814999
       objectReference: {fileID: 0}
+    - target: {fileID: 2986410986864082358, guid: f978bfd9935c479128edebc0828f364d, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3376232722682779796, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: namespacePrefix
       value: /amr3
@@ -22818,6 +22822,10 @@ PrefabInstance:
       propertyPath: stopLineTransforms.Array.data[1]
       value: 
       objectReference: {fileID: 591031728}
+    - target: {fileID: 2986410986864082358, guid: f978bfd9935c479128edebc0828f364d, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4711191307475830511, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: roadObject
       value: 
@@ -30480,6 +30488,10 @@ PrefabInstance:
     - target: {fileID: 2557366220179019281, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: m_ParentAnchorRotation.z
       value: 0.70710564
+      objectReference: {fileID: 0}
+    - target: {fileID: 2986410986864082358, guid: f978bfd9935c479128edebc0828f364d, type: 3}
+      propertyPath: m_Enabled
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3376232722682779796, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: namespacePrefix
@@ -137183,6 +137195,10 @@ PrefabInstance:
       propertyPath: m_ParentAnchorPosition.z
       value: 0.0000028908253
       objectReference: {fileID: 0}
+    - target: {fileID: 2986410986864082358, guid: f978bfd9935c479128edebc0828f364d, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3376232722682779796, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: namespacePrefix
       value: /amr5
@@ -198293,6 +198309,10 @@ PrefabInstance:
       propertyPath: m_ParentAnchorRotation.z
       value: 0.7071055
       objectReference: {fileID: 0}
+    - target: {fileID: 2986410986864082358, guid: f978bfd9935c479128edebc0828f364d, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3376232722682779796, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: namespacePrefix
       value: /amr1
@@ -203274,6 +203294,10 @@ PrefabInstance:
     - target: {fileID: 2557366220179019281, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: m_ParentAnchorRotation.z
       value: 0.70710564
+      objectReference: {fileID: 0}
+    - target: {fileID: 2986410986864082358, guid: f978bfd9935c479128edebc0828f364d, type: 3}
+      propertyPath: m_Enabled
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3376232722682779796, guid: f978bfd9935c479128edebc0828f364d, type: 3}
       propertyPath: namespacePrefix

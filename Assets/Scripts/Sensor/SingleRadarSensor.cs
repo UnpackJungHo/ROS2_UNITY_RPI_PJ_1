@@ -95,7 +95,7 @@ public class SingleRadarSensor : MonoBehaviour
     public Transform selfRoot;
 
     [Header("Debug (디버그 설정)")]
-    public bool showDebugRays = true;
+    public bool showDebugRays = false;
     public Color hitColor = Color.red;
     public Color missColor = new Color(1f, 0.5f, 0.5f, 0.3f);
 
@@ -123,6 +123,19 @@ public class SingleRadarSensor : MonoBehaviour
     private float lastScanTime;
     private readonly List<RadarDetection> detections = new List<RadarDetection>();
     private readonly Dictionary<int, int> colliderIndexMap = new Dictionary<int, int>();
+
+    // GC-free: 사전 할당 버퍼 및 Comparer
+    private RaycastHit[] _raycastHitBuffer = new RaycastHit[16];
+    private static readonly DetectionComparer _detectionComparer = new DetectionComparer();
+
+    private sealed class DetectionComparer : System.Collections.Generic.IComparer<RadarDetection>
+    {
+        public int Compare(RadarDetection a, RadarDetection b)
+        {
+            int d = a.distance.CompareTo(b.distance);
+            return d != 0 ? d : b.confidence.CompareTo(a.confidence);
+        }
+    }
 
     // Bridge에서 제어하는 외부 입력 상태
     private bool externalInputFresh = false;
@@ -191,17 +204,18 @@ public class SingleRadarSensor : MonoBehaviour
                 float vAngle = -halfVFOV + (v * vAngleStep);
                 Vector3 direction = GetDirectionFromAngles(hAngle, vAngle);
 
-                RaycastHit[] hits = Physics.RaycastAll(origin, direction, rangeMax, detectionLayer, QueryTriggerInteraction.Ignore);
-                if (hits.Length == 0)
+                int hitCount = Physics.RaycastNonAlloc(origin, direction, _raycastHitBuffer, rangeMax, detectionLayer, QueryTriggerInteraction.Ignore);
+                if (hitCount == 0)
                 {
                     continue;
                 }
 
-                Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                Array.Sort(_raycastHitBuffer, 0, hitCount, SensorPhysicsUtil.HitDistanceComparer);
 
                 int acceptedHits = 0;
-                foreach (var hit in hits)
+                for (int hi = 0; hi < hitCount; hi++)
                 {
+                    var hit = _raycastHitBuffer[hi];
                     if (acceptedHits >= maxHitsPerRay) break;
                     if (hit.collider == null) continue;
                     if (IsSelfCollider(hit.collider)) continue;
@@ -274,13 +288,7 @@ public class SingleRadarSensor : MonoBehaviour
     }
 
     private bool IsSelfCollider(Collider collider)
-    {
-        if (!ignoreSelfColliders || collider == null || selfRoot == null)
-            return false;
-
-        Transform ct = collider.transform;
-        return ct == selfRoot || ct.IsChildOf(selfRoot);
-    }
+        => SensorPhysicsUtil.IsSelfCollider(collider, ignoreSelfColliders, selfRoot);
 
     private void AddOrUpdateDetection(Collider collider, RadarDetection candidate)
     {
@@ -386,12 +394,7 @@ public class SingleRadarSensor : MonoBehaviour
 
     private void SortAndTrimDetections()
     {
-        detections.Sort((a, b) =>
-        {
-            int distanceCompare = a.distance.CompareTo(b.distance);
-            if (distanceCompare != 0) return distanceCompare;
-            return b.confidence.CompareTo(a.confidence);
-        });
+        detections.Sort(_detectionComparer);
 
         if (detections.Count > maxDetections)
         {
@@ -648,11 +651,7 @@ public class SingleRadarSensor : MonoBehaviour
     }
 
     bool IsValidExternalDistance(float distance)
-    {
-        if (float.IsNaN(distance) || float.IsInfinity(distance))
-            return false;
-        return distance > 0f;
-    }
+        => SensorPhysicsUtil.IsValidExternalDistance(distance);
 
     void ClearAllDetections()
     {

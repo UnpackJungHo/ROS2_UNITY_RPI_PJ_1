@@ -260,7 +260,6 @@ public class CameraRenderer : MonoBehaviour
 
         RenderTexture.active = renderTexture;
         texture2D.ReadPixels(new Rect(0, 0, imageWidth, imageHeight), 0, 0);
-        texture2D.Apply();
         RenderTexture.active = null;
 
         byte[] imageData = texture2D.GetRawTextureData();
