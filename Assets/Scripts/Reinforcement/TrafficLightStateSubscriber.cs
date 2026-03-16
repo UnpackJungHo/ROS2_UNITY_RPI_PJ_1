@@ -32,7 +32,7 @@ public class TrafficLightStateSubscriber : MonoBehaviour
         ros.Subscribe<StringMsg>(stateTopicName, OnTrafficLightState);
         ros.Subscribe<Float32MultiArrayMsg>(perceptionTopicName, OnTrafficLightPerception);
 
-        Debug.Log($"[TrafficLight] Subscribing state={stateTopicName}, perception={perceptionTopicName}");
+       //Debug.Log($"[TrafficLight] Subscribing state={stateTopicName}, perception={perceptionTopicName}");
     }
 
     private void OnTrafficLightState(StringMsg msg)

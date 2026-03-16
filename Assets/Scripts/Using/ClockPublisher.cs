@@ -12,7 +12,7 @@ public class ClockPublisher : MonoBehaviour
 {
     [Header("ROS Settings")]
     public string clockTopic = "/clock";
-    public float publishRate = 100f; // 100Hz recommended for smooth check
+    public float publishRate = 50f; // 100Hz recommended for smooth check
 
     private ROSConnection ros;
     private float timeElapsed;

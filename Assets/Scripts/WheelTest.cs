@@ -518,7 +518,7 @@ public class WheelTest : MonoBehaviour
         // 충분한 구동력을 확보해야 maxSpeed(2 m/s)까지 도달 가능
         drive.damping = 10f;
         drive.targetVelocity = velocity;
-        drive.forceLimit = 120f;
+        drive.forceLimit = 100f;
         wheel.xDrive = drive;
     }
 

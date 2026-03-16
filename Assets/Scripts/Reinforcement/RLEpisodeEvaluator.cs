@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Unity.Robotics.ROSTCPConnector;
 using UnityEngine;
 
 /// <summary>
@@ -27,7 +28,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
     /// <summary>경로 진행률 기반 보상을 계산하는 프로바이더 (path progress reward shaping).</summary>
     public ProgressRewardProvider progressRewardProvider;
     /// <summary>전방 장애물과의 TTC(Time-To-Collision) 기반 경고 레벨을 발행하는 퍼블리셔.</summary>
-    public CollisionWarningPublisher collisionWarningPublisher;
+    public CollisionWarningEngine collisionWarningEngine;
     /// <summary>Ackermann 조향/스로틀/브레이크를 제어하는 차량 컨트롤러.</summary>
     public WheelTest wheelController;
     /// <summary>신호등 주행 결정을 제공하는 엔진. 종료 시점의 traffic 상태 로그에 사용.</summary>
@@ -51,7 +52,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [Header("Failure Rules")]
     /// <summary>이 경고 레벨(예: Brake=5) 이상에서 저속 정지가 유지되면 FailRiskStop으로 판정.</summary>
     [Tooltip("이 레벨 이상에서 저속 정지가 유지되면 실패")]
-    public CollisionWarningPublisher.WarningLevel dangerLevelThreshold = CollisionWarningPublisher.WarningLevel.Brake;
+    public CollisionWarningEngine.WarningLevel dangerLevelThreshold = CollisionWarningEngine.WarningLevel.Brake;
     /// <summary>위험 레벨 + 정지 상태가 이 시간(초) 이상 지속되면 FailRiskStop 종료.</summary>
     [Tooltip("위험레벨 + 정지 상태가 이 시간 지속되면 FailRiskStop")]
     public float dangerStopHoldSeconds = 0.7f;
@@ -138,17 +139,20 @@ public class RLEpisodeEvaluator : MonoBehaviour
     /// <summary>마지막 충돌의 상대 속도(m/s). 충돌 심각도 판단 지표.</summary>
     [SerializeField] private float lastCollisionRelativeSpeed = 0f;
     /// <summary>에피소드 중 관측된 최고 경고 레벨 (Safe → ... → Brake 순).</summary>
-    [SerializeField] private CollisionWarningPublisher.WarningLevel maxWarningLevel =
-        CollisionWarningPublisher.WarningLevel.Safe;
+    [SerializeField] private CollisionWarningEngine.WarningLevel maxWarningLevel =
+        CollisionWarningEngine.WarningLevel.Safe;
     /// <summary>에피소드 중 관측된 최소 TTC(Time-To-Collision, 초). 장애물 근접도 지표.</summary>
     [SerializeField] private float minObservedTtc = float.PositiveInfinity;
     /// <summary>stuck 감지용 슬라이딩 윈도우 경과 타이머(초).</summary>
     [SerializeField] private float stuckTimer = 0f;
-    /// <summary>stuck 감지 윈도우 내 누적 이동거리(m).</summary>
+    /// <summary>stuck 감지 윈도우 내 경로 진행 거리(m). pathS 기반.</summary>
     [SerializeField] private float stuckDistanceAccum = 0f;
     [SerializeField] private string resolvedCsvFileName = "rl_episode_report.csv";
-    /// <summary>stuck 감지를 위해 이전 프레임의 차량 월드 위치를 저장.</summary>
+    [SerializeField] private string resolvedNamespace = "";
+    /// <summary>stuck 감지를 위해 이전 프레임의 차량 월드 위치를 저장 (fallback용).</summary>
     private Vector3 stuckLastPosition;
+    /// <summary>stuck 감지 윈도우 시작 시점의 경로 진행거리(pathS). 경로 진행 기반 stuck 판정에 사용.</summary>
+    private float stuckPathSAtWindowStart = 0f;
 
     /// <summary>에피소드 종료 시 외부 구독자에게 알리는 이벤트. 리플레이 버퍼 저장, 모델 업데이트 등에 활용.</summary>
     public event Action<RLEpisodeEvaluator> OnEpisodeTerminated;
@@ -159,6 +163,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
             AutoFindReferences();
 
         ResolveCsvFileName();
+        ResolveNamespace();
 
         if (autoBeginOnStart)
         {
@@ -210,8 +215,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
     {
         if (progressRewardProvider == null)
             progressRewardProvider = FindObjectOfType<ProgressRewardProvider>();
-        if (collisionWarningPublisher == null)
-            collisionWarningPublisher = FindObjectOfType<CollisionWarningPublisher>();
+        if (collisionWarningEngine == null)
+            collisionWarningEngine = FindObjectOfType<CollisionWarningEngine>();
         if (wheelController == null)
             wheelController = FindObjectOfType<WheelTest>();
         if (trafficLightDecisionEngine == null)
@@ -244,11 +249,12 @@ public class RLEpisodeEvaluator : MonoBehaviour
         collisionCount = 0;
         lastCollisionObjectName = "None";
         lastCollisionRelativeSpeed = 0f;
-        maxWarningLevel = CollisionWarningPublisher.WarningLevel.Safe;
+        maxWarningLevel = CollisionWarningEngine.WarningLevel.Safe;
         minObservedTtc = float.PositiveInfinity;
         stuckTimer = 0f;
         stuckDistanceAccum = 0f;
         stuckLastPosition = wheelController != null ? wheelController.transform.position : transform.position;
+        stuckPathSAtWindowStart = progressRewardProvider != null ? progressRewardProvider.GetCurrentPathS() : 0f;
 
         if (progressRewardProvider != null)
             progressRewardProvider.ResetRewardState();
@@ -261,10 +267,10 @@ public class RLEpisodeEvaluator : MonoBehaviour
     /// </summary>
     void UpdateRiskMetrics(float dt)
     {
-        if (collisionWarningPublisher == null)
+        if (collisionWarningEngine == null)
             return;
 
-        CollisionWarningPublisher.WarningLevel level = collisionWarningPublisher.GetWarningLevel();
+        CollisionWarningEngine.WarningLevel level = collisionWarningEngine.GetWarningLevel();
         if (level > maxWarningLevel)
             maxWarningLevel = level;
 
@@ -273,7 +279,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
             timeAtDangerLevel += dt;
         }
 
-        float ttc = collisionWarningPublisher.GetTimeToCollision();
+        float ttc = collisionWarningEngine.GetTimeToCollision();
         if (!float.IsInfinity(ttc))
             minObservedTtc = Mathf.Min(minObservedTtc, ttc);
 
@@ -296,30 +302,61 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
     /// <summary>
     /// 차량의 이동 불능(stuck) 상태를 감지한다.
-    /// 슬라이딩 윈도우(stuckTimeWindow) 동안 누적 이동거리가 stuckDistanceThreshold 미만이면
+    /// 슬라이딩 윈도우(stuckTimeWindow) 동안 경로 진행거리(pathS)가 stuckDistanceThreshold 미만이면
     /// FailStuck으로 에피소드를 종료한다. 에피소드 초기 grace period 동안은 감지를 건너뛴다.
+    ///
+    /// 경로 진행 기반: 물리 슬라이딩/서스펜션 노이즈와 무관하게 실제 경로 진행만 측정.
+    /// progressRewardProvider가 없을 때만 XZ 평면 거리로 fallback.
     /// </summary>
     void UpdateStuckDetection(float dt)
     {
         if (stuckTimeWindow <= 0f)
             return;
 
-        // 에피소드 초기에는 모델 로드/추론 시작까지 시간이 필요하므로 grace period 적용
-        if (elapsedSeconds < stuckGracePeriod)
-            return;
-
         Vector3 currentPos = wheelController != null ? wheelController.transform.position : transform.position;
-        stuckDistanceAccum += Vector3.Distance(currentPos, stuckLastPosition);
-        stuckLastPosition = currentPos;
+        float currentPathS = progressRewardProvider != null ? progressRewardProvider.GetCurrentPathS() : -1f;
+
+        // Grace period: 윈도우 기준점만 갱신하고 감지하지 않음
+        if (elapsedSeconds < stuckGracePeriod)
+        {
+            stuckLastPosition = currentPos;
+            stuckPathSAtWindowStart = currentPathS >= 0f ? currentPathS : 0f;
+            return;
+        }
+
         stuckTimer += dt;
+
+        // 진단 표시용: 현재 윈도우 내 경로 진행거리 갱신
+        if (currentPathS >= 0f)
+            stuckDistanceAccum = currentPathS - stuckPathSAtWindowStart;
 
         if (stuckTimer >= stuckTimeWindow)
         {
-            if (stuckDistanceAccum < stuckDistanceThreshold)
+            bool isStuck;
+            float movedAmount;
+
+            if (currentPathS >= 0f)
+            {
+                // 경로 진행(pathS) 기반 판정: 도로 밖 슬라이딩은 진행으로 카운트 안 됨
+                movedAmount = currentPathS - stuckPathSAtWindowStart;
+                isStuck = movedAmount < stuckDistanceThreshold;
+            }
+            else
+            {
+                // fallback: XZ 평면 거리 (progressRewardProvider 없을 때)
+                Vector3 delta = currentPos - stuckLastPosition;
+                delta.y = 0f;
+                movedAmount = delta.magnitude;
+                isStuck = movedAmount < stuckDistanceThreshold;
+            }
+
+            stuckDistanceAccum = movedAmount;
+
+            if (isStuck)
             {
                 SetTerminal(
                     TerminalType.FailStuck,
-                    $"Stuck(moved={stuckDistanceAccum:F2}m in {stuckTimer:F1}s < {stuckDistanceThreshold:F1}m)"
+                    $"Stuck(pathProgress={movedAmount:F2}m in {stuckTimer:F1}s < {stuckDistanceThreshold:F1}m)"
                 );
                 return;
             }
@@ -327,6 +364,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
             // 윈도우 리셋
             stuckTimer = 0f;
             stuckDistanceAccum = 0f;
+            stuckPathSAtWindowStart = currentPathS >= 0f ? currentPathS : 0f;
+            stuckLastPosition = currentPos;
         }
     }
 
@@ -431,8 +470,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
                 trashReason = "None";
         }
 
-        string terminalDiag = BuildTerminalDiagnosticLine();
-
         if (stopVehicleOnTerminal && wheelController != null)
         {
             wheelController.SetSteering(0f);
@@ -442,13 +479,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
         if (saveEpisodeReportCsv)
             AppendEpisodeCsv();
-
-        Debug.Log(
-            $"[RLEpisode] End #{episodeIndex} | type={terminalType} | success={episodeSuccess} | " +
-            $"score={episodeScore:F3} | rewardBase={episodeRewardBase:F3} | trash={isTrashEpisode} | " +
-            $"collisionObj={lastCollisionObjectName} | collisionRelV={lastCollisionRelativeSpeed:F2}m/s | reason={terminalReason}"
-        );
-        Debug.Log($"[RLEpisode][TerminalDiag] {terminalDiag}");
 
         OnEpisodeTerminated?.Invoke(this);
     }
@@ -513,26 +543,26 @@ public class RLEpisodeEvaluator : MonoBehaviour
         float wheelThrottle = wheelController != null ? wheelController.GetThrottleInput() : 0f;
         float wheelBrake = wheelController != null ? wheelController.GetBrakeInput() : 0f;
 
-        CollisionWarningPublisher.WarningLevel warningLevel = collisionWarningPublisher != null
-            ? collisionWarningPublisher.GetWarningLevel()
-            : CollisionWarningPublisher.WarningLevel.Safe;
-        float ttc = collisionWarningPublisher != null
-            ? collisionWarningPublisher.GetTimeToCollision()
+        CollisionWarningEngine.WarningLevel warningLevel = collisionWarningEngine != null
+            ? collisionWarningEngine.GetWarningLevel()
+            : CollisionWarningEngine.WarningLevel.Safe;
+        float ttc = collisionWarningEngine != null
+            ? collisionWarningEngine.GetTimeToCollision()
             : float.PositiveInfinity;
-        float obstacleDist = collisionWarningPublisher != null
-            ? collisionWarningPublisher.GetDistanceToObstacle()
+        float obstacleDist = collisionWarningEngine != null
+            ? collisionWarningEngine.GetDistanceToObstacle()
             : float.PositiveInfinity;
-        float pathObstacleDist = collisionWarningPublisher != null
-            ? collisionWarningPublisher.GetPathDistanceToObstacle()
+        float pathObstacleDist = collisionWarningEngine != null
+            ? collisionWarningEngine.GetPathDistanceToObstacle()
             : float.PositiveInfinity;
-        float sideObstacleDist = collisionWarningPublisher != null
-            ? collisionWarningPublisher.GetSideDistanceToObstacle()
+        float sideObstacleDist = collisionWarningEngine != null
+            ? collisionWarningEngine.GetSideDistanceToObstacle()
             : float.PositiveInfinity;
-        (string source, string sensor, float distance) closestObstacleInfo = collisionWarningPublisher != null
-            ? collisionWarningPublisher.GetClosestObstacleInfo()
+        (string source, string sensor, float distance) closestObstacleInfo = collisionWarningEngine != null
+            ? collisionWarningEngine.GetClosestObstacleInfo()
             : ("None", "None", float.PositiveInfinity);
-        float closestUltraConfidence = collisionWarningPublisher != null
-            ? collisionWarningPublisher.CurrentSensorData.ultrasonicClosestConfidence
+        float closestUltraConfidence = collisionWarningEngine != null
+            ? collisionWarningEngine.CurrentSensorData.ultrasonicClosestConfidence
             : 0f;
         string ttcText = float.IsInfinity(ttc)
             ? "inf"
@@ -589,6 +619,15 @@ public class RLEpisodeEvaluator : MonoBehaviour
             $"{regressionDebug} rl[{rlDebug}]";
     }
 
+    void ResolveNamespace()
+    {
+        const string probeSuffix = "/X";
+        string probe = RosTopicNamespace.Resolve(gameObject, probeSuffix);
+        resolvedNamespace = probe.EndsWith(probeSuffix)
+            ? probe.Substring(0, probe.Length - probeSuffix.Length).TrimEnd('/')
+            : "";
+    }
+
     void ResolveCsvFileName()
     {
         string configured = string.IsNullOrWhiteSpace(csvFileName) ? "rl_episode_report.csv" : csvFileName.Trim();
@@ -613,7 +652,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
         {
             string dir = Path.Combine(Application.dataPath, "Resources", "RL");
             string path = Path.Combine(dir, resolvedCsvFileName);
-            Debug.Log($"[RLEpisode] CSV output: {path}");
+            //Debug.Log($"[RLEpisode] CSV output: {path}");
         }
     }
 
@@ -655,6 +694,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public int GetEpisodeIndex() => episodeIndex;
     public int GetCollisionCount() => collisionCount;
     public float GetTimeAtDangerLevel() => timeAtDangerLevel;
-    public CollisionWarningPublisher.WarningLevel GetMaxWarningLevel() => maxWarningLevel;
+    public CollisionWarningEngine.WarningLevel GetMaxWarningLevel() => maxWarningLevel;
     public float GetMinObservedTtc() => minObservedTtc;
 }

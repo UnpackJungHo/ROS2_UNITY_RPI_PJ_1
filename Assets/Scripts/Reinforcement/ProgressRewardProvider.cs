@@ -58,7 +58,7 @@ public class ProgressRewardProvider : MonoBehaviour
     public GameObject triggerTarget;
 
     [Header("Safety Penalty")]
-    public CollisionWarningPublisher collisionWarningPublisher;
+    public CollisionWarningEngine collisionWarningEngine;
     public float cautionPenaltyPerSec = 0.05f;
     public float warningPenaltyPerSec = 0.15f;
     public float brakePenaltyPerSec = 0.35f;
@@ -228,6 +228,13 @@ public class ProgressRewardProvider : MonoBehaviour
             return false;
         }
 
+        bool controlPointsAreLocal = ReadBoolField(roadData, "controlPointsAreLocal", false);
+        if (controlPointsAreLocal)
+        {
+            for (int i = 0; i < controlPoints.Count; i++)
+                controlPoints[i] = sourceRoad.transform.TransformPoint(controlPoints[i]);
+        }
+
         bool looped = ReadBoolField(roadData, "isLooped", false);
         int curveResolution = Mathf.Max(2, ReadIntField(roadData, "curveResolution", 10));
         isLoopedPath = looped;
@@ -246,7 +253,7 @@ public class ProgressRewardProvider : MonoBehaviour
         }
 
         BuildWaypointTransforms(waypointPositions);
-        Debug.Log($"[ProgressReward] Waypoint 자동생성 완료: {generatedWaypointCount}개 (looped={isLoopedPath})");
+        //Debug.Log($"[ProgressReward] Waypoint 자동생성 완료: {generatedWaypointCount}개 (looped={isLoopedPath})");
         return true;
     }
 
@@ -566,16 +573,16 @@ public class ProgressRewardProvider : MonoBehaviour
     /// </summary>
     float ComputeSafetyPenalty(float dt)
     {
-        if (collisionWarningPublisher == null)
+        if (collisionWarningEngine == null)
             return 0f;
 
-        return collisionWarningPublisher.GetWarningLevel() switch
+        return collisionWarningEngine.GetWarningLevel() switch
         {
-            CollisionWarningPublisher.WarningLevel.Caution => cautionPenaltyPerSec * dt,
-            CollisionWarningPublisher.WarningLevel.SlowDown => warningPenaltyPerSec * dt,
-            CollisionWarningPublisher.WarningLevel.Warning => warningPenaltyPerSec * dt,
-            CollisionWarningPublisher.WarningLevel.Brake => brakePenaltyPerSec * dt,
-            CollisionWarningPublisher.WarningLevel.EmergencyStop => emergencyPenaltyPerSec * dt,
+            CollisionWarningEngine.WarningLevel.Caution => cautionPenaltyPerSec * dt,
+            CollisionWarningEngine.WarningLevel.SlowDown => warningPenaltyPerSec * dt,
+            CollisionWarningEngine.WarningLevel.Warning => warningPenaltyPerSec * dt,
+            CollisionWarningEngine.WarningLevel.Brake => brakePenaltyPerSec * dt,
+            CollisionWarningEngine.WarningLevel.EmergencyStop => emergencyPenaltyPerSec * dt,
             _ => 0f
         };
     }

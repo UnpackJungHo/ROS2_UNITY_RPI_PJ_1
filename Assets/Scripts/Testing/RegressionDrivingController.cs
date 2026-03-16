@@ -33,7 +33,7 @@ public class RegressionDrivingController : MonoBehaviour
     public DrivingDataCollectorV2 dataCollector;
 
     [Tooltip("충돌 경고 융합기 (선택 - 안전 오버라이드용)")]
-    public CollisionWarningPublisher collisionWarningPublisher;
+    public CollisionWarningEngine collisionWarningEngine;
 
     [Tooltip("신호등 판단 엔진 (선택 - 안전 오버라이드용)")]
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
@@ -75,6 +75,10 @@ public class RegressionDrivingController : MonoBehaviour
     [Tooltip("Brake 단계 최소 브레이크")]
     public float brakeLevelBrake = 0.8f;
 
+    [Header("Performance (Multi-Vehicle)")]
+    [Tooltip("다중 차량 시 추론 시점을 분산")]
+    public bool enableInferenceStagger = true;
+
     [Header("RL Residual Mode")]
     [Tooltip("true면 추론만 하고 차량에 직접 적용하지 않음 (RL Agent가 읽어서 보정)")]
     public bool predictionOnlyMode = false;
@@ -108,6 +112,10 @@ public class RegressionDrivingController : MonoBehaviour
     private readonly float[] mean = { 0.485f, 0.456f, 0.406f };
     private readonly float[] std = { 0.229f, 0.224f, 0.225f };
 
+    // 프리할당 버퍼 (GC 방지)
+    private float[] tensorDataBuffer;
+    private float[] speedBuffer = new float[1];
+
     private float lastInferenceTime;
     private bool isModelLoaded = false;
     private bool warnedMissingCamera = false;
@@ -119,7 +127,13 @@ public class RegressionDrivingController : MonoBehaviour
         InitializeRenderTextures();
         LoadModel();
 
-        Debug.Log($"[RegressionDriving] Speed-Aware Regression Controller Initialized");
+        if (enableInferenceStagger)
+        {
+            float stagger = Mathf.Abs(gameObject.GetInstanceID() % 97) / 97f * inferenceInterval;
+            lastInferenceTime = Time.time + stagger - inferenceInterval;
+        }
+
+        //Debug.Log($"[RegressionDriving] Speed-Aware Regression Controller Initialized");
         //Debug.Log($"  '{toggleKey}' 키: 자율주행 모드 토글");
         //Debug.Log($"  WASD: 자율주행 중 개입 (자동 수동 모드 전환)");
         //Debug.Log($"  개입 후 {autoResumeDelay}초 뒤 자동 AI 모드 복귀");
@@ -141,8 +155,8 @@ public class RegressionDrivingController : MonoBehaviour
 
         if (dataCollector == null)
             dataCollector = FindObjectOfType<DrivingDataCollectorV2>();
-        if (collisionWarningPublisher == null)
-            collisionWarningPublisher = FindObjectOfType<CollisionWarningPublisher>();
+        if (collisionWarningEngine == null)
+            collisionWarningEngine = FindObjectOfType<CollisionWarningEngine>();
         if (trafficLightDecisionEngine == null)
             trafficLightDecisionEngine = FindObjectOfType<TrafficLightDecisionEngine>();
 
@@ -156,6 +170,7 @@ public class RegressionDrivingController : MonoBehaviour
     {
         frontRenderTexture = new RenderTexture(frontImageWidth, frontImageHeight, 24);
         frontTexture = new Texture2D(frontImageWidth, frontImageHeight, TextureFormat.RGB24, false);
+        tensorDataBuffer = new float[3 * frontImageHeight * frontImageWidth];
     }
 
     void LoadModel()
@@ -322,9 +337,6 @@ public class RegressionDrivingController : MonoBehaviour
         isInterventionActive = false;
         interventionTimer = 0f;
 
-        // [DEBUG] 리셋 직전 값 기록
-        Debug.Log($"[RegressionReset] BEFORE reset: steer={predictedSteering:F4}, throttle={predictedThrottle:F4} | isAutonomous={isAutonomousMode}, forceInference={forceInference}");
-
         predictedSteering = 0f;
         predictedThrottle = 0f;
         appliedSteering = 0f;
@@ -336,33 +348,16 @@ public class RegressionDrivingController : MonoBehaviour
         if (frontCamera == null && cameraPublisher != null)
             frontCamera = cameraPublisher.GetCamera();
 
-        // [DEBUG] 카메라 위치 (TeleportRoot 후 즉시 읽은 값)
-        if (frontCamera != null)
-            Debug.Log($"[RegressionReset] Camera world pos at reset: {frontCamera.transform.position} | cam={frontCamera.name}");
-        else
-            Debug.LogWarning("[RegressionReset] frontCamera is NULL at reset!");
-
         if (!forceInference)
-        {
-            Debug.Log("[RegressionReset] forceInference=false → skipping immediate RunInference. predictedSteering/Throttle = 0.");
             return;
-        }
 
         if (!isAutonomousMode)
-        {
-            Debug.LogWarning("[RegressionReset] forceInference=true 이지만 isAutonomousMode=false → RunInference 건너뜀!");
             return;
-        }
 
         if (!EnsureInferenceReady())
-        {
-            Debug.LogWarning("[RegressionReset] forceInference=true 이지만 EnsureInferenceReady()=false → RunInference 건너뜀!");
             return;
-        }
 
-        Debug.Log($"[RegressionReset] RunInference 즉시 호출 (forceInference=true). 카메라 pos={frontCamera?.transform.position}");
-        bool inferenceOk = RunInference();
-        Debug.Log($"[RegressionReset] AFTER forceInference: ok={inferenceOk}, steer={predictedSteering:F4}, throttle={predictedThrottle:F4}");
+        RunInference();
     }
 
     bool EnsureInferenceReady()
@@ -454,10 +449,10 @@ public class RegressionDrivingController : MonoBehaviour
             // 2. 이미지 텐서 생성
             frontInputTensor = TextureToTensor(frontTexture, frontImageHeight, frontImageWidth);
 
-            // 3. 속도 텐서 생성 (정규화)
+            // 3. 속도 텐서 생성 (정규화, 프리할당 버퍼 재사용)
             float currentSpeed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
-            float normalizedSpeed = currentSpeed / speedNormalize;
-            speedInputTensor = new TensorFloat(new TensorShape(1, 1), new float[] { normalizedSpeed });
+            speedBuffer[0] = currentSpeed / speedNormalize;
+            speedInputTensor = new TensorFloat(new TensorShape(1, 1), speedBuffer);
 
             // 4. 추론 실행
             worker.SetInput("front_image", frontInputTensor);
@@ -511,38 +506,59 @@ public class RegressionDrivingController : MonoBehaviour
 
     void CaptureCamera(Camera cam, RenderTexture rt, Texture2D tex)
     {
-        RenderTexture originalTarget = cam.targetTexture;
-        cam.targetTexture = rt;
-        cam.Render();
+        // CameraPublisher의 렌더 결과를 추론 해상도로 다운스케일 (추가 씬 렌더 불필요)
+        RenderTexture sourceRT = cameraPublisher != null ? cameraPublisher.GetRenderTexture() : null;
+        if (sourceRT != null)
+        {
+            Graphics.Blit(sourceRT, rt);
+        }
+        else
+        {
+            // fallback: CameraPublisher RT가 없으면 직접 렌더
+            RenderTexture originalTarget = cam.targetTexture;
+            cam.targetTexture = rt;
+            cam.Render();
+            cam.targetTexture = originalTarget;
+        }
 
         RenderTexture.active = rt;
         tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
         tex.Apply();
         RenderTexture.active = null;
-
-        cam.targetTexture = originalTarget;
     }
 
     TensorFloat TextureToTensor(Texture2D texture, int height, int width)
     {
-        Color[] pixels = texture.GetPixels();
-        float[] tensorData = new float[3 * height * width];
+        // GetRawTextureData: NativeArray 뷰 반환 (Color[] 대비 GC 할당 없음)
+        byte[] rawBytes = texture.GetRawTextureData();
+        int hw = height * width;
+        int chR = 0;
+        int chG = hw;
+        int chB = hw * 2;
+
+        // 역정규화 상수 사전 계산
+        float invStdR = 1f / std[0], invStdG = 1f / std[1], invStdB = 1f / std[2];
 
         for (int y = 0; y < height; y++)
         {
+            int srcY = height - 1 - y;
+            int srcRowOffset = srcY * width * 3;
+            int dstRowOffset = y * width;
+
             for (int x = 0; x < width; x++)
             {
-                int srcY = height - 1 - y;
-                int pixelIdx = srcY * width + x;
-                Color pixel = pixels[pixelIdx];
+                int byteIdx = srcRowOffset + x * 3;
+                float r = rawBytes[byteIdx] / 255f;
+                float g = rawBytes[byteIdx + 1] / 255f;
+                float b = rawBytes[byteIdx + 2] / 255f;
 
-                tensorData[0 * height * width + y * width + x] = (pixel.r - mean[0]) / std[0];
-                tensorData[1 * height * width + y * width + x] = (pixel.g - mean[1]) / std[1];
-                tensorData[2 * height * width + y * width + x] = (pixel.b - mean[2]) / std[2];
+                tensorDataBuffer[chR + dstRowOffset + x] = (r - mean[0]) * invStdR;
+                tensorDataBuffer[chG + dstRowOffset + x] = (g - mean[1]) * invStdG;
+                tensorDataBuffer[chB + dstRowOffset + x] = (b - mean[2]) * invStdB;
             }
         }
 
-        return new TensorFloat(new TensorShape(1, 3, height, width), tensorData);
+        return new TensorFloat(new TensorShape(1, 3, height, width), tensorDataBuffer);
     }
 
     void ApplyAIControl()
@@ -562,26 +578,26 @@ public class RegressionDrivingController : MonoBehaviour
         if (enableSafetyOverride)
         {
             // 1) 센서 기반 충돌 오버라이드
-            if (collisionWarningPublisher != null)
+            if (collisionWarningEngine != null)
             {
-                CollisionWarningPublisher.WarningLevel level = collisionWarningPublisher.GetWarningLevel();
-                if (level >= CollisionWarningPublisher.WarningLevel.EmergencyStop)
+                CollisionWarningEngine.WarningLevel level = collisionWarningEngine.GetWarningLevel();
+                if (level >= CollisionWarningEngine.WarningLevel.EmergencyStop)
                 {
                     adjustedThrottle = 0f;
                     brakeCommand = 1f;
                 }
-                else if (level >= CollisionWarningPublisher.WarningLevel.Brake)
+                else if (level >= CollisionWarningEngine.WarningLevel.Brake)
                 {
                     adjustedThrottle = 0f;
                     brakeCommand = Mathf.Max(brakeCommand, brakeLevelBrake);
                 }
-                else if (level >= CollisionWarningPublisher.WarningLevel.Warning)
+                else if (level >= CollisionWarningEngine.WarningLevel.Warning)
                 {
                     adjustedThrottle = Mathf.Min(adjustedThrottle, 0.15f);
                     if (Mathf.Abs(currentSpeed) >= Mathf.Max(0f, warningBrakeMinSpeed))
                         brakeCommand = Mathf.Max(brakeCommand, warningBrake);
                 }
-                else if (level >= CollisionWarningPublisher.WarningLevel.SlowDown)
+                else if (level >= CollisionWarningEngine.WarningLevel.SlowDown)
                 {
                     adjustedThrottle = Mathf.Min(adjustedThrottle, appliedThrottle * slowDownThrottleScale);
                 }

@@ -21,6 +21,8 @@ public class RoadData : MonoBehaviour
 {
     [Header("Control Points")]
     public List<Vector3> controlPoints = new List<Vector3>();
+    [Tooltip("true면 controlPoints가 Road 오브젝트 로컬 좌표 기준으로 저장됩니다. 구버전 데이터는 false(월드 좌표)일 수 있습니다.")]
+    public bool controlPointsAreLocal = true;
 
     [Header("Road Settings")]
     public float roadWidth = 5f;

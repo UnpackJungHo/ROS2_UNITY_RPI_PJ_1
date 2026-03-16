@@ -11,6 +11,20 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class TrainTestModeSwitcher : MonoBehaviour
 {
+    /// <summary>
+    /// 개별 ROS 토픽 컴포넌트의 모드별 활성화 설정.
+    /// </summary>
+    [System.Serializable]
+    public class RosTopicEntry
+    {
+        [Tooltip("ROS 퍼블리셔/서브스크라이버/브리지 컴포넌트")]
+        public MonoBehaviour component;
+        [Tooltip("Train 모드에서 활성화")]
+        public bool enableInTrain;
+        [Tooltip("Test 모드에서 활성화")]
+        public bool enableInTest = true;
+    }
+
     public enum RuntimeMode
     {
         Train = 0,
@@ -32,15 +46,17 @@ public class TrainTestModeSwitcher : MonoBehaviour
     [Header("Core References")]
     public AutoDriverRLAgent autoDriverRLAgent;
     public RegressionDrivingController regressionDrivingController;
-    public VehicleCmdSubscriber vehicleCmdSubscriber;
     public DrivingStatusUIController drivingStatusUIController;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
     public WheelTest wheelController;
     public BehaviorParameters behaviorParameters;
 
-    [Header("Sensor References")]
-    public SingleUltrasonicSensor[] ultrasonicSensors;
-    public SingleRadarSensor[] radarSensors;
+    [Header("ROS 토픽 개별 제어")]
+    [Tooltip("각 ROS 퍼블리셔/서브스크라이버를 할당하고 모드별 활성화를 개별 설정.\n" +
+             "CameraPublisher, CollisionWarningRosBridge는 rosPublishingEnabled 제어.\n" +
+             "나머지는 enabled 제어.\n" +
+             "[Populate ROS Topics] 컨텍스트 메뉴로 자동 탐색 가능.")]
+    public RosTopicEntry[] rosTopics = new RosTopicEntry[0];
 
     [Header("Optional UI")]
     public TMP_Text modeText;
@@ -64,7 +80,7 @@ public class TrainTestModeSwitcher : MonoBehaviour
     }
 
     void Start()
-    {
+    {   
         if (autoApplyOnStart)
             ApplySelectedMode();
     }
@@ -96,10 +112,10 @@ public class TrainTestModeSwitcher : MonoBehaviour
 
             UpdateModeText();
             lastAppliedMode = selectedMode;
-            lastAppliedSummary =
-                $"Mode={selectedMode}, Ultrasonic={CountValid(ultrasonicSensors)}, Radar={CountValid(radarSensors)}";
+            int rosTopicCount = rosTopics != null ? rosTopics.Length : 0;
+            lastAppliedSummary = $"Mode={selectedMode}, RosTopics={rosTopicCount}";
 
-            Debug.Log($"[TrainTestModeSwitcher] {lastAppliedSummary}");
+            //Debug.Log($"[TrainTestModeSwitcher] {lastAppliedSummary}");
         }
         finally
         {
@@ -115,9 +131,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
 
         if (regressionDrivingController == null)
             regressionDrivingController = FindOne<RegressionDrivingController>(includeInactiveObjects);
-
-        if (vehicleCmdSubscriber == null)
-            vehicleCmdSubscriber = FindOne<VehicleCmdSubscriber>(includeInactiveObjects);
 
         if (drivingStatusUIController == null)
             drivingStatusUIController = FindOne<DrivingStatusUIController>(includeInactiveObjects);
@@ -136,9 +149,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             if (behaviorParameters == null)
                 behaviorParameters = FindOne<BehaviorParameters>(includeInactiveObjects);
         }
-
-        ultrasonicSensors = GetComponentsInChildren<SingleUltrasonicSensor>(includeInactiveObjects);
-        radarSensors = GetComponentsInChildren<SingleRadarSensor>(includeInactiveObjects);
 
         if (modeText == null)
         {
@@ -186,12 +196,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             regressionDrivingController.predictionOnlyMode = true;
         }
 
-        if (vehicleCmdSubscriber != null)
-        {
-            vehicleCmdSubscriber.useRegressionAutonomyGate = false;
-            vehicleCmdSubscriber.enabled = false;
-        }
-
         if (drivingStatusUIController != null)
         {
             drivingStatusUIController.useExternalCollisionTopicForUI = false;
@@ -210,6 +214,7 @@ public class TrainTestModeSwitcher : MonoBehaviour
             wheelController.externalControlEnabled = true;
 
         ApplySensorMode(useExternalTopicInput: false, fallbackToRaycastWhenExternalStale: true);
+        ApplyRosTopicToggles(RuntimeMode.Train);
     }
 
     void ApplyTestMode()
@@ -230,12 +235,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             regressionDrivingController.predictionOnlyMode = true;
         }
 
-        if (vehicleCmdSubscriber != null)
-        {
-            vehicleCmdSubscriber.useRegressionAutonomyGate = false;
-            vehicleCmdSubscriber.enabled = true;
-        }
-
         if (drivingStatusUIController != null)
         {
             drivingStatusUIController.useExternalCollisionTopicForUI = true;
@@ -251,34 +250,116 @@ public class TrainTestModeSwitcher : MonoBehaviour
         }
 
         ApplySensorMode(useExternalTopicInput: true, fallbackToRaycastWhenExternalStale: false);
+        ApplyRosTopicToggles(RuntimeMode.Test);
+    }
+
+    /// <summary>
+    /// rosTopics 배열의 각 항목에 대해 모드별 활성화/비활성화를 적용한다.
+    /// CameraPublisher, CollisionWarningRosBridge는 rosPublishingEnabled 제어.
+    /// 나머지는 enabled 제어.
+    /// </summary>
+    void ApplyRosTopicToggles(RuntimeMode mode)
+    {
+        if (rosTopics == null) return;
+
+        foreach (var entry in rosTopics)
+        {
+            if (entry == null || entry.component == null) continue;
+
+            bool shouldEnable = mode == RuntimeMode.Train ? entry.enableInTrain : entry.enableInTest;
+
+            switch (entry.component)
+            {
+                case CameraPublisher cam:
+                    cam.rosPublishingEnabled = shouldEnable;
+                    break;
+                case CollisionWarningRosBridge cwb:
+                    cwb.rosPublishingEnabled = shouldEnable;
+                    break;
+                default:
+                    entry.component.enabled = shouldEnable;
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 하위 오브젝트에서 모든 ROS 퍼블리셔/서브스크라이버를 탐색하여 rosTopics에 추가한다.
+    /// 이미 등록된 컴포넌트는 건너뛴다.
+    /// </summary>
+    [ContextMenu("Populate ROS Topics")]
+    public void PopulateRosTopics()
+    {
+        var list = new System.Collections.Generic.List<RosTopicEntry>();
+        var existing = new System.Collections.Generic.HashSet<MonoBehaviour>();
+
+        if (rosTopics != null)
+        {
+            foreach (var entry in rosTopics)
+            {
+                if (entry?.component != null)
+                    existing.Add(entry.component);
+            }
+            list.AddRange(rosTopics);
+        }
+
+        System.Type[] rosTypes = new System.Type[]
+        {
+            typeof(CameraPublisher),
+            typeof(PolicyCameraPublisher),
+            typeof(LidarPublisher),
+            typeof(ImuPublisher),
+            typeof(OdometryPublisher),
+            typeof(UltrasonicSensorPublisher),
+            typeof(RadarSensorPublisher),
+            typeof(SingleRadarSensorRosBridge),
+            typeof(SingleUltrasonicSensorRosBridge),
+            typeof(CollisionWarningRosBridge),
+            typeof(ReinforcementObservationPublisher),
+            typeof(ClockPublisher),
+            typeof(StaticTfPublisher),
+            typeof(TrafficLightStateSubscriber),
+            typeof(StopLineStateSubscriber),
+            typeof(VehicleCmdSubscriber),
+        };
+
+        foreach (var t in rosTypes)
+        {
+            foreach (var c in GetComponentsInChildren(t, includeInactiveObjects))
+            {
+                var mb = (MonoBehaviour)c;
+                if (!existing.Contains(mb))
+                {
+                    list.Add(new RosTopicEntry
+                    {
+                        component = mb,
+                        enableInTrain = false,
+                        enableInTest = true
+                    });
+                    existing.Add(mb);
+                }
+            }
+        }
+
+        rosTopics = list.ToArray();
     }
 
     void ApplySensorMode(bool useExternalTopicInput, bool fallbackToRaycastWhenExternalStale)
     {
-        if (ultrasonicSensors != null)
+        // 초음파 Bridge에서 외부 입력 모드 제어
+        foreach (var bridge in GetComponentsInChildren<SingleUltrasonicSensorRosBridge>(includeInactiveObjects))
         {
-            for (int i = 0; i < ultrasonicSensors.Length; i++)
-            {
-                SingleUltrasonicSensor sensor = ultrasonicSensors[i];
-                if (sensor == null)
-                    continue;
-
-                sensor.useExternalTopicInput = useExternalTopicInput;
-                sensor.fallbackToRaycastWhenExternalStale = fallbackToRaycastWhenExternalStale;
-            }
+            if (bridge == null) continue;
+            bridge.useExternalTopicInput = useExternalTopicInput;
+            bridge.fallbackToRaycastWhenExternalStale = fallbackToRaycastWhenExternalStale;
         }
 
-        if (radarSensors != null)
+        // 레이더 Bridge에서 외부 입력 모드 제어
+        foreach (var bridge in GetComponentsInChildren<SingleRadarSensorRosBridge>(includeInactiveObjects))
         {
-            for (int i = 0; i < radarSensors.Length; i++)
-            {
-                SingleRadarSensor sensor = radarSensors[i];
-                if (sensor == null)
-                    continue;
-
-                sensor.useExternalTopicInput = useExternalTopicInput;
-                sensor.fallbackToRaycastWhenExternalStale = fallbackToRaycastWhenExternalStale;
-            }
+            if (bridge == null) continue;
+            bridge.useExternalTopicInput = useExternalTopicInput;
+            bridge.fallbackToRaycastWhenExternalStale = fallbackToRaycastWhenExternalStale;
         }
     }
 
@@ -290,20 +371,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
         modeText.text = selectedMode == RuntimeMode.Train
             ? "Mode: TRAIN (Internal)"
             : "Mode: TEST (External)";
-    }
-
-    static int CountValid<T>(T[] items) where T : Object
-    {
-        if (items == null)
-            return 0;
-
-        int count = 0;
-        for (int i = 0; i < items.Length; i++)
-        {
-            if (items[i] != null)
-                count++;
-        }
-        return count;
     }
 
     static T FindOne<T>(bool includeInactive) where T : Object

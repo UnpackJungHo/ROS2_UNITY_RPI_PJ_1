@@ -155,13 +155,13 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         writeThread.IsBackground = true;
         writeThread.Start();
 
-        Debug.Log($"[DataCollectorV2] Ready! (front_3 단독 모드: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG)");
-        // Debug.Log($"  front_1: {SMALL_WIDTH}x{SMALL_HEIGHT} JPEG(Q{{jpegQuality}})");  // 비활성화
-        // Debug.Log($"  front_2: {LARGE_WIDTH}x{LARGE_HEIGHT} JPEG(Q{{jpegQuality}})");  // 비활성화
-        Debug.Log($"  front_3: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG  <-- 활성");
-        // Debug.Log($"  front_4: {LARGE_WIDTH}x{LARGE_HEIGHT} PNG");                     // 비활성화
-        Debug.Log($"  '{recordKey}' 키: 녹화 시작/중지");
-        Debug.Log($"  '{saveKey}' 키: 데이터 저장");
+        //Debug.Log($"[DataCollectorV2] Ready! (front_3 단독 모드: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG)");
+        //Debug.Log($"  front_1: {SMALL_WIDTH}x{SMALL_HEIGHT} JPEG(Q{{jpegQuality}})");  // 비활성화
+        //Debug.Log($"  front_2: {LARGE_WIDTH}x{LARGE_HEIGHT} JPEG(Q{{jpegQuality}})");  // 비활성화
+        //Debug.Log($"  front_3: {SMALL_WIDTH}x{SMALL_HEIGHT} PNG  <-- 활성");
+        //Debug.Log($"  front_4: {LARGE_WIDTH}x{LARGE_HEIGHT} PNG");                     // 비활성화
+        //Debug.Log($"  '{recordKey}' 키: 녹화 시작/중지");
+        //Debug.Log($"  '{saveKey}' 키: 데이터 저장");
     }
 
     void AutoFindReferences()
@@ -383,9 +383,6 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
         frameBuffer.Add(frame);
         frameCount++;
-
-        if (frameCount % 100 == 0)
-            Debug.Log($"[DataCollectorV2] {frameCount} frames captured (front_3 PNG only)");
     }
 
     /// <summary>

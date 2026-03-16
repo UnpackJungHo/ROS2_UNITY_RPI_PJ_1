@@ -6,7 +6,7 @@ using RosMessageTypes.Std;
 
 /// <summary>
 /// 주행 관련 UI 텍스트를 한 곳에서 갱신하는 전용 컨트롤러.
-/// - CollisionWarningPublisher
+/// - CollisionWarningEngine
 /// - DrivingDataCollectorV2
 /// - RegressionDrivingController
 /// </summary>
@@ -19,13 +19,13 @@ public class DrivingStatusUIController : MonoBehaviour
     public string externalCollisionTopicName = "/collision_warning";
     [Tooltip("이 시간(초) 이상 메시지가 없으면 stale로 간주")]
     public float externalCollisionTimeoutSec = 0.5f;
-    [Tooltip("외부 토픽이 stale이면 기존 CollisionWarningPublisher 값으로 fallback")]
+    [Tooltip("외부 토픽이 stale이면 기존 CollisionWarningEngine 값으로 fallback")]
     public bool fallbackToLocalCollisionPublisher = true;
     [Tooltip("ML-Agents 학습 Communicator 연결 시 외부 토픽 미수신이어도 로컬 Collision 값을 UI에 표시")]
     public bool forceLocalCollisionUiWhenTraining = true;
 
     [Header("Source References")]
-    public CollisionWarningPublisher collisionWarningPublisher;
+    public CollisionWarningEngine collisionWarningEngine;
     public DrivingDataCollectorV2 dataCollector;
     public RegressionDrivingController regressionController;
     public WheelTest wheelController;
@@ -112,7 +112,7 @@ public class DrivingStatusUIController : MonoBehaviour
     void Update()
     {
         if (autoFindReferences &&
-            (collisionWarningPublisher == null || dataCollector == null || regressionController == null ||
+            (collisionWarningEngine == null || dataCollector == null || regressionController == null ||
              wheelController == null ||
              trafficLightSubscriber == null || trafficLightDecisionEngine == null || sceneTrafficLight == null ||
              progressRewardProvider == null ||
@@ -134,8 +134,8 @@ public class DrivingStatusUIController : MonoBehaviour
 
     void AutoFindReferences()
     {
-        if (collisionWarningPublisher == null)
-            collisionWarningPublisher = FindObjectOfType<CollisionWarningPublisher>();
+        if (collisionWarningEngine == null)
+            collisionWarningEngine = FindObjectOfType<CollisionWarningEngine>();
 
         if (dataCollector == null)
             dataCollector = FindObjectOfType<DrivingDataCollectorV2>();
@@ -307,12 +307,12 @@ public class DrivingStatusUIController : MonoBehaviour
         }
         else
         {
-            if (collisionWarningPublisher == null) return;
-            CollisionWarningPublisher.WarningLevel level = collisionWarningPublisher.GetWarningLevel();
-            (string source, string sensor, float distance) info = collisionWarningPublisher.GetClosestObstacleInfo();
+            if (collisionWarningEngine == null) return;
+            CollisionWarningEngine.WarningLevel level = collisionWarningEngine.GetWarningLevel();
+            (string source, string sensor, float distance) info = collisionWarningEngine.GetClosestObstacleInfo();
 
             levelText = $"{level} ({(int)level})";
-            ttc = collisionWarningPublisher.GetTimeToCollision();
+            ttc = collisionWarningEngine.GetTimeToCollision();
             sensorInfo = info.source == "None" ? "None" : $"{info.source}-{info.sensor}";
             distance = info.distance;
         }
@@ -443,8 +443,8 @@ public class DrivingStatusUIController : MonoBehaviour
 
             if (regressionStatsText != null)
             {
-                string warningInfo = collisionWarningPublisher != null
-                    ? $" | Warn: {collisionWarningPublisher.GetWarningLevel()}"
+                string warningInfo = collisionWarningEngine != null
+                    ? $" | Warn: {collisionWarningEngine.GetWarningLevel()}"
                     : "";
                 regressionStatsText.text = $"Speed: {speed:F2} m/s | Interventions: {interventionCount}{warningInfo}";
             }

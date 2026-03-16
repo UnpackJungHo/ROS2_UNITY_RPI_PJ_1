@@ -35,7 +35,7 @@ public class StopLineStateSubscriber : MonoBehaviour
         ros.Subscribe<StringMsg>(stateTopicName, OnState);
         ros.Subscribe<Float32MultiArrayMsg>(perceptionTopicName, OnPerception);
 
-        Debug.Log($"[StopLine] Subscribing state={stateTopicName}, perception={perceptionTopicName}");
+        //Debug.Log($"[StopLine] Subscribing state={stateTopicName}, perception={perceptionTopicName}");
     }
 
     private void OnState(StringMsg msg)

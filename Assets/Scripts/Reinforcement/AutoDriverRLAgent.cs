@@ -26,7 +26,7 @@ public class AutoDriverRLAgent : Agent
     public WheelTest wheelController;
     public ProgressRewardProvider progressRewardProvider;
     public RLEpisodeEvaluator episodeEvaluator;
-    public CollisionWarningPublisher collisionWarningPublisher;
+    public CollisionWarningEngine collisionWarningEngine;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
     public RegressionDrivingController regressionDrivingController;
     public VehicleCmdSubscriber vehicleCmdSubscriber;
@@ -226,24 +226,14 @@ public class AutoDriverRLAgent : Agent
                 regressionDrivingController != null &&
                 regressionDrivingController.predictionOnlyMode;
 
-            // 회전 리셋 설정에 대한 경고 로그 출력
-            if (episodeStartTransform != null && !useEpisodeStartTransformRotation)
-            {
-                if (forceStartRotationForResidualRl)
-                {
-                    Debug.Log(
-                        "[AutoDriverRLAgent] useEpisodeStartTransformRotation=False 이지만 " +
-                        "Residual RL 모드에서는 시작 회전을 강제 적용합니다."
-                    );
-                }
-                else
-                {
-                    Debug.LogWarning(
-                        "[AutoDriverRLAgent] episodeStartTransform은 지정되었지만 회전 리셋이 꺼져 있습니다. " +
-                        "재시작 시 실패 시점 헤딩이 유지되어 시작 직후 교착이 발생할 수 있습니다."
-                    );
-                }
-            }
+            // 회전 리셋 설정에 대한 경고 로그 출력 (학습 성능을 위해 비활성화)
+            // if (episodeStartTransform != null && !useEpisodeStartTransformRotation)
+            // {
+            //     if (forceStartRotationForResidualRl)
+            //         Debug.Log("[AutoDriverRLAgent] useEpisodeStartTransformRotation=False 이지만 Residual RL 모드에서는 시작 회전을 강제 적용합니다.");
+            //     else
+            //         Debug.LogWarning("[AutoDriverRLAgent] episodeStartTransform은 지정되었지만 회전 리셋이 꺼져 있습니다.");
+            // }
             // 실제 차량 위치/회전/속도 리셋 수행
             ResetVehicleState();
         }
@@ -256,9 +246,7 @@ public class AutoDriverRLAgent : Agent
         //    즉시 추론하지 않고 다음 Update()에서 물리 정착 후 추론
         if (regressionDrivingController != null)
         {
-            Debug.Log($"[RLAgent.OnEpisodeBegin] BEFORE ResetForEpisodeRestart: base steer={regressionDrivingController.GetPredictedSteering():F4}, throttle={regressionDrivingController.GetPredictedThrottle():F4}");
             regressionDrivingController.ResetForEpisodeRestart(forceInference: false);
-            Debug.Log($"[RLAgent.OnEpisodeBegin] AFTER  ResetForEpisodeRestart: base steer={regressionDrivingController.GetPredictedSteering():F4}, throttle={regressionDrivingController.GetPredictedThrottle():F4}");
         }
 
         // 8) 에피소드 평가기 또는 보상 제공자의 상태를 리셋
@@ -298,12 +286,12 @@ public class AutoDriverRLAgent : Agent
         // 경로 진행률 (0~1)
         float progressRatio = progressRewardProvider != null ? progressRewardProvider.GetPathProgressRatio() : 0f;
         // 충돌까지 남은 시간 (TTC, seconds)
-        float ttc = collisionWarningPublisher != null
-            ? collisionWarningPublisher.GetTimeToCollision()
+        float ttc = collisionWarningEngine != null
+            ? collisionWarningEngine.GetTimeToCollision()
             : float.PositiveInfinity;
         // 충돌 경고 레벨 정규화 (0~1, 6단계 기준)
-        float warningLevelNorm = collisionWarningPublisher != null
-            ? Mathf.Clamp01((int)collisionWarningPublisher.GetWarningLevel() / 6f)
+        float warningLevelNorm = collisionWarningEngine != null
+            ? Mathf.Clamp01((int)collisionWarningEngine.GetWarningLevel() / 6f)
             : 0f;
         // 정지선까지 거리
         float stopLineDistance = trafficLightDecisionEngine != null
@@ -403,8 +391,8 @@ public class AutoDriverRLAgent : Agent
         if (episodeEvaluator == null)
             episodeEvaluator = GetComponent<RLEpisodeEvaluator>() ?? GetComponentInParent<RLEpisodeEvaluator>();
 
-        if (collisionWarningPublisher == null)
-            collisionWarningPublisher = GetComponent<CollisionWarningPublisher>() ?? GetComponentInParent<CollisionWarningPublisher>();
+        if (collisionWarningEngine == null)
+            collisionWarningEngine = GetComponent<CollisionWarningEngine>() ?? GetComponentInParent<CollisionWarningEngine>();
 
         if (trafficLightDecisionEngine == null)
             trafficLightDecisionEngine = GetComponent<TrafficLightDecisionEngine>() ?? GetComponentInParent<TrafficLightDecisionEngine>();
@@ -708,9 +696,9 @@ public class AutoDriverRLAgent : Agent
         float baseSteering = regressionDrivingController != null ? regressionDrivingController.GetPredictedSteering() : 0f;
         float baseThrottle = regressionDrivingController != null ? regressionDrivingController.GetPredictedThrottle() : 0f;
 
-        // [DEBUG] base값이 특정 고정값에 멈춰 있으면 경고 (stale prediction 감지)
-        if (Mathf.Abs(baseSteering - (-0.384f)) < 0.005f && Mathf.Abs(baseThrottle - 0.185f) < 0.005f)
-            Debug.LogWarning($"[RLAgent.Action] ⚠️ STALE BASE DETECTED! steer={baseSteering:F4}, throttle={baseThrottle:F4} | delta=({deltaSteer:F4},{deltaAccel:F4})");
+        // [DEBUG] stale prediction 감지 (학습 성능을 위해 비활성화)
+        // if (Mathf.Abs(baseSteering - (-0.384f)) < 0.005f && Mathf.Abs(baseThrottle - 0.185f) < 0.005f)
+        //     Debug.LogWarning($"[RLAgent.Action] STALE BASE DETECTED!");
 
         // 3) Residual 합산: base + delta → 최종 제어값
         float finalSteer = Mathf.Clamp(baseSteering + deltaSteer, -1f, 1f);
@@ -787,23 +775,23 @@ public class AutoDriverRLAgent : Agent
     void ApplySafetyOverride(ref float throttle, ref float brake)
     {
         // ─── 충돌 경고 기반 안전 오버라이드 ───
-        if (collisionWarningPublisher != null)
+        if (collisionWarningEngine != null)
         {
-            CollisionWarningPublisher.WarningLevel level = collisionWarningPublisher.GetWarningLevel();
+            CollisionWarningEngine.WarningLevel level = collisionWarningEngine.GetWarningLevel();
 
-            if (level >= CollisionWarningPublisher.WarningLevel.EmergencyStop)
+            if (level >= CollisionWarningEngine.WarningLevel.EmergencyStop)
             {
                 // 비상 정지: 스로틀 0, 최대 브레이크
                 throttle = 0f;
                 brake = Mathf.Max(brake, emergencyBrake);
             }
-            else if (level >= CollisionWarningPublisher.WarningLevel.Brake)
+            else if (level >= CollisionWarningEngine.WarningLevel.Brake)
             {
                 // 브레이크 단계: 스로틀 0, 강한 브레이크
                 throttle = 0f;
                 brake = Mathf.Max(brake, brakeLevelBrake);
             }
-            else if (level >= CollisionWarningPublisher.WarningLevel.Warning)
+            else if (level >= CollisionWarningEngine.WarningLevel.Warning)
             {
                 // 경고 단계: 스로틀 제한, 최소 속도 이상이면 브레이크 적용
                 throttle = Mathf.Min(throttle, 0.15f);
@@ -811,7 +799,7 @@ public class AutoDriverRLAgent : Agent
                 if (Mathf.Abs(speed) >= Mathf.Max(0f, warningBrakeMinSpeed))
                     brake = Mathf.Max(brake, warningBrake);
             }
-            else if (level >= CollisionWarningPublisher.WarningLevel.SlowDown)
+            else if (level >= CollisionWarningEngine.WarningLevel.SlowDown)
             {
                 // 감속 단계: 스로틀만 제한 (부드러운 감속)
                 throttle = Mathf.Min(throttle, cautionThrottleScale);

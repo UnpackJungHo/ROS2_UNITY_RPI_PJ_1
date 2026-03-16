@@ -67,7 +67,7 @@ public class TrafficLight : MonoBehaviour
         greenSprites = new List<Sprite>(Resources.LoadAll<Sprite>($"{basePath}/Green"));
         _availableGreenSprites = new List<Sprite>(greenSprites);
 
-        Debug.Log($"[TrafficLight] Loaded {datasetType} sprites: R={redSprites.Count}, Y={yellowSprites.Count}, G={greenSprites.Count}");
+        //Debug.Log($"[TrafficLight] Loaded {datasetType} sprites: R={redSprites.Count}, Y={yellowSprites.Count}, G={greenSprites.Count}");
     }
 
     private IEnumerator TrafficCycle()

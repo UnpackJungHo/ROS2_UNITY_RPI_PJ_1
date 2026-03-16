@@ -18,29 +18,24 @@ public class TrafficLightDecisionEngine : MonoBehaviour
     public TrafficLightStateSubscriber trafficLightSubscriber;
     public StopLineStateSubscriber stopLineSubscriber;
     public WheelTest wheelController;
+    [Tooltip("차량 기준 Transform (미할당 시 현재 오브젝트)")]
+    public Transform egoTransform;
+
+    [Header("Scene Traffic Lights")]
     [Tooltip("true면 ROS state 대신 씬 TrafficLight.currentColor를 신호 입력으로 사용")]
     public bool useSceneTrafficLightState = true;
-    [Tooltip("단일 씬 신호등 참조(복수 후보가 없을 때 사용)")]
-    public TrafficLight sceneTrafficLight;
-    [Tooltip("복수 씬 신호등 후보(여러 횡단보도). 전방 최근접 신호등을 선택")]
+    [Tooltip("씬 신호등 후보 리스트. 전방 최근접 신호등을 자동 선택")]
     public TrafficLight[] sceneTrafficLights;
     [Tooltip("씬 신호등 후보 선택 시 허용 횡오프셋(m). 0 이하면 횡오프셋 체크 비활성")]
     public float maxSceneSignalLateralOffset = 8f;
     [Tooltip("씬 신호등을 쓰지 못할 때 ROS 구독 상태로 fallback")]
     public bool fallbackToRosSubscriberState = true;
-    [Tooltip("차량 기준 Transform (미할당 시 현재 오브젝트)")]
-    public Transform egoTransform;
-    [Tooltip("정지선 Transform (있으면 최우선 사용)")]
-    public Transform stopLineTransform;
-    [Tooltip("복수 정지선 후보(여러 횡단보도). 전방 최근접 정지선을 자동 선택")]
+
+    [Header("Stop Lines")]
+    [Tooltip("정지선 후보 리스트. 전방 최근접 정지선을 자동 선택")]
     public Transform[] stopLineTransforms;
     [Tooltip("정지선 후보 선택 시 허용 횡오프셋(m). 0 이하면 횡오프셋 체크 비활성")]
     public float maxStopLineLateralOffset = 4f;
-    [Tooltip("단일/복수 정지선 참조가 비어있을 때 이름 키워드로 후보 자동 수집")]
-    public bool autoFindStopLinesByName = true;
-    [Tooltip("자동 수집용 이름 키워드(예: StopLineRef)")]
-    public string autoStopLineNameKeyword = "StopLineRef";
-    public bool autoFindReferences = true;
 
     [Header("Perception Relevance Gate")]
     [Range(0f, 1f)] public float minStateConfidence = 0.35f;
@@ -96,39 +91,13 @@ public class TrafficLightDecisionEngine : MonoBehaviour
 
     void Start()
     {
-        if (autoFindReferences)
-            AutoFindReferences();
+        if (egoTransform == null)
+            egoTransform = wheelController != null ? wheelController.transform : transform;
     }
 
     void Update()
     {
         EvaluateDecision();
-    }
-
-    void AutoFindReferences()
-    {
-        if (trafficLightSubscriber == null)
-            trafficLightSubscriber = FindObjectOfType<TrafficLightStateSubscriber>();
-
-        if (sceneTrafficLight == null)
-            sceneTrafficLight = FindObjectOfType<TrafficLight>();
-
-        if ((sceneTrafficLights == null || sceneTrafficLights.Length == 0) && autoFindReferences)
-            sceneTrafficLights = FindObjectsOfType<TrafficLight>();
-
-        if (stopLineSubscriber == null)
-            stopLineSubscriber = FindObjectOfType<StopLineStateSubscriber>();
-
-        if (wheelController == null)
-            wheelController = FindObjectOfType<WheelTest>();
-
-        if (egoTransform == null)
-            egoTransform = wheelController != null ? wheelController.transform : transform;
-
-        bool missingStopLines = stopLineTransform == null &&
-                                (stopLineTransforms == null || stopLineTransforms.Length == 0);
-        if (autoFindStopLinesByName && missingStopLines)
-            stopLineTransforms = FindStopLineTransformsByName(autoStopLineNameKeyword);
     }
 
     void EvaluateDecision()
@@ -234,28 +203,29 @@ public class TrafficLightDecisionEngine : MonoBehaviour
 
     float ComputeStopLineDistanceFromTransform()
     {
-        if (egoTransform == null)
+        if (egoTransform == null || stopLineTransforms == null)
             return float.PositiveInfinity;
 
         activeStopLineName = "none";
         float bestDistance = float.PositiveInfinity;
 
-        void TryCandidate(Transform candidate)
+        for (int i = 0; i < stopLineTransforms.Length; i++)
         {
+            Transform candidate = stopLineTransforms[i];
             if (candidate == null)
-                return;
+                continue;
 
             Vector3 toStopLine = candidate.position - egoTransform.position;
             float longitudinal = Vector3.Dot(toStopLine, egoTransform.forward);
             if (longitudinal <= 0f)
-                return;
+                continue;
 
             float lateralLimit = Mathf.Max(0f, maxStopLineLateralOffset);
             if (lateralLimit > 0f)
             {
                 float lateral = Mathf.Abs(Vector3.Dot(toStopLine, egoTransform.right));
                 if (lateral > lateralLimit)
-                    return;
+                    continue;
             }
 
             if (longitudinal < bestDistance)
@@ -263,14 +233,6 @@ public class TrafficLightDecisionEngine : MonoBehaviour
                 bestDistance = longitudinal;
                 activeStopLineName = candidate.name;
             }
-        }
-
-        TryCandidate(stopLineTransform);
-
-        if (stopLineTransforms != null)
-        {
-            for (int i = 0; i < stopLineTransforms.Length; i++)
-                TryCandidate(stopLineTransforms[i]);
         }
 
         return bestDistance;
@@ -319,7 +281,6 @@ public class TrafficLightDecisionEngine : MonoBehaviour
         }
 
         float requiredDecel = (speed * speed) / Mathf.Max(0.1f, 2f * dist);
-        // 0~3m/s^2 범위를 0~1 brake로 단순 맵핑
         recommendedBrake = Mathf.Clamp01(requiredDecel / 3f);
         recommendedBrake = Mathf.Max(recommendedBrake, 0.35f);
         recommendedBrake = Mathf.Min(recommendedBrake, maxStopBrake);
@@ -362,35 +323,22 @@ public class TrafficLightDecisionEngine : MonoBehaviour
 
     TrafficLight ResolveActiveSceneTrafficLight()
     {
-        List<TrafficLight> candidates = new List<TrafficLight>();
-        if (sceneTrafficLight != null)
-            candidates.Add(sceneTrafficLight);
-
-        if (sceneTrafficLights != null)
-        {
-            for (int i = 0; i < sceneTrafficLights.Length; i++)
-            {
-                TrafficLight candidate = sceneTrafficLights[i];
-                if (candidate == null)
-                    continue;
-                if (!candidates.Contains(candidate))
-                    candidates.Add(candidate);
-            }
-        }
-
-        if (candidates.Count == 0)
+        if (sceneTrafficLights == null || sceneTrafficLights.Length == 0)
             return null;
 
         if (egoTransform == null)
-            return candidates[0];
+            return sceneTrafficLights[0];
 
         float bestDistance = float.PositiveInfinity;
         TrafficLight best = null;
         float lateralLimit = Mathf.Max(0f, maxSceneSignalLateralOffset);
 
-        for (int i = 0; i < candidates.Count; i++)
+        for (int i = 0; i < sceneTrafficLights.Length; i++)
         {
-            TrafficLight candidate = candidates[i];
+            TrafficLight candidate = sceneTrafficLights[i];
+            if (candidate == null)
+                continue;
+
             Vector3 toLight = candidate.transform.position - egoTransform.position;
             float longitudinal = Vector3.Dot(toLight, egoTransform.forward);
             if (longitudinal <= 0f)
@@ -410,7 +358,7 @@ public class TrafficLightDecisionEngine : MonoBehaviour
             }
         }
 
-        return best != null ? best : candidates[0];
+        return best != null ? best : sceneTrafficLights[0];
     }
 
     static string NormalizeSignalState(string raw)
@@ -422,30 +370,6 @@ public class TrafficLightDecisionEngine : MonoBehaviour
         if (s == "red" || s == "yellow" || s == "green")
             return s;
         return "none";
-    }
-
-    Transform[] FindStopLineTransformsByName(string keyword)
-    {
-        if (string.IsNullOrWhiteSpace(keyword))
-            return new Transform[0];
-
-        Transform[] all = FindObjectsOfType<Transform>();
-        List<Transform> matches = new List<Transform>();
-        string key = keyword.Trim().ToLowerInvariant();
-
-        for (int i = 0; i < all.Length; i++)
-        {
-            Transform t = all[i];
-            if (t == null)
-                continue;
-            if (t.name == null)
-                continue;
-
-            if (t.name.ToLowerInvariant().Contains(key))
-                matches.Add(t);
-        }
-
-        return matches.ToArray();
     }
 
     public TrafficDecision GetDecision() => currentDecision;
@@ -464,7 +388,7 @@ public class TrafficLightDecisionEngine : MonoBehaviour
     public float GetDecisionDistance() => fusedDecisionDistance;
     public float GetRecommendedThrottleScale() => recommendedThrottleScale;
     public float GetRecommendedBrake() => recommendedBrake;
-    public bool HasStopLineTransform() => stopLineTransform != null;
+    public bool HasStopLineTransform() => stopLineTransforms != null && stopLineTransforms.Length > 0;
     public bool HasStopLinePerception() => stopLineSubscriber != null;
     public bool ShouldStop() => currentDecision == TrafficDecision.Stop;
     public bool ShouldCaution() => currentDecision == TrafficDecision.Caution;
