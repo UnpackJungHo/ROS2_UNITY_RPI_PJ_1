@@ -6,7 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/KJH/RL.unity
+    path: Assets/Scenes/KJH/RL_before.unity
     guid: 9942c6f4948bbee6f9b53bcb53ee6d81
   m_configObjects:
     com.unity.input.settings: {fileID: 11400000, guid: 95ed845484ed16bcf9fcc9541892357f, type: 2}

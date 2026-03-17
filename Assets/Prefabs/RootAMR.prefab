@@ -565,7 +565,7 @@ MonoBehaviour:
   frontViewCamera: {fileID: 8863827206365748115}
   preferDedicatedRuntimeCamera: 1
   enableRenderStagger: 1
-  enableStabilization: 1
+  enableStabilization: 0
   positionSmoothTime: 0.08
   rotationSmoothTime: 0.06
   stabilizeVertical: 1
@@ -4067,7 +4067,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3394345786966611038}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 41611797f4858b29ab2a048e1c73543b, type: 3}
   m_Name: 
@@ -4098,7 +4098,7 @@ MonoBehaviour:
   wheelController: {fileID: 8767988594840380841}
   cameraPublisher: {fileID: 8526092224972961840}
   dataCollector: {fileID: 2724679006326700055}
-  collisionWarningEngine: {fileID: 0}
+  collisionWarningEngine: {fileID: 4887158630418357921}
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
   frontImageWidth: 200
   frontImageHeight: 66
@@ -4153,10 +4153,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0e0dbf1aeff8c3edb00662acc4fef05, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  wheelController: {fileID: 0}
+  wheelController: {fileID: 8767988594840380841}
   autoFindWheelController: 1
   useRegressionAutonomyGate: 1
-  regressionDrivingController: {fileID: 0}
+  regressionDrivingController: {fileID: 3411824885766192326}
   autoFindRegressionController: 1
   releaseExternalControlWhenGateClosed: 1
   holdBrakeWhenGateClosed: 0
@@ -6418,6 +6418,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5969163342980933528}
   - component: {fileID: 1662412574697323824}
+  - component: {fileID: 1008550436067625208}
   m_Layer: 0
   m_Name: RootAMR
   m_TagString: Untagged
@@ -6534,9 +6535,27 @@ MonoBehaviour:
   - component: {fileID: 726012837616418817}
     enableInTrain: 0
     enableInTest: 1
+  trainRenderRate: 5
+  testRenderRate: 10
+  trainFixedDeltaTime: 0
+  testFixedDeltaTime: 0
   modeText: {fileID: 0}
   lastAppliedMode: 0
   lastAppliedSummary: Mode=Train, RosTopics=22
+--- !u!114 &1008550436067625208
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5290848885025529959}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3284cdfbae9986fed83248ab0a038fee, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  scannedJointControls: 0
+  disabledJointControls: 0
 --- !u!1 &5304906363571736173
 GameObject:
   m_ObjectHideFlags: 0
@@ -9366,7 +9385,7 @@ MonoBehaviour:
   rangeMax: 50
   horizontalFOV: 70
   verticalFOV: 10
-  horizontalRayNum: 15
+  horizontalRayNum: 10
   verticalRayNum: 3
   maxHitsPerRay: 2
   maxDetections: 8
@@ -11705,7 +11724,7 @@ MonoBehaviour:
   rangeMax: 50
   horizontalFOV: 70
   verticalFOV: 10
-  horizontalRayNum: 15
+  horizontalRayNum: 10
   verticalRayNum: 3
   maxHitsPerRay: 2
   maxDetections: 24
