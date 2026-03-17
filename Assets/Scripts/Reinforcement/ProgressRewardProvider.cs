@@ -105,6 +105,11 @@ public class ProgressRewardProvider : MonoBehaviour
     private float unconsumedStepReward = 0f;
     private int lastNearestSegmentIndex = 0; // 이전 프레임 최근접 세그먼트 캐시
 
+    // 헤딩/횡오차 캐시 (AutoDriverRLAgent가 O(1)으로 읽기 위한 캐시)
+    private float cachedHeadingErrorDeg = 0f;
+    private float cachedSignedLateralError = 0f;
+    private Vector3 cachedBestTangent = Vector3.forward;
+
     /// <summary>
     /// 참조 자동 연결, 트리거 프록시 구성, 필요 시 RoadData 기반 waypoint 자동 생성,
     /// 그리고 초기 경로 상태를 준비한다.
@@ -452,11 +457,17 @@ public class ProgressRewardProvider : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 추적 위치를 경로에 투영해 path-s와 횡오차를 갱신한다.
+    /// 현재 추적 위치를 경로에 투영해 path-s와 횡오차를 갱신하고,
+    /// 헤딩 오차 캐시도 함께 갱신한다.
     /// </summary>
     void UpdatePathProgress()
     {
-        currentPathS = ProjectOnPath(GetTrackedPosition(), out currentLateralError);
+        Vector3 trackedPos = GetTrackedPosition();
+        currentPathS = ProjectOnPath(trackedPos, out currentLateralError);
+
+        // 헤딩 오차 캐시 갱신 (AutoDriverRLAgent가 재사용)
+        Transform tracked = (triggerTarget != null) ? triggerTarget.transform : transform;
+        cachedHeadingErrorDeg = Vector3.SignedAngle(cachedBestTangent, tracked.forward, Vector3.up);
     }
 
     /// <summary>
@@ -515,6 +526,29 @@ public class ProgressRewardProvider : MonoBehaviour
 
         lastNearestSegmentIndex = bestIndex;
         lateralError = Mathf.Sqrt(bestDistSq);
+
+        // 헤딩/횡오차 캐시 갱신 (접선 방향과 부호 있는 횡오차)
+        if (bestIndex >= 0 && bestIndex < segCount && progressWaypoints.Length >= 2)
+        {
+            int bj = (bestIndex + 1) % progressWaypoints.Length;
+            Vector3 a = progressWaypoints[bestIndex].position;
+            Vector3 b = progressWaypoints[bj].position;
+            Vector3 ab = b - a;
+            float abLenSq = ab.sqrMagnitude;
+
+            if (abLenSq > 1e-6f)
+            {
+                cachedBestTangent = ab.normalized;
+
+                float t = Mathf.Clamp01(Vector3.Dot(position - a, ab) / abLenSq);
+                Vector3 projected = a + (ab * t);
+                Vector3 offset = position - projected;
+                float sideSign = Mathf.Sign(Vector3.Dot(Vector3.Cross(cachedBestTangent, offset), Vector3.up));
+                if (Mathf.Approximately(sideSign, 0f)) sideSign = 1f;
+                cachedSignedLateralError = lateralError * sideSign;
+            }
+        }
+
         return bestS;
     }
 
@@ -795,5 +829,27 @@ public class ProgressRewardProvider : MonoBehaviour
         cumulativeTrafficPenalty = 0f;
         cumulativeReward = 0f;
         lastNearestSegmentIndex = 0;
+
+        // 헤딩/횡오차 캐시 초기화
+        cachedHeadingErrorDeg = 0f;
+        cachedSignedLateralError = 0f;
+        cachedBestTangent = Vector3.forward;
     }
+
+    /// <summary>
+    /// ProgressRewardProvider가 캐싱한 최근접 세그먼트 인덱스를 반환한다.
+    /// AutoDriverRLAgent의 ComputeHeadingErrorDeg 최적화에 사용된다.
+    /// </summary>
+    public int GetLastNearestSegmentIndex() => lastNearestSegmentIndex;
+
+    /// <summary>
+    /// FixedUpdate에서 계산·캐시된 헤딩 오차(도)를 반환한다.
+    /// AutoDriverRLAgent가 O(N) 재계산 없이 읽을 수 있다.
+    /// </summary>
+    public float GetCachedHeadingErrorDeg() => cachedHeadingErrorDeg;
+
+    /// <summary>
+    /// FixedUpdate에서 계산·캐시된 부호 있는 횡방향 오차를 반환한다.
+    /// </summary>
+    public float GetCachedSignedLateralError() => cachedSignedLateralError;
 }

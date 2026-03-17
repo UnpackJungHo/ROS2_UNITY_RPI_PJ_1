@@ -36,6 +36,19 @@ public class AutoDriverRLAgent : Agent
     public bool autoFindReferences = true;
     [Tooltip("DecisionRequester가 없을 때 FixedUpdate마다 RequestDecision 호출")]
     public bool requestDecisionInFixedUpdateWithoutRequester = false;
+
+    [Header("Decision Staggering")]
+    [Tooltip("true: DecisionRequester.DecisionStep을 에이전트별로 자동 배정\n" +
+             "→ 8대 동시 BehaviourUpdate 스파이크를 프레임별 1~2회로 분산\n" +
+             "DecisionRequester가 반드시 붙어 있어야 함")]
+    public bool useStaggeredDecision = false;
+    [Tooltip("-1이면 Play 진입 시 자동 배정 (에이전트 등록 순서 0~N, mod DecisionPeriod)")]
+    [SerializeField] private int staggerOffset = -1;
+
+    // Play 진입마다 정적 카운터를 0으로 초기화 (도메인 리로드 안전)
+    private static int s_staggerCounter;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStaggerCounter() => s_staggerCounter = 0;
     [Tooltip("할당하면 Agent Transform이 이 타겟(base_link 등)을 추적")]
     public Transform followTargetTransform;
     public bool followTargetPosition = true;
@@ -142,6 +155,15 @@ public class AutoDriverRLAgent : Agent
 
         // 6) 초기화 완료 플래그 설정 (종료 콜백에서 초기화 전 호출 방지용)
         agentInitialized = true;
+
+        // 7) Stagger 활성화: DecisionRequester.DecisionStep에 에이전트별 오프셋 배정
+        //    DecisionRequester는 그대로 유지 — 공식 ML-Agents API로 분산 처리
+        if (useStaggeredDecision && decisionRequester != null)
+        {
+            if (staggerOffset < 0)
+                staggerOffset = s_staggerCounter++;
+            decisionRequester.DecisionStep = staggerOffset % decisionRequester.DecisionPeriod;
+        }
     }
 
     /// <summary>
@@ -181,8 +203,11 @@ public class AutoDriverRLAgent : Agent
         // Agent Transform을 followTarget(base_link 등)의 위치/회전으로 동기화
         SyncToFollowTarget();
 
-        // 외부 ROS cmd 모드가 활성화된 경우: 모방학습을 예측 전용으로, 휠 컨트롤러를 외부 제어 모드로 설정
-        if (IsExternalRosCmdInputActive())
+        // IsExternalRosCmdInputActive()를 한 번만 호출하여 캐시 (FixedUpdate 핫패스)
+        bool isExternalCmd = IsExternalRosCmdInputActive();
+
+        // 외부 ROS cmd 모드: 모방학습을 예측 전용으로, 휠 컨트롤러를 외부 제어 모드로 설정
+        if (isExternalCmd)
         {
             if (regressionDrivingController != null && !regressionDrivingController.predictionOnlyMode)
                 regressionDrivingController.predictionOnlyMode = true;
@@ -190,12 +215,11 @@ public class AutoDriverRLAgent : Agent
             if (wheelController != null && !wheelController.externalControlEnabled)
                 wheelController.externalControlEnabled = true;
         }
-
-        // 외부 입력 비활성 & DecisionRequester 없을 때: 수동으로 매 FixedUpdate 결정 요청
-        if (!IsExternalRosCmdInputActive() &&
-            requestDecisionInFixedUpdateWithoutRequester &&
-            decisionRequester == null)
+        // DecisionRequester 없이 수동 결정 요청 (fallback)
+        else if (requestDecisionInFixedUpdateWithoutRequester && decisionRequester == null)
+        {
             RequestDecision();
+        }
     }
 
     /// <summary>
@@ -274,8 +298,7 @@ public class AutoDriverRLAgent : Agent
     /// </summary>
     public override void CollectObservations(VectorSensor sensor)
     {
-        // Agent Transform을 물리 객체에 동기화 (관측 전 최신 위치 보장)
-        SyncToFollowTarget();
+        // SyncToFollowTarget() ← 제거: FixedUpdate()에서 이미 수행됨
 
         // ─── 환경 상태 관측 (인덱스 0~7) ───
 
@@ -298,8 +321,19 @@ public class AutoDriverRLAgent : Agent
             ? trafficLightDecisionEngine.GetDecisionDistance()
             : float.PositiveInfinity;
 
-        // 경로 대비 헤딩 오차(도)와 부호 있는 횡방향 오차 계산
-        float headingErrorDeg = ComputeHeadingErrorDeg(out float signedLateralError);
+        // ProgressRewardProvider 캐시에서 헤딩/횡오차 읽기 (O(N) → O(1))
+        // ProgressRewardProvider.FixedUpdate()가 CollectObservations()보다 먼저 실행됨이 보장된다.
+        float headingErrorDeg;
+        float signedLateralError;
+        if (progressRewardProvider != null)
+        {
+            headingErrorDeg = progressRewardProvider.GetCachedHeadingErrorDeg();
+            signedLateralError = progressRewardProvider.GetCachedSignedLateralError();
+        }
+        else
+        {
+            headingErrorDeg = ComputeHeadingErrorDeg(out signedLateralError);
+        }
         lastHeadingErrorDeg = headingErrorDeg;
         lastSignedLateralError = signedLateralError;
 
@@ -987,11 +1021,22 @@ public class AutoDriverRLAgent : Agent
     /// </summary>
     public float GetCurrentHeadingErrorDeg(out float signedLateralError)
     {
+        // 캐시 우선 사용 (SyncToFollowTarget + ComputeHeadingErrorDeg 제거)
+        if (progressRewardProvider != null)
+        {
+            signedLateralError = progressRewardProvider.GetCachedSignedLateralError();
+            float heading = progressRewardProvider.GetCachedHeadingErrorDeg();
+            lastHeadingErrorDeg = heading;
+            lastSignedLateralError = signedLateralError;
+            return heading;
+        }
+
+        // fallback: progressRewardProvider 없을 때만 직접 계산
         SyncToFollowTarget();
-        float headingErrorDeg = ComputeHeadingErrorDeg(out signedLateralError);
-        lastHeadingErrorDeg = headingErrorDeg;
+        float h = ComputeHeadingErrorDeg(out signedLateralError);
+        lastHeadingErrorDeg = h;
         lastSignedLateralError = signedLateralError;
-        return headingErrorDeg;
+        return h;
     }
 
     /// <summary>

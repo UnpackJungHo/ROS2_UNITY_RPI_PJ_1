@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// 카메라 설정, RenderTexture 관리, Stabilizer를 담당하는 로직 컴포넌트.
@@ -52,7 +53,6 @@ public class CameraRenderer : MonoBehaviour
 
     private Camera cam;
     private RenderTexture renderTexture;
-    private Texture2D texture2D;
     private CameraStabilizer stabilizer;
     private bool createdStabilizerAtRuntime;
     private bool createdRuntimeFrontCameraAtRuntime;
@@ -60,8 +60,28 @@ public class CameraRenderer : MonoBehaviour
     private float lastRenderTime;
     private byte[] flippedDataBuffer;
 
+    // AsyncGPUReadback 상태 (GPU stall 제거)
+    private byte[] latestRgbData;
+    private bool hasValidData = false;
+    private bool readbackInProgress = false;
+
     public Camera GetCamera() => cam;
     public RenderTexture GetRenderTexture() => renderTexture;
+
+    /// <summary>
+    /// 런타임에 렌더 해상도를 변경한다. RenderTexture/Texture2D를 재생성한다.
+    /// </summary>
+    public void SetResolution(int width, int height)
+    {
+        if (imageWidth == width && imageHeight == height)
+            return;
+
+        imageWidth = width;
+        imageHeight = height;
+
+        if (cam != null)
+            SetupRenderResources();
+    }
 
     void Start()
     {
@@ -181,19 +201,17 @@ public class CameraRenderer : MonoBehaviour
             renderTexture = null;
         }
 
-        if (texture2D != null)
-        {
-            Object.Destroy(texture2D);
-            texture2D = null;
-        }
-
         renderTexture = new RenderTexture(imageWidth, imageHeight, 24, RenderTextureFormat.ARGB32);
         renderTexture.Create();
 
-        texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
         flippedDataBuffer = new byte[imageWidth * imageHeight * 3];
         cam.targetTexture = renderTexture;
         cam.enabled = false;
+
+        // 해상도 변경 시 비동기 상태 초기화
+        hasValidData = false;
+        readbackInProgress = false;
+        latestRgbData = null;
     }
 
     Camera GetOrCreateRuntimeFrontCamera(Camera templateCamera)
@@ -251,19 +269,45 @@ public class CameraRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// RenderTexture에서 RGB 데이터를 읽어 반환한다.
+    /// RenderTexture에서 RGB 데이터를 비동기로 요청하고 이전 프레임의 완료된 데이터를 반환한다.
+    /// GPU stall 없이 1프레임 지연된 데이터를 제공한다 (10Hz 캡처 기준 영향 없음).
     /// </summary>
     public byte[] ReadRgbData()
     {
-        if (cam == null || renderTexture == null || texture2D == null)
+        if (cam == null || renderTexture == null)
             return null;
 
-        RenderTexture.active = renderTexture;
-        texture2D.ReadPixels(new Rect(0, 0, imageWidth, imageHeight), 0, 0);
-        RenderTexture.active = null;
+        if (!readbackInProgress)
+        {
+            readbackInProgress = true;
+            AsyncGPUReadback.Request(renderTexture, 0, TextureFormat.RGB24, OnAsyncReadbackComplete);
+        }
 
-        byte[] imageData = texture2D.GetRawTextureData();
-        return ConvertToRGB(imageData);
+        return hasValidData ? latestRgbData : null;
+    }
+
+    void OnAsyncReadbackComplete(AsyncGPUReadbackRequest request)
+    {
+        readbackInProgress = false;
+
+        if (request.hasError)
+            return;
+
+        var data = request.GetData<byte>();
+        if (latestRgbData == null || latestRgbData.Length != data.Length)
+            latestRgbData = new byte[data.Length];
+
+        // 수직 반전 복사 (GPU 기본값은 하단 원점, ConvertToRGB 로직 통합)
+        int rowBytes = imageWidth * 3;
+        for (int y = 0; y < imageHeight; y++)
+        {
+            int srcRow = (imageHeight - 1 - y) * rowBytes;
+            int dstRow = y * rowBytes;
+            for (int x = 0; x < rowBytes; x++)
+                latestRgbData[dstRow + x] = data[srcRow + x];
+        }
+
+        hasValidData = true;
     }
 
     byte[] ConvertToRGB(byte[] rgbData)
@@ -299,12 +343,6 @@ public class CameraRenderer : MonoBehaviour
             renderTexture.Release();
             Destroy(renderTexture);
             renderTexture = null;
-        }
-
-        if (texture2D != null)
-        {
-            Destroy(texture2D);
-            texture2D = null;
         }
 
         if (createdStabilizerAtRuntime && stabilizer != null)

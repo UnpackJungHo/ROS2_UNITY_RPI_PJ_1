@@ -58,6 +58,19 @@ public class TrainTestModeSwitcher : MonoBehaviour
              "[Populate ROS Topics] 컨텍스트 메뉴로 자동 탐색 가능.")]
     public RosTopicEntry[] rosTopics = new RosTopicEntry[0];
 
+    [Header("Performance")]
+    [Tooltip("학습 시 CameraRenderer 렌더 주기 (Hz). 0이면 변경 안 함.\n" +
+             "DecisionPeriod=5 기준 5Hz면 충분 (기본 10Hz 대비 Camera.Render() 50% 감소)")]
+    public float trainRenderRate = 5f;
+    [Tooltip("테스트 시 CameraRenderer 렌더 주기 (Hz). 0이면 변경 안 함.")]
+    public float testRenderRate = 10f;
+
+    [Tooltip("학습 시 Physics.fixedDeltaTime 값. 0이면 변경 안 함.\n" +
+             "0.04 = 25Hz (기본 0.02=50Hz 대비 FixedUpdate 50% 감소, 물리 안정성 테스트 필요)")]
+    public float trainFixedDeltaTime = 0f;
+    [Tooltip("테스트 시 Physics.fixedDeltaTime 복원 값. 0이면 변경 안 함.")]
+    public float testFixedDeltaTime = 0f;
+
     [Header("Optional UI")]
     public TMP_Text modeText;
 
@@ -181,6 +194,12 @@ public class TrainTestModeSwitcher : MonoBehaviour
     void ApplyTrainMode()
     {
         // 학습: Unity 내부 로직만 사용
+        ApplyCameraRendererResolution(200, 66);
+        if (trainRenderRate > 0f)
+            ApplyCameraRendererRate(trainRenderRate);
+        if (trainFixedDeltaTime > 0f && Application.isPlaying)
+            Time.fixedDeltaTime = trainFixedDeltaTime;
+
         if (autoDriverRLAgent != null)
         {
             autoDriverRLAgent.externalRosCmdInputOnly = false;
@@ -194,6 +213,11 @@ public class TrainTestModeSwitcher : MonoBehaviour
         {
             regressionDrivingController.isAutonomousMode = true;
             regressionDrivingController.predictionOnlyMode = true;
+            // #1: 카메라(trainRenderRate=5Hz)와 추론 주기 동기화 → 동일 이미지 중복 추론 제거
+            if (trainRenderRate > 0f)
+                regressionDrivingController.inferenceInterval = 1f / trainRenderRate;
+            // #2: Academy 스텝 기반 분산 활성화 → 프레임 내 동시 추론 스파이크 감소
+            regressionDrivingController.useAcademyStepStagger = true;
         }
 
         if (drivingStatusUIController != null)
@@ -220,6 +244,12 @@ public class TrainTestModeSwitcher : MonoBehaviour
     void ApplyTestMode()
     {
         // 추론: 외부 ROS 토픽 로직만 사용
+        ApplyCameraRendererResolution(640, 480);
+        if (testRenderRate > 0f)
+            ApplyCameraRendererRate(testRenderRate);
+        if (testFixedDeltaTime > 0f && Application.isPlaying)
+            Time.fixedDeltaTime = testFixedDeltaTime;
+
         if (autoDriverRLAgent != null)
         {
             autoDriverRLAgent.externalRosCmdInputOnly = true;
@@ -371,6 +401,33 @@ public class TrainTestModeSwitcher : MonoBehaviour
         modeText.text = selectedMode == RuntimeMode.Train
             ? "Mode: TRAIN (Internal)"
             : "Mode: TEST (External)";
+    }
+
+    /// <summary>
+    /// 씬의 모든 CameraRenderer renderRate를 변경한다.
+    /// </summary>
+    void ApplyCameraRendererRate(float rate)
+    {
+        foreach (var cr in FindAll<CameraRenderer>(includeInactiveObjects))
+            cr.renderRate = rate;
+    }
+
+    /// <summary>
+    /// 씬의 모든 CameraRenderer 해상도를 변경한다.
+    /// 런타임이면 즉시 RenderTexture를 재생성하고, 에디터 모드면 Inspector 값만 갱신한다.
+    /// </summary>
+    void ApplyCameraRendererResolution(int width, int height)
+    {
+        foreach (var cr in FindAll<CameraRenderer>(includeInactiveObjects))
+        {
+            if (Application.isPlaying)
+                cr.SetResolution(width, height);
+            else
+            {
+                cr.imageWidth = width;
+                cr.imageHeight = height;
+            }
+        }
     }
 
     static T FindOne<T>(bool includeInactive) where T : Object

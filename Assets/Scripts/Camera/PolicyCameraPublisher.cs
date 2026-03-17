@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Sensor;
 using RosMessageTypes.Std;
@@ -31,10 +32,14 @@ public class PolicyCameraPublisher : MonoBehaviour
     private ROSConnection ros;
     private Camera sourceCamera;
     private RenderTexture renderTexture;
-    private Texture2D texture2D;
     private float publishInterval;
     private float lastPublishTime;
     private byte[] flippedDataBuffer;
+
+    // AsyncGPUReadback 상태 (GPU stall 제거)
+    private byte[] latestPolicyRgbData;
+    private bool hasPolicyData = false;
+    private bool policyReadbackInProgress = false;
 
     void Start()
     {
@@ -49,7 +54,6 @@ public class PolicyCameraPublisher : MonoBehaviour
 
         renderTexture = new RenderTexture(imageWidth, imageHeight, 24, RenderTextureFormat.ARGB32);
         renderTexture.Create();
-        texture2D = new Texture2D(imageWidth, imageHeight, TextureFormat.RGB24, false);
         flippedDataBuffer = new byte[imageWidth * imageHeight * 3];
 
         publishInterval = 1f / Mathf.Max(1f, publishRate);
@@ -101,13 +105,16 @@ public class PolicyCameraPublisher : MonoBehaviour
             return;
         }
 
-        RenderTexture.active = renderTexture;
-        texture2D.ReadPixels(new Rect(0, 0, imageWidth, imageHeight), 0, 0);
-        texture2D.Apply();
-        RenderTexture.active = null;
+        // ReadPixels → AsyncGPUReadback (GPU stall 제거)
+        if (!policyReadbackInProgress)
+        {
+            policyReadbackInProgress = true;
+            AsyncGPUReadback.Request(renderTexture, 0, TextureFormat.RGB24, OnPolicyReadbackComplete);
+        }
 
-        byte[] imageData = texture2D.GetRawTextureData();
-        byte[] rgbData = ConvertToRGB(imageData);
+        // 이전 프레임 완료 데이터로 발행 (1프레임 지연, 10Hz 기준 영향 없음)
+        if (!hasPolicyData)
+            return;
 
         ImageMsg imageMsg = new ImageMsg
         {
@@ -125,10 +132,33 @@ public class PolicyCameraPublisher : MonoBehaviour
             encoding = "rgb8",
             is_bigendian = 0,
             step = (uint)(imageWidth * 3),
-            data = rgbData
+            data = latestPolicyRgbData
         };
 
         ros.Publish(topicName, imageMsg);
+    }
+
+    void OnPolicyReadbackComplete(AsyncGPUReadbackRequest request)
+    {
+        policyReadbackInProgress = false;
+
+        if (request.hasError)
+            return;
+
+        var data = request.GetData<byte>();
+        if (latestPolicyRgbData == null || latestPolicyRgbData.Length != data.Length)
+            latestPolicyRgbData = new byte[data.Length];
+
+        int rowBytes = imageWidth * 3;
+        for (int y = 0; y < imageHeight; y++)
+        {
+            int srcRow = (imageHeight - 1 - y) * rowBytes;
+            int dstRow = y * rowBytes;
+            for (int x = 0; x < rowBytes; x++)
+                latestPolicyRgbData[dstRow + x] = data[srcRow + x];
+        }
+
+        hasPolicyData = true;
     }
 
     byte[] ConvertToRGB(byte[] rgbData)
@@ -152,8 +182,5 @@ public class PolicyCameraPublisher : MonoBehaviour
             renderTexture.Release();
             Destroy(renderTexture);
         }
-
-        if (texture2D != null)
-            Destroy(texture2D);
     }
 }

@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using Unity.Sentis;
+using Unity.Collections;
 
 /// <summary>
 /// Speed-Aware 회귀(Regression) 자율주행 컨트롤러 (Single View)
@@ -79,6 +81,12 @@ public class RegressionDrivingController : MonoBehaviour
     [Tooltip("다중 차량 시 추론 시점을 분산")]
     public bool enableInferenceStagger = true;
 
+    [Tooltip("predictionOnlyMode=true 시 Academy.StepCount 기반으로 추론 시점 분산\n" +
+             "(TrainTestModeSwitcher가 학습 모드 진입 시 자동 활성화)")]
+    public bool useAcademyStepStagger = false;
+    [Tooltip("Academy 스텝 기반 분산 주기 (DecisionPeriod와 동일 값으로 설정)")]
+    public int staggerPeriod = 5;
+
     [Header("RL Residual Mode")]
     [Tooltip("true면 추론만 하고 차량에 직접 적용하지 않음 (RL Agent가 읽어서 보정)")]
     public bool predictionOnlyMode = false;
@@ -104,9 +112,11 @@ public class RegressionDrivingController : MonoBehaviour
     private RenderTexture frontRenderTexture;
     private Texture2D frontTexture;
 
-    // 텐서
+    // 텐서 (Start()에서 미리 생성하여 매 추론마다 재사용 - GC 방지)
     private TensorFloat frontInputTensor;
     private TensorFloat speedInputTensor;
+    private TensorShape frontInputShape;
+    private TensorShape speedInputShape;
 
     // ImageNet 정규화 상수
     private readonly float[] mean = { 0.485f, 0.456f, 0.406f };
@@ -117,9 +127,23 @@ public class RegressionDrivingController : MonoBehaviour
     private float[] speedBuffer = new float[1];
 
     private float lastInferenceTime;
+    private int academyStaggerOffset = 0;
+    private int lastAcademyStep = -1;
+    private int staggerDivisor = 1; // Mathf.Max(1, staggerPeriod) 캐시 — Start()에서 확정
+
+    // 정적 카운터: Play 진입 시 리셋 → 8대가 0~(staggerPeriod-1)에 균등 배분
+    private static int s_academyOffsetCounter;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetAcademyOffsetCounter() => s_academyOffsetCounter = 0;
+
     private bool isModelLoaded = false;
     private bool warnedMissingCamera = false;
     private bool warnedMissingWorker = false;
+
+    // AsyncGPUReadback 상태 (CaptureCamera GPU stall 제거)
+    private byte[] latestCaptureData;
+    private bool hasCaptureData = false;
+    private bool captureReadbackInProgress = false;
 
     void Start()
     {
@@ -132,6 +156,10 @@ public class RegressionDrivingController : MonoBehaviour
             float stagger = Mathf.Abs(gameObject.GetInstanceID() % 97) / 97f * inferenceInterval;
             lastInferenceTime = Time.time + stagger - inferenceInterval;
         }
+
+        // Academy 스텝 기반 분산: 등록 순서 기반 균등 배분 (0,1,2,3,4,0,1,2 → 최대 2대/슬롯)
+        staggerDivisor = Mathf.Max(1, staggerPeriod);
+        academyStaggerOffset = System.Threading.Interlocked.Increment(ref s_academyOffsetCounter) % staggerDivisor;
 
         //Debug.Log($"[RegressionDriving] Speed-Aware Regression Controller Initialized");
         //Debug.Log($"  '{toggleKey}' 키: 자율주행 모드 토글");
@@ -171,6 +199,12 @@ public class RegressionDrivingController : MonoBehaviour
         frontRenderTexture = new RenderTexture(frontImageWidth, frontImageHeight, 24);
         frontTexture = new Texture2D(frontImageWidth, frontImageHeight, TextureFormat.RGB24, false);
         tensorDataBuffer = new float[3 * frontImageHeight * frontImageWidth];
+
+        // TensorFloat를 미리 생성하여 추론 루프에서 재사용 (매 추론마다 new 방지 → GC 감소)
+        frontInputShape = new TensorShape(1, 3, frontImageHeight, frontImageWidth);
+        speedInputShape = new TensorShape(1, 1);
+        frontInputTensor = TensorFloat.Zeros(frontInputShape);
+        speedInputTensor = TensorFloat.Zeros(speedInputShape);
     }
 
     void LoadModel()
@@ -186,8 +220,8 @@ public class RegressionDrivingController : MonoBehaviour
             worker?.Dispose();
             worker = null;
             runtimeModel = ModelLoader.Load(modelAsset);
-            // CPU 백엔드 사용: GPU 비동기 파이프라인에서 MakeReadable()이 이전 프레임
-            // 출력 버퍼를 반환하는 문제(stale -0.384/0.185)를 방지한다.
+            // CPU 백엔드 사용: GPU(GPUCompute)는 MakeReadable()이 이전 프레임 출력을
+            // 반환하는 stale output 버그(동일 값 고착) 확인됨 → CPU로 유지.
             worker = WorkerFactory.CreateWorker(BackendType.CPU, runtimeModel);
 
             isModelLoaded = runtimeModel != null && worker != null;
@@ -241,7 +275,22 @@ public class RegressionDrivingController : MonoBehaviour
             }
             else
             {
-                if (EnsureInferenceReady() && Time.time - lastInferenceTime >= inferenceInterval)
+                bool shouldInfer;
+                if (predictionOnlyMode && useAcademyStepStagger)
+                {
+                    // Academy 스텝 기반 분산: DecisionStep과 동기화하여 스파이크 감소
+                    int step = Unity.MLAgents.Academy.Instance.StepCount;
+                    shouldInfer = step != lastAcademyStep
+                                  && (step + academyStaggerOffset) % staggerDivisor == 0
+                                  && EnsureInferenceReady();
+                    if (shouldInfer) lastAcademyStep = step;
+                }
+                else
+                {
+                    shouldInfer = EnsureInferenceReady() && Time.time - lastInferenceTime >= inferenceInterval;
+                }
+
+                if (shouldInfer)
                 {
                     if (RunInference()) // 추론 시작
                         lastInferenceTime = Time.time;
@@ -344,6 +393,7 @@ public class RegressionDrivingController : MonoBehaviour
 
         // 다음 Update에서 바로 추론이 가능하도록 타이머를 되감는다.
         lastInferenceTime = Time.time - Mathf.Max(0.001f, inferenceInterval);
+        lastAcademyStep = -1; // Academy 스텝 추적 초기화 (에피소드 재시작 시 즉시 추론 허용)
 
         if (frontCamera == null && cameraPublisher != null)
             frontCamera = cameraPublisher.GetCamera();
@@ -441,18 +491,41 @@ public class RegressionDrivingController : MonoBehaviour
 
         try
         {
-            // 1. 카메라 이미지 캡처
-            // [DEBUG] 추론 시작 시 카메라 위치 기록
+            // 1. 카메라 이미지 캡처 (비동기 요청 시작)
             Vector3 camPos = frontCamera != null ? frontCamera.transform.position : Vector3.zero;
             CaptureCamera(frontCamera, frontRenderTexture, frontTexture);
 
-            // 2. 이미지 텐서 생성
-            frontInputTensor = TextureToTensor(frontTexture, frontImageHeight, frontImageWidth);
+            // 비동기 데이터가 아직 준비되지 않았으면 이번 프레임 추론 스킵 (1프레임 지연)
+            if (!hasCaptureData)
+                return false;
 
-            // 3. 속도 텐서 생성 (정규화, 프리할당 버퍼 재사용)
+            // 2. tensorDataBuffer 채운 뒤 기존 frontInputTensor 데이터만 갱신
+            // Execute() 후 worker가 내부 백엔드를 변경할 수 있으므로 as 캐스트로 안전 처리
+            FillTensorDataBuffer(latestCaptureData, frontImageHeight, frontImageWidth);
+            var frontData = frontInputTensor?.tensorOnDevice as ArrayTensorData;
+            if (frontData != null)
+            {
+                NativeTensorArray.Copy(tensorDataBuffer, frontData.array, tensorDataBuffer.Length);
+            }
+            else
+            {
+                frontInputTensor?.Dispose();
+                frontInputTensor = new TensorFloat(frontInputShape, tensorDataBuffer);
+            }
+
+            // 3. 속도 텐서 데이터만 갱신
             float currentSpeed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
             speedBuffer[0] = currentSpeed / speedNormalize;
-            speedInputTensor = new TensorFloat(new TensorShape(1, 1), speedBuffer);
+            var speedData = speedInputTensor?.tensorOnDevice as ArrayTensorData;
+            if (speedData != null)
+            {
+                speedData.array.Set<float>(0, speedBuffer[0]);
+            }
+            else
+            {
+                speedInputTensor?.Dispose();
+                speedInputTensor = new TensorFloat(speedInputShape, speedBuffer);
+            }
 
             // 4. 추론 실행
             worker.SetInput("front_image", frontInputTensor);
@@ -496,12 +569,7 @@ public class RegressionDrivingController : MonoBehaviour
             isModelLoaded = runtimeModel != null;
             return false;
         }
-        finally
-        {
-            // 텐서 정리
-            frontInputTensor?.Dispose();
-            speedInputTensor?.Dispose();
-        }
+        // finally Dispose 제거: 텐서는 OnDestroy()까지 재사용
     }
 
     void CaptureCamera(Camera cam, RenderTexture rt, Texture2D tex)
@@ -521,22 +589,41 @@ public class RegressionDrivingController : MonoBehaviour
             cam.targetTexture = originalTarget;
         }
 
-        RenderTexture.active = rt;
-        tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
-        tex.Apply();
-        RenderTexture.active = null;
+        // ReadPixels → AsyncGPUReadback (GPU stall 제거, 1프레임 지연 허용)
+        if (!captureReadbackInProgress)
+        {
+            captureReadbackInProgress = true;
+            AsyncGPUReadback.Request(rt, 0, TextureFormat.RGB24, OnCaptureReadbackComplete);
+        }
     }
 
-    TensorFloat TextureToTensor(Texture2D texture, int height, int width)
+    void OnCaptureReadbackComplete(AsyncGPUReadbackRequest request)
     {
-        // GetRawTextureData: NativeArray 뷰 반환 (Color[] 대비 GC 할당 없음)
-        byte[] rawBytes = texture.GetRawTextureData();
+        captureReadbackInProgress = false;
+
+        if (request.hasError)
+            return;
+
+        var data = request.GetData<byte>();
+        if (latestCaptureData == null || latestCaptureData.Length != data.Length)
+            latestCaptureData = new byte[data.Length];
+
+        // 플립 없이 복사 (BytesToTensor 내부에서 수직 반전 처리)
+        data.CopyTo(latestCaptureData);
+        hasCaptureData = true;
+    }
+
+    /// <summary>
+    /// AsyncGPUReadback 완료 데이터(byte[])를 tensorDataBuffer에 채운다.
+    /// ImageNet 정규화 + 수직 반전 포함. TensorFloat 생성은 하지 않는다.
+    /// </summary>
+    void FillTensorDataBuffer(byte[] rawBytes, int height, int width)
+    {
         int hw = height * width;
         int chR = 0;
         int chG = hw;
         int chB = hw * 2;
 
-        // 역정규화 상수 사전 계산
         float invStdR = 1f / std[0], invStdG = 1f / std[1], invStdB = 1f / std[2];
 
         for (int y = 0; y < height; y++)
@@ -557,8 +644,6 @@ public class RegressionDrivingController : MonoBehaviour
                 tensorDataBuffer[chB + dstRowOffset + x] = (b - mean[2]) * invStdB;
             }
         }
-
-        return new TensorFloat(new TensorShape(1, 3, height, width), tensorDataBuffer);
     }
 
     void ApplyAIControl()
