@@ -21,7 +21,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
         FailRiskStop = 2,    // 실패: 위험 단계에서 저속 정지가 유지됨 (장애물 앞 교착)
         FailCollision = 3,   // 실패: 다른 오브젝트와 물리적 충돌 발생
         FailTimeout = 4,     // 실패: 제한 시간 초과
-        FailStuck = 5        // 실패: 일정 시간 동안 거의 이동하지 못함 (경로 이탈/멈춤)
+        FailStuck = 5,       // 실패: 일정 시간 동안 거의 이동하지 못함 (경로 이탈/멈춤)
+        FailWrongLane = 6    // 실패: 왼쪽 차선(실패 게이트) 통과
     }
 
     [Header("References")]
@@ -45,9 +46,13 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public bool autoBeginOnStart = true;
     /// <summary>에피소드 종료 시 차량을 강제 정지(브레이크 100%)시킬지 여부.</summary>
     public bool stopVehicleOnTerminal = true;
-    /// <summary>에피소드 최대 허용 시간(초). 0 이하이면 타임아웃 비활성.</summary>
-    [Tooltip("0 이하이면 타임아웃 비활성")]
-    public float maxEpisodeSeconds = 120f;
+    /// <summary>에피소드 최대 허용 시간(초). 0 이하이면 타임아웃 비활성.
+    /// 연속 학습 모드에서는 0으로 설정 — max_steps가 학습 한계를 결정함.</summary>
+    [Tooltip("0 이하이면 타임아웃 비활성. 연속 학습 시 0으로 설정")]
+    public float maxEpisodeSeconds = 0f;
+    /// <summary>true면 FinishLineGate 통과 시 에피소드 종료. 연속 학습 시 false로 설정.</summary>
+    [Tooltip("false면 결승선 통과 시에도 에피소드를 종료하지 않음 (연속 학습 모드)")]
+    public bool enableFinishLineTerminal = false;
 
     [Header("Failure Rules")]
     /// <summary>이 경고 레벨(예: Brake=5) 이상에서 저속 정지가 유지되면 FailRiskStop으로 판정.</summary>
@@ -400,9 +405,32 @@ public class RLEpisodeEvaluator : MonoBehaviour
         if (!episodeActive || terminalReached)
             return;
 
+        // 연속 학습 모드에서는 결승선 통과를 무시 — 위치 리셋 없이 학습 계속
+        if (!enableFinishLineTerminal)
+            return;
+
         SetTerminal(
             TerminalType.Finish,
             $"Finish(gate={gateName}, enter={enterSigned:F3}, exit={exitSigned:F3})"
+        );
+    }
+
+    /// <summary>
+    /// FinishLineGate의 실패 게이트(왼쪽 차선)를 통과했을 때 호출된다.
+    /// enableFinishLineTerminal이 true일 때만 에피소드를 FailWrongLane으로 종료한다.
+    /// </summary>
+    public void NotifyFailCrossed(string gateName, float enterSigned, float exitSigned)
+    {
+        if (!episodeActive || terminalReached)
+            return;
+
+        // 연속 학습 모드(enableFinishLineTerminal=false)에서는 게이트 무시
+        if (!enableFinishLineTerminal)
+            return;
+
+        SetTerminal(
+            TerminalType.FailWrongLane,
+            $"WrongLane(gate={gateName}, enter={enterSigned:F3}, exit={exitSigned:F3})"
         );
     }
 
@@ -448,6 +476,10 @@ public class RLEpisodeEvaluator : MonoBehaviour
                     break;
                 case TerminalType.FailStuck:
                     episodeScore -= stuckExtraPenalty;
+                    break;
+                case TerminalType.FailWrongLane:
+                    // 추가 페널티 없음 — baseFailurePenalty는 switch 바깥 공통 로직에서 이미 차감됨
+                    // isTrashEpisode는 lowProgress 조건으로만 판정 (진행도가 높으면 학습 데이터로 활용)
                     break;
             }
 
