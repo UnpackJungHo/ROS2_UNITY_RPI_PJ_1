@@ -82,6 +82,6 @@ yolov8s.pt
 /Assets/Resources/RL/rl_episode_report.csv.meta
 
 /Assets/Resources/RL/*
-
+.agents/skills
 /analysis/*
 /.mcp.json

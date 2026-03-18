@@ -11,7 +11,7 @@ using Unity.Collections;
 ///
 /// 기능:
 /// - P키: 자율주행 모드 토글
-/// - WASD: 자율주행 중 사람 개입 (자동으로 수동 모드 전환)
+/// - WASD: 자율주행 중 개입 (자동으로 수동 모드 전환)
 /// - 3초 후 자동으로 AI 모드 복귀
 /// - DrivingDataCollectorV2 연동하여 개입 데이터 수집
 ///
@@ -160,11 +160,6 @@ public class RegressionDrivingController : MonoBehaviour
         // Academy 스텝 기반 분산: 등록 순서 기반 균등 배분 (0,1,2,3,4,0,1,2 → 최대 2대/슬롯)
         staggerDivisor = Mathf.Max(1, staggerPeriod);
         academyStaggerOffset = System.Threading.Interlocked.Increment(ref s_academyOffsetCounter) % staggerDivisor;
-
-        //Debug.Log($"[RegressionDriving] Speed-Aware Regression Controller Initialized");
-        //Debug.Log($"  '{toggleKey}' 키: 자율주행 모드 토글");
-        //Debug.Log($"  WASD: 자율주행 중 개입 (자동 수동 모드 전환)");
-        //Debug.Log($"  개입 후 {autoResumeDelay}초 뒤 자동 AI 모드 복귀");
     }
 
     void AutoFindReferences()
@@ -220,8 +215,9 @@ public class RegressionDrivingController : MonoBehaviour
             worker?.Dispose();
             worker = null;
             runtimeModel = ModelLoader.Load(modelAsset);
-            // CPU 백엔드 사용: GPU(GPUCompute)는 MakeReadable()이 이전 프레임 출력을
-            // 반환하는 stale output 버그(동일 값 고착) 확인됨 → CPU로 유지.
+            // CPU 백엔드 유지: GPUCompute + FlushSchedule(true)는 단기에는 stale이 없으나
+            // 장기 운용(~35초+) 시 동일 값 고착 재발 확인됨 (Sentis 1.2.0-exp.2).
+            // Sentis 업그레이드 후 재시도 필요.
             worker = WorkerFactory.CreateWorker(BackendType.CPU, runtimeModel);
 
             isModelLoaded = runtimeModel != null && worker != null;
@@ -238,25 +234,52 @@ public class RegressionDrivingController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// predictionOnlyMode=true 일 때 물리 프레임에 동기화된 추론 수행.
+    /// AutoDriverRLAgent(DecisionRequester) 와 같은 FixedUpdate 체인에서 실행되어
+    /// base prediction 스테일 문제를 해소한다.
+    /// Script Execution Order: RegressionDrivingController → AutoDriverRLAgent 순서로 설정 필요.
+    /// </summary>
+    void FixedUpdate()
+    {
+        if (!predictionOnlyMode) return;
+        if (!isAutonomousMode) return;
+
+        if (useAcademyStepStagger)
+        {
+            int step = Unity.MLAgents.Academy.Instance.StepCount;
+            if (step == lastAcademyStep) return;
+            if ((step + academyStaggerOffset) % staggerDivisor != 0) return;
+            lastAcademyStep = step;
+        }
+
+        if (EnsureInferenceReady())
+            RunInference();
+    }
+
     void Update()
     {
+        // 카메라 초기화는 항상 수행
         if (frontCamera == null && cameraPublisher != null)
         {
             frontCamera = cameraPublisher.GetCamera();
             warnedMissingCamera = frontCamera == null;
         }
 
+        // 토글 키는 항상 처리
         if (Input.GetKeyDown(toggleKey))
         {
-            // 수동 / 자동 모드 토글
             ToggleAutonomousMode();
         }
 
+        // predictionOnlyMode 시 추론은 FixedUpdate에서 처리 — Update에서는 스킵
+        if (predictionOnlyMode) return;
+
         if (isAutonomousMode)
         {
-            if (IsManualInputDetected()) // 입력 들어오면
+            if (IsManualInputDetected())
             {
-                StartIntervention(); // 개입 시작 - AI 제어 중단, 수동 모드로 전환
+                StartIntervention();
             }
 
             if (isInterventionActive)
@@ -268,39 +291,24 @@ public class RegressionDrivingController : MonoBehaviour
                     interventionTimer = 0f;
                 }
 
-                if (interventionTimer >= autoResumeDelay) // 0.5초 동안 입력 없으면 개입 종료 - AI 모드 복귀
+                if (interventionTimer >= autoResumeDelay)
                 {
                     EndIntervention();
                 }
             }
             else
             {
-                bool shouldInfer;
-                if (predictionOnlyMode && useAcademyStepStagger)
-                {
-                    // Academy 스텝 기반 분산: DecisionStep과 동기화하여 스파이크 감소
-                    int step = Unity.MLAgents.Academy.Instance.StepCount;
-                    shouldInfer = step != lastAcademyStep
-                                  && (step + academyStaggerOffset) % staggerDivisor == 0
-                                  && EnsureInferenceReady();
-                    if (shouldInfer) lastAcademyStep = step;
-                }
-                else
-                {
-                    shouldInfer = EnsureInferenceReady() && Time.time - lastInferenceTime >= inferenceInterval;
-                }
+                bool shouldInfer = EnsureInferenceReady() && Time.time - lastInferenceTime >= inferenceInterval;
 
                 if (shouldInfer)
                 {
-                    if (RunInference()) // 추론 시작
+                    if (RunInference())
                         lastInferenceTime = Time.time;
                 }
 
-                if (!predictionOnlyMode)
-                    ApplyAIControl(); // 차량 센서(레이더, 초음파 센서) 및 신호등에 따른 주행 제어 적용
+                ApplyAIControl();
             }
         }
-
     }
 
     bool IsManualInputDetected()
@@ -323,59 +331,15 @@ public class RegressionDrivingController : MonoBehaviour
         Debug.Log($"[RegressionDriving] 자율주행 모드: {(isAutonomousMode ? "ON" : "OFF")}");
     }
 
-    /// <summary>
-    /// 현재 개입 상태인지 반환 (DrivingDataCollectorV2 연동용)
-    /// </summary>
-    public bool IsInterventionActive()
-    {
-        return isInterventionActive;
-    }
-
-    /// <summary>
-    /// AI가 예측한 steering 값 반환
-    /// </summary>
-    public float GetPredictedSteering()
-    {
-        return predictedSteering;
-    }
-
-    /// <summary>
-    /// AI가 예측한 throttle 값 반환
-    /// </summary>
-    public float GetPredictedThrottle()
-    {
-        return predictedThrottle;
-    }
-
-    public float GetAppliedSteering()
-    {
-        return appliedSteering;
-    }
-
-    public float GetAppliedThrottle()
-    {
-        return appliedThrottle;
-    }
-
-    public int GetInterventionCount()
-    {
-        return interventionCount;
-    }
-
-    public float GetInterventionRemainingTime()
-    {
-        return Mathf.Max(0f, autoResumeDelay - interventionTimer);
-    }
-
-    public bool IsModelLoaded()
-    {
-        return isModelLoaded;
-    }
-
-    public float GetCurrentSpeedMS()
-    {
-        return wheelController != null ? wheelController.GetSpeedMS() : 0f;
-    }
+    public bool IsInterventionActive() => isInterventionActive;
+    public float GetPredictedSteering() => predictedSteering;
+    public float GetPredictedThrottle() => predictedThrottle;
+    public float GetAppliedSteering() => appliedSteering;
+    public float GetAppliedThrottle() => appliedThrottle;
+    public int GetInterventionCount() => interventionCount;
+    public float GetInterventionRemainingTime() => Mathf.Max(0f, autoResumeDelay - interventionTimer);
+    public bool IsModelLoaded() => isModelLoaded;
+    public float GetCurrentSpeedMS() => wheelController != null ? wheelController.GetSpeedMS() : 0f;
 
     /// <summary>
     /// 에피소드 재시작 시 회귀 컨트롤러 내부 상태를 초기화하고,
@@ -391,21 +355,15 @@ public class RegressionDrivingController : MonoBehaviour
         appliedSteering = 0f;
         appliedThrottle = 0f;
 
-        // 다음 Update에서 바로 추론이 가능하도록 타이머를 되감는다.
         lastInferenceTime = Time.time - Mathf.Max(0.001f, inferenceInterval);
-        lastAcademyStep = -1; // Academy 스텝 추적 초기화 (에피소드 재시작 시 즉시 추론 허용)
+        lastAcademyStep = -1;
 
         if (frontCamera == null && cameraPublisher != null)
             frontCamera = cameraPublisher.GetCamera();
 
-        if (!forceInference)
-            return;
-
-        if (!isAutonomousMode)
-            return;
-
-        if (!EnsureInferenceReady())
-            return;
+        if (!forceInference) return;
+        if (!isAutonomousMode) return;
+        if (!EnsureInferenceReady()) return;
 
         RunInference();
     }
@@ -484,23 +442,18 @@ public class RegressionDrivingController : MonoBehaviour
         Debug.Log($"[RegressionDriving] 개입 종료 - AI 모드 복귀");
     }
 
-    bool RunInference() // 카메라 이미지 캡처 → 텐서 변환 → 모델 추론 → 제어값 적용
+    bool RunInference()
     {
         if (!EnsureInferenceReady())
             return false;
 
         try
         {
-            // 1. 카메라 이미지 캡처 (비동기 요청 시작)
-            Vector3 camPos = frontCamera != null ? frontCamera.transform.position : Vector3.zero;
             CaptureCamera(frontCamera, frontRenderTexture, frontTexture);
 
-            // 비동기 데이터가 아직 준비되지 않았으면 이번 프레임 추론 스킵 (1프레임 지연)
             if (!hasCaptureData)
                 return false;
 
-            // 2. tensorDataBuffer 채운 뒤 기존 frontInputTensor 데이터만 갱신
-            // Execute() 후 worker가 내부 백엔드를 변경할 수 있으므로 as 캐스트로 안전 처리
             FillTensorDataBuffer(latestCaptureData, frontImageHeight, frontImageWidth);
             var frontData = frontInputTensor?.tensorOnDevice as ArrayTensorData;
             if (frontData != null)
@@ -513,7 +466,6 @@ public class RegressionDrivingController : MonoBehaviour
                 frontInputTensor = new TensorFloat(frontInputShape, tensorDataBuffer);
             }
 
-            // 3. 속도 텐서 데이터만 갱신
             float currentSpeed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
             speedBuffer[0] = currentSpeed / speedNormalize;
             var speedData = speedInputTensor?.tensorOnDevice as ArrayTensorData;
@@ -527,26 +479,18 @@ public class RegressionDrivingController : MonoBehaviour
                 speedInputTensor = new TensorFloat(speedInputShape, speedBuffer);
             }
 
-            // 4. 추론 실행
             worker.SetInput("front_image", frontInputTensor);
             worker.SetInput("speed", speedInputTensor);
             worker.Execute();
 
-            // 5. 결과 읽기 - [steering, throttle] 연속값
             TensorFloat outputTensor = worker.PeekOutput("output") as TensorFloat;
             if (outputTensor != null)
             {
                 outputTensor.MakeReadable();
-                // 모델 출력: steering [-1, 1], throttle [0, 1]
                 predictedSteering = outputTensor[0];
                 predictedThrottle = outputTensor[1];
-
-                // 직접 제어값으로 사용
                 appliedSteering = predictedSteering;
                 appliedThrottle = predictedThrottle;
-
-                // [DEBUG] 추론 결과 로그 (camPos와 함께 확인)
-                //Debug.Log($"[RegressionInference] camPos={camPos} speed={currentSpeed:F3} → steer={predictedSteering:F4}, throttle={predictedThrottle:F4}");
             }
 
             inferenceSuccessCount++;
@@ -569,12 +513,10 @@ public class RegressionDrivingController : MonoBehaviour
             isModelLoaded = runtimeModel != null;
             return false;
         }
-        // finally Dispose 제거: 텐서는 OnDestroy()까지 재사용
     }
 
     void CaptureCamera(Camera cam, RenderTexture rt, Texture2D tex)
     {
-        // CameraPublisher의 렌더 결과를 추론 해상도로 다운스케일 (추가 씬 렌더 불필요)
         RenderTexture sourceRT = cameraPublisher != null ? cameraPublisher.GetRenderTexture() : null;
         if (sourceRT != null)
         {
@@ -582,14 +524,12 @@ public class RegressionDrivingController : MonoBehaviour
         }
         else
         {
-            // fallback: CameraPublisher RT가 없으면 직접 렌더
             RenderTexture originalTarget = cam.targetTexture;
             cam.targetTexture = rt;
             cam.Render();
             cam.targetTexture = originalTarget;
         }
 
-        // ReadPixels → AsyncGPUReadback (GPU stall 제거, 1프레임 지연 허용)
         if (!captureReadbackInProgress)
         {
             captureReadbackInProgress = true;
@@ -608,15 +548,10 @@ public class RegressionDrivingController : MonoBehaviour
         if (latestCaptureData == null || latestCaptureData.Length != data.Length)
             latestCaptureData = new byte[data.Length];
 
-        // 플립 없이 복사 (BytesToTensor 내부에서 수직 반전 처리)
         data.CopyTo(latestCaptureData);
         hasCaptureData = true;
     }
 
-    /// <summary>
-    /// AsyncGPUReadback 완료 데이터(byte[])를 tensorDataBuffer에 채운다.
-    /// ImageNet 정규화 + 수직 반전 포함. TensorFloat 생성은 하지 않는다.
-    /// </summary>
     void FillTensorDataBuffer(byte[] rawBytes, int height, int width)
     {
         int hw = height * width;
@@ -654,7 +589,6 @@ public class RegressionDrivingController : MonoBehaviour
         float adjustedThrottle = appliedThrottle;
         float brakeCommand = 0f;
 
-        // 최대 속도 초과 시 감속
         if (currentSpeed >= maxSpeedLimit)
         {
             adjustedThrottle = Mathf.Min(adjustedThrottle, 0f);
@@ -662,7 +596,6 @@ public class RegressionDrivingController : MonoBehaviour
 
         if (enableSafetyOverride)
         {
-            // 1) 센서 기반 충돌 오버라이드
             if (collisionWarningEngine != null)
             {
                 CollisionWarningEngine.WarningLevel level = collisionWarningEngine.GetWarningLevel();
@@ -688,7 +621,6 @@ public class RegressionDrivingController : MonoBehaviour
                 }
             }
 
-            // 2) 신호등 기반 오버라이드
             if (trafficLightDecisionEngine != null)
             {
                 TrafficLightDecisionEngine.TrafficDecision decision = trafficLightDecisionEngine.GetDecision();
@@ -722,5 +654,4 @@ public class RegressionDrivingController : MonoBehaviour
         if (frontRenderTexture != null) Destroy(frontRenderTexture);
         if (frontTexture != null) Destroy(frontTexture);
     }
-
 }

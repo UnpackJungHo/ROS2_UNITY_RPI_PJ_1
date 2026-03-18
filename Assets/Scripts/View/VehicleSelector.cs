@@ -6,8 +6,11 @@ using UnityEngine;
 /// 선택된 차량의 VehicleViewProvider를 통해 Main Camera에 뷰를 표시한다.
 ///
 /// 조작:
-///   Z 키       - "robot" 태그 차량 목록에서 순차 전환
-///   1/2/3 키   - Front/Top/Back 뷰 전환
+///   Z 키       - 차량 목록 순차 전환 / 자유 관찰 모드에서는 차량 모드 복귀
+///   1/2/3 키   - Front/Top/Back 뷰 전환 (차량 모드에서만)
+///   G 키       - 자유 관찰 모드 진입
+///   자유 관찰 모드: 마우스 우클릭 유지 + WASD/QE 이동, 마우스 시야 회전
+///                  Shift 키로 고속 이동
 /// </summary>
 [DisallowMultipleComponent]
 public class VehicleSelector : MonoBehaviour
@@ -22,20 +25,48 @@ public class VehicleSelector : MonoBehaviour
 
     [Header("View Controls")]
     public VehicleViewProvider.ViewMode defaultViewMode = VehicleViewProvider.ViewMode.TopView;
-    public KeyCode frontViewHotkey = KeyCode.Alpha1;
-    public KeyCode topViewHotkey = KeyCode.Alpha2;
-    public KeyCode backViewHotkey = KeyCode.Alpha3;
+    public KeyCode frontViewHotkey  = KeyCode.Alpha1;
+    public KeyCode topViewHotkey    = KeyCode.Alpha2;
+    public KeyCode backViewHotkey   = KeyCode.Alpha3;
     public KeyCode cycleVehicleHotkey = KeyCode.Z;
+
+    [Header("Free Camera")]
+    [Tooltip("자유 관찰 모드 진입 키")]
+    public KeyCode freeCameraHotkey = KeyCode.G;
+
+    [Tooltip("기본 이동 속도 (units/s)")]
+    public float freeCamMoveSpeed = 10f;
+
+    [Tooltip("Shift 누를 때 이동 속도 배율")]
+    public float freeCamFastMultiplier = 3f;
+
+    [Tooltip("마우스 시야 회전 감도")]
+    public float freeCamRotateSpeed = 2f;
 
     [Header("Debug (Read Only)")]
     [SerializeField] private string selectedVehicleName = "None";
     [SerializeField] private VehicleViewProvider.ViewMode currentViewMode;
     [SerializeField] private int discoveredVehicleCount = 0;
-    [SerializeField] private int selectedVehicleIndex = -1;
+    [SerializeField] private int selectedVehicleIndex   = -1;
+    [SerializeField] private bool isFreeCameraMode      = false;
 
+    // ── 차량 관측 상태 ──
     private VehicleViewProvider selectedVehicle;
     private readonly List<VehicleViewProvider> discoveredProviders = new List<VehicleViewProvider>();
     private Vector3 backViewVelocity = Vector3.zero;
+
+    // ── 자유 관찰 모드 복귀용 스냅샷 ──
+    private VehicleViewProvider       savedVehicle;
+    private VehicleViewProvider.ViewMode savedViewMode;
+    private int savedVehicleIndex;
+
+    // ── 자유 관찰 카메라 상태 ──
+    private float freeCamYaw;
+    private float freeCamPitch;
+
+    // ══════════════════════════════════════════════
+    //  Unity 생명주기
+    // ══════════════════════════════════════════════
 
     void Awake()
     {
@@ -58,6 +89,12 @@ public class VehicleSelector : MonoBehaviour
 
     void LateUpdate()
     {
+        if (isFreeCameraMode)
+        {
+            UpdateFreeCamera();
+            return;
+        }
+
         if (selectedVehicle == null)
         {
             if (discoveredProviders.Count == 0)
@@ -76,9 +113,135 @@ public class VehicleSelector : MonoBehaviour
         selectedVehicle.ApplyView(displayCamera, currentViewMode, ref backViewVelocity, false);
     }
 
+    // ══════════════════════════════════════════════
+    //  입력 처리
+    // ══════════════════════════════════════════════
+
     /// <summary>
-    /// 씬에서 모든 VehicleViewProvider를 탐색하여 목록을 갱신한다.
+    /// 입력 우선순위:
+    ///   1. G 키  → 자유 관찰 모드 진입 (어느 모드에서든)
+    ///   2. Z 키  → 자유 관찰 모드 중이면 차량 모드 복귀,
+    ///              차량 모드 중이면 다음 차량으로 순환
+    ///   3. 1/2/3 → 차량 모드에서만 뷰 전환
     /// </summary>
+    void HandleKeyboardInput()
+    {
+        if (Input.GetKeyDown(freeCameraHotkey))
+        {
+            EnterFreeCameraMode();
+            return;
+        }
+
+        if (Input.GetKeyDown(cycleVehicleHotkey))
+        {
+            if (isFreeCameraMode)
+                ExitFreeCameraMode();
+            else
+                CycleNextVehicle();
+            return;
+        }
+
+        if (!isFreeCameraMode)
+        {
+            if (Input.GetKeyDown(frontViewHotkey))
+                SetViewMode(VehicleViewProvider.ViewMode.FrontView);
+            else if (Input.GetKeyDown(topViewHotkey))
+                SetViewMode(VehicleViewProvider.ViewMode.TopView);
+            else if (Input.GetKeyDown(backViewHotkey))
+                SetViewMode(VehicleViewProvider.ViewMode.BackView);
+        }
+    }
+
+    // ══════════════════════════════════════════════
+    //  자유 관찰 모드
+    // ══════════════════════════════════════════════
+
+    void EnterFreeCameraMode()
+    {
+        if (isFreeCameraMode) return;
+
+        // 현재 차량 관측 상태 스냅샷 저장
+        savedVehicle       = selectedVehicle;
+        savedVehicleIndex  = selectedVehicleIndex;
+        savedViewMode      = currentViewMode;
+
+        // 현재 카메라 회전에서 Yaw/Pitch 초기화
+        ResolveDisplayCamera();
+        if (displayCamera != null)
+        {
+            Vector3 euler = displayCamera.transform.eulerAngles;
+            freeCamYaw   = euler.y;
+            freeCamPitch = NormalizeAngle(euler.x); // -180~180 범위로 정규화
+        }
+
+        isFreeCameraMode = true;
+        Debug.Log("[VehicleSelector] 자유 관찰 모드 진입 (Z키로 차량 모드 복귀)");
+    }
+
+    void ExitFreeCameraMode()
+    {
+        if (!isFreeCameraMode) return;
+
+        isFreeCameraMode = false;
+
+        // 저장된 차량 상태 복원
+        if (savedVehicle != null)
+        {
+            selectedVehicleIndex = savedVehicleIndex;
+            currentViewMode      = savedViewMode;
+            backViewVelocity     = Vector3.zero;
+            SelectVehicle(savedVehicle);
+        }
+        else if (discoveredProviders.Count > 0)
+        {
+            SelectVehicle(discoveredProviders[0]);
+        }
+
+        Debug.Log($"[VehicleSelector] 차량 관측 모드 복귀 → {selectedVehicleName} (뷰: {currentViewMode})");
+    }
+
+    /// <summary>
+    /// 자유 관찰 모드의 카메라 이동/회전을 LateUpdate에서 처리한다.
+    /// 마우스 우클릭 유지 중에만 회전이 활성화된다.
+    /// </summary>
+    void UpdateFreeCamera()
+    {
+        ResolveDisplayCamera();
+        if (displayCamera == null) return;
+
+        // ── 마우스 우클릭 유지 시 시야 회전 ──
+        if (Input.GetMouseButton(1))
+        {
+            freeCamYaw   += Input.GetAxis("Mouse X") * freeCamRotateSpeed;
+            freeCamPitch -= Input.GetAxis("Mouse Y") * freeCamRotateSpeed;
+            freeCamPitch  = Mathf.Clamp(freeCamPitch, -89f, 89f);
+
+            displayCamera.transform.rotation = Quaternion.Euler(freeCamPitch, freeCamYaw, 0f);
+        }
+
+        // ── WASD / QE 이동 ──
+        float speed = freeCamMoveSpeed * Time.deltaTime;
+        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+            speed *= freeCamFastMultiplier;
+
+        Transform t = displayCamera.transform;
+        Vector3 move = Vector3.zero;
+
+        if (Input.GetKey(KeyCode.W)) move += t.forward;
+        if (Input.GetKey(KeyCode.S)) move -= t.forward;
+        if (Input.GetKey(KeyCode.D)) move += t.right;
+        if (Input.GetKey(KeyCode.A)) move -= t.right;
+        if (Input.GetKey(KeyCode.E)) move += Vector3.up;
+        if (Input.GetKey(KeyCode.Q)) move -= Vector3.up;
+
+        if (move.sqrMagnitude > 0f)
+            t.position += move.normalized * speed;
+    }
+
+    // ══════════════════════════════════════════════
+    //  차량 관측 모드
+    // ══════════════════════════════════════════════
+
     public void RefreshVehicleProviders()
     {
         discoveredProviders.Clear();
@@ -88,27 +251,20 @@ public class VehicleSelector : MonoBehaviour
         discoveredVehicleCount = discoveredProviders.Count;
     }
 
-    /// <summary>
-    /// 지정된 차량을 선택하고 즉시 뷰를 적용한다.
-    /// </summary>
     public void SelectVehicle(VehicleViewProvider provider)
     {
-        if (provider == null)
-            return;
+        if (provider == null) return;
 
-        selectedVehicle = provider;
+        selectedVehicle      = provider;
         selectedVehicleIndex = discoveredProviders.IndexOf(provider);
-        backViewVelocity = Vector3.zero;
-        selectedVehicleName = provider.VehicleId;
+        backViewVelocity     = Vector3.zero;
+        selectedVehicleName  = provider.VehicleId;
 
         ResolveDisplayCamera();
         if (displayCamera != null)
             selectedVehicle.ApplyView(displayCamera, currentViewMode, ref backViewVelocity, true);
     }
 
-    /// <summary>
-    /// Z 키 입력으로 차량 목록에서 다음 차량으로 순차 전환한다.
-    /// </summary>
     void CycleNextVehicle()
     {
         if (discoveredProviders.Count == 0)
@@ -127,43 +283,38 @@ public class VehicleSelector : MonoBehaviour
         Debug.Log($"[VehicleSelector] Z 키 전환 → [{selectedVehicleIndex + 1}/{discoveredProviders.Count}] {selectedVehicleName} (뷰: {currentViewMode})");
     }
 
-    /// <summary>
-    /// 뷰 모드를 변경하고 즉시 적용한다.
-    /// </summary>
     public void SetViewMode(VehicleViewProvider.ViewMode mode)
     {
-        currentViewMode = mode;
+        currentViewMode  = mode;
         backViewVelocity = Vector3.zero;
 
         if (selectedVehicle != null && displayCamera != null)
             selectedVehicle.ApplyView(displayCamera, currentViewMode, ref backViewVelocity, true);
     }
 
-    void HandleKeyboardInput()
-    {
-        if (Input.GetKeyDown(cycleVehicleHotkey))
-            CycleNextVehicle();
-        else if (Input.GetKeyDown(frontViewHotkey))
-            SetViewMode(VehicleViewProvider.ViewMode.FrontView);
-        else if (Input.GetKeyDown(topViewHotkey))
-            SetViewMode(VehicleViewProvider.ViewMode.TopView);
-        else if (Input.GetKeyDown(backViewHotkey))
-            SetViewMode(VehicleViewProvider.ViewMode.BackView);
-    }
+    // ══════════════════════════════════════════════
+    //  유틸
+    // ══════════════════════════════════════════════
 
     void ResolveDisplayCamera()
     {
-        if (displayCamera != null)
-            return;
-
+        if (displayCamera != null) return;
         displayCamera = Camera.main;
     }
 
-    // ──────────────────────────────────────────────
-    //  외부 접근용
-    // ──────────────────────────────────────────────
+    /// <summary>Unity eulerAngles는 0~360 반환. -180~180으로 정규화한다.</summary>
+    static float NormalizeAngle(float angle)
+    {
+        if (angle > 180f) angle -= 360f;
+        return angle;
+    }
 
-    public VehicleViewProvider GetSelectedVehicle() => selectedVehicle;
-    public VehicleViewProvider.ViewMode GetCurrentViewMode() => currentViewMode;
-    public IReadOnlyList<VehicleViewProvider> GetDiscoveredProviders() => discoveredProviders;
+    // ══════════════════════════════════════════════
+    //  외부 접근용
+    // ══════════════════════════════════════════════
+
+    public VehicleViewProvider GetSelectedVehicle()                     => selectedVehicle;
+    public VehicleViewProvider.ViewMode GetCurrentViewMode()            => currentViewMode;
+    public IReadOnlyList<VehicleViewProvider> GetDiscoveredProviders()  => discoveredProviders;
+    public bool IsFreeCameraMode                                        => isFreeCameraMode;
 }

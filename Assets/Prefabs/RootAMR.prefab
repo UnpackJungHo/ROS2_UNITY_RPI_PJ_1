@@ -558,11 +558,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff38b58da6b22dd62ac1c0127f23dfb1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  imageWidth: 640
-  imageHeight: 480
+  imageWidth: 200
+  imageHeight: 66
   cameraXRotation: 0
   cameraTransform: {fileID: 9017249206558866654}
-  frontViewCamera: {fileID: 8863827206365748115}
+  frontViewCamera: {fileID: 0}
   preferDedicatedRuntimeCamera: 1
   enableRenderStagger: 1
   enableStabilization: 0
@@ -570,7 +570,7 @@ MonoBehaviour:
   rotationSmoothTime: 0.06
   stabilizeVertical: 1
   stabilizeRoll: 1
-  renderRate: 10
+  renderRate: 5
 --- !u!114 &8526092224972961840
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -609,89 +609,6 @@ MonoBehaviour:
   sourceCameraPublisher: {fileID: 8526092224972961840}
   autoFindSourceCameraPublisher: 1
   enablePublishStagger: 1
---- !u!1 &430913411133644962
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 3117912512585092834}
-  - component: {fileID: 8863827206365748115}
-  m_Layer: 0
-  m_Name: Own_Camera
-  m_TagString: MainCamera
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &3117912512585092834
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 430913411133644962}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 5969163342980933528}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!20 &8863827206365748115
-Camera:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 430913411133644962}
-  m_Enabled: 1
-  serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
-  m_projectionMatrixMode: 1
-  m_GateFitMode: 2
-  m_FOVAxisMode: 0
-  m_Iso: 200
-  m_ShutterSpeed: 0.005
-  m_Aperture: 16
-  m_FocusDistance: 10
-  m_FocalLength: 50
-  m_BladeCount: 5
-  m_Curvature: {x: 2, y: 11}
-  m_BarrelClipping: 0.25
-  m_Anamorphism: 0
-  m_SensorSize: {x: 36, y: 24}
-  m_LensShift: {x: 0, y: 0}
-  m_NormalizedViewPortRect:
-    serializedVersion: 2
-    x: 0
-    y: 0
-    width: 1
-    height: 1
-  near clip plane: 0.3
-  far clip plane: 1000
-  field of view: 60
-  orthographic: 0
-  orthographic size: 5
-  m_Depth: -1
-  m_CullingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 0
-  m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
-  m_AllowDynamicResolution: 0
-  m_ForceIntoRT: 0
-  m_OcclusionCulling: 1
-  m_StereoConvergence: 10
-  m_StereoSeparation: 0.022
 --- !u!1 &585509703466794728
 GameObject:
   m_ObjectHideFlags: 0
@@ -4102,7 +4019,7 @@ MonoBehaviour:
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
   frontImageWidth: 200
   frontImageHeight: 66
-  inferenceInterval: 0.1
+  inferenceInterval: 0.2
   speedNormalize: 3
   toggleKey: 112
   autoResumeDelay: 0.5
@@ -4114,6 +4031,8 @@ MonoBehaviour:
   warningBrakeMinSpeed: 0.6
   brakeLevelBrake: 0.8
   enableInferenceStagger: 1
+  useAcademyStepStagger: 1
+  staggerPeriod: 5
   predictionOnlyMode: 1
   predictedSteering: 0
   predictedThrottle: 0
@@ -4600,7 +4519,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   vehicleId: Vehicle0
   cameraPublisher: {fileID: 8526092224972961840}
-  frontViewCameraOverride: {fileID: 8863827206365748115}
+  frontViewCameraOverride: {fileID: 0}
   followTarget: {fileID: 7530947417517179381}
   autoFindReferences: 1
   topViewHeight: 5
@@ -6441,7 +6360,6 @@ Transform:
   m_Children:
   - {fileID: 6625900988171852772}
   - {fileID: 5135929511051420050}
-  - {fileID: 3117912512585092834}
   - {fileID: 9203125173181878002}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: -31.157, z: 0}
@@ -6537,7 +6455,7 @@ MonoBehaviour:
     enableInTest: 1
   trainRenderRate: 5
   testRenderRate: 10
-  trainFixedDeltaTime: 0
+  trainFixedDeltaTime: 0.04
   testFixedDeltaTime: 0
   modeText: {fileID: 0}
   lastAppliedMode: 0
@@ -6556,6 +6474,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   scannedJointControls: 0
   disabledJointControls: 0
+  disabledControllers: 0
 --- !u!1 &5304906363571736173
 GameObject:
   m_ObjectHideFlags: 0
@@ -6918,7 +6837,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_BrainParameters:
-    VectorObservationSize: 16
+    VectorObservationSize: 17
     NumStackedVectorObservations: 1
     m_ActionSpec:
       m_NumContinuousActions: 2
@@ -6960,8 +6879,10 @@ MonoBehaviour:
   regressionDrivingController: {fileID: 3411824885766192326}
   vehicleCmdSubscriber: {fileID: 726012837616418817}
   decisionRequester: {fileID: 7593338097266831288}
-  autoFindReferences: 1
+  autoFindReferences: 0
   requestDecisionInFixedUpdateWithoutRequester: 1
+  useStaggeredDecision: 0
+  staggerOffset: -1
   followTargetTransform: {fileID: 7530947417517179381}
   followTargetPosition: 1
   followTargetRotation: 1
@@ -6973,8 +6894,8 @@ MonoBehaviour:
   residualSteerScale: 0.3
   residualAccelScale: 0.3
   applyTrainingStabilityTuning: 1
-  tunedResidualSteerScale: 0.16
-  tunedResidualAccelScale: 0.12
+  tunedResidualSteerScale: 0.35
+  tunedResidualAccelScale: 0.25
   tunedWarningBrake: 0.15
   allowReverse: 1
   enableSafetyOverride: 1
@@ -6991,8 +6912,8 @@ MonoBehaviour:
   ttcNormalizeSeconds: 8
   stopLineDistanceNormalize: 30
   includeTrafficDecisionOneHot: 1
-  successTerminalReward: 1
-  failureTerminalPenalty: -1
+  successTerminalReward: 30
+  failureTerminalPenalty: -30
   lastBaseSteering: 0
   lastBaseThrottle: 0
   lastDeltaSteering: 0
@@ -7154,26 +7075,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d39967bc2384740e884f26e9f421a483, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  progressWaypoints: []
-  isLoopedPath: 0
-  autoInitOnStart: 1
-  autoBuildWaypointsFromRoadData: 1
-  roadObject: {fileID: 0}
-  roadObjectName: Road
-  waypointStride: 3
-  useRoadCurveResolution: 1
-  generatedWaypointRoot: {fileID: 0}
-  generatedWaypointCount: 0
-  progressRewardPerMeter: 1
-  zoneRewardWeight: 0.25
-  reverseProgressPenaltyScale: 1.4
-  zoneRewardNoProgressScale: 0.1
-  zoneRewardFullScaleProgressMeters: 0.03
-  clampProgressDeltaBySpeed: 1
-  progressDeltaSpeedMultiplier: 2
-  progressDeltaClampMarginMeters: 0.05
-  progressDeltaAbsoluteMaxMeters: 0.5
   triggerTarget: {fileID: 8085041038903891360}
+  progressRewardScale: 1
+  reverseProgressPenaltyScale: 1.4
+  zoneRewardWeight: 0.5
+  zoneRewardNoProgressScale: 0
+  zoneRewardFullScaleProgressSpeed: 0.5
+  headingRewardWeight: 0.3
+  headingErrorNormalizeDeg: 45
+  lateralRewardWeight: 0.2
+  lateralErrorNormalizeM: 2
   collisionWarningEngine: {fileID: 4887158630418357921}
   cautionPenaltyPerSec: 0.05
   warningPenaltyPerSec: 0.15
@@ -7185,25 +7096,29 @@ MonoBehaviour:
   redViolationPenaltyPerSec: 0.6
   accumulateOnlyWhenEpisodeActive: 1
   episodeEvaluator: {fileID: 2755947177669669440}
-  currentPathS: 0
+  cumulativeReward: 0
+  cumulativeProgressReward: 0
+  cumulativeZoneReward: 0
   currentLateralError: 0
+  cumulativeHeadingReward: 0
+  cumulativeLateralReward: 0
+  cumulativeSafetyPenalty: 0
+  cumulativeTrafficPenalty: 0
+  currentZoneScore: 0
   currentZoneName: None
   activeZoneCount: 0
   lastProgressReward: 0
   lastZoneReward: 0
+  lastHeadingReward: 0
+  lastLateralReward: 0
   lastSafetyPenalty: 0
   lastTrafficPenalty: 0
-  cumulativeProgressReward: 0
-  cumulativeZoneReward: 0
-  cumulativeSafetyPenalty: 0
-  cumulativeTrafficPenalty: 0
-  currentZoneScore: 0
   lastStepReward: 0
-  cumulativeReward: 0
-  lastZoneProgressScale: 1
-  lastRawDeltaS: 0
-  lastUsedDeltaS: 0
-  lastDeltaSClamped: 0
+  lastForwardProgress: 0
+  cachedHeadingErrorDegDebug: 0
+  cachedSignedLateralErrorDebug: 0
+  progressWaypoints: []
+  isLoopedPath: 0
 --- !u!114 &2660801402183037605
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7540,7 +7455,8 @@ MonoBehaviour:
   autoFindReferences: 1
   autoBeginOnStart: 1
   stopVehicleOnTerminal: 1
-  maxEpisodeSeconds: 180
+  maxEpisodeSeconds: 0
+  enableFinishLineTerminal: 0
   dangerLevelThreshold: 5
   dangerStopHoldSeconds: 0.7
   stoppedSpeedThreshold: 0.05
@@ -7558,6 +7474,7 @@ MonoBehaviour:
   collisionExtraPenalty: 10
   timeoutExtraPenalty: 4
   stuckExtraPenalty: 8
+  wrongLaneExtraPenalty: 15
   lowProgressTrashThreshold: 0.1
   saveEpisodeReportCsv: 1
   csvFileName: rl_episode_report.csv
@@ -9510,6 +9427,7 @@ GameObject:
   - component: {fileID: 8127667464052672463}
   - component: {fileID: 4514414543253568386}
   - component: {fileID: 8767988594840380841}
+  - component: {fileID: 2176580151158033785}
   m_Layer: 11
   m_Name: base_link
   m_TagString: Untagged
@@ -9722,6 +9640,27 @@ MonoBehaviour:
   currentResistForce: 0
   frontAxleLoad: 0
   rearAxleLoad: 0
+--- !u!65 &2176580151158033785
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8085041038903891360}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.48688376, y: 0.3147988, z: 0.065633714}
+  m_Center: {x: -0.018571733, y: 0.21453516, z: 0.4671717}
 --- !u!1 &8088569568636917192
 GameObject:
   m_ObjectHideFlags: 0
@@ -10671,7 +10610,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8680362007506430393}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f644adf5b756ac9f2a91b2944eeafbb1, type: 3}
   m_Name: 

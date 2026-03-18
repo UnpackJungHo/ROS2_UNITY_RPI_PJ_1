@@ -109,7 +109,7 @@ public class CameraRenderer : MonoBehaviour
         ResolveFrontViewCamera();
         if (cam == null)
         {
-            Debug.LogError("[CameraRenderer] 사용할 Camera를 찾지 못했습니다. frontViewCamera 또는 Main Camera를 확인하세요.");
+            Debug.Log("[CameraRenderer] frontViewCamera가 비어있어 카메라 렌더링을 건너뜁니다.");
             return;
         }
 
@@ -131,27 +131,18 @@ public class CameraRenderer : MonoBehaviour
 
     void ResolveFrontViewCamera()
     {
-        Camera templateCamera = frontViewCamera != null ? frontViewCamera : Camera.main;
-
-        if (preferDedicatedRuntimeCamera && cameraTransform != null)
+        if (frontViewCamera == null)
         {
-            frontViewCamera = GetOrCreateRuntimeFrontCamera(templateCamera);
-            cam = frontViewCamera;
+            cam = null;
             return;
         }
 
-        if (frontViewCamera == null && Camera.main != null)
-            frontViewCamera = Camera.main;
-
-        if (frontViewCamera == null)
+        if (preferDedicatedRuntimeCamera && cameraTransform != null)
         {
-            GameObject mainCameraObj = GameObject.Find("Main Camera");
-            if (mainCameraObj != null)
-                frontViewCamera = mainCameraObj.GetComponent<Camera>();
+            frontViewCamera = GetOrCreateRuntimeFrontCamera(frontViewCamera);
+            cam = frontViewCamera;
+            return;
         }
-
-        if (frontViewCamera == null && cameraTransform != null)
-            frontViewCamera = cameraTransform.GetComponent<Camera>();
 
         cam = frontViewCamera;
     }
