@@ -14,11 +14,12 @@ using UnityEngine;
 ///   0: delta_steering [-1, 1] (실제 효과는 residualScale로 제한)
 ///   1: delta_accel    [-1, 1]
 ///
-/// Observation space (16, includeTrafficDecisionOneHot=true):
+/// Observation space (17, includeTrafficDecisionOneHot=true):
 ///   0-7:   환경 상태 (speed, lateral, heading, progress, ttc, warning, stopLine)
 ///   8-10:  현재 차량 입력 (steer, throttle, brake)
 ///   11-12: 모방학습 base 예측 (baseSteering, baseThrottle)
 ///   13-15: 신호등 one-hot (Go, Caution, Stop)
+///   16:    safety override level (0~1, Agent가 override 상태 인지 가능)
 /// </summary>
 public class AutoDriverRLAgent : Agent
 {
@@ -71,8 +72,8 @@ public class AutoDriverRLAgent : Agent
     [Header("Training Stability Tuning")]
     [Tooltip("학습 안정화를 위해 residual/safety 파라미터를 권장 범위로 자동 보정")]
     public bool applyTrainingStabilityTuning = true;
-    [Range(0.12f, 0.2f)] public float tunedResidualSteerScale = 0.16f;
-    [Range(0.1f, 0.15f)] public float tunedResidualAccelScale = 0.12f;
+    [Range(0.2f, 0.5f)] public float tunedResidualSteerScale = 0.35f;
+    [Range(0.15f, 0.35f)] public float tunedResidualAccelScale = 0.25f;
     [Range(0.1f, 0.2f)] public float tunedWarningBrake = 0.15f;
 
     [Header("Action Mapping")]
@@ -376,6 +377,10 @@ public class AutoDriverRLAgent : Agent
             sensor.AddObservation(decision == 1 ? 1f : 0f);                               // 14: Caution (주의)
             sensor.AddObservation(decision == 2 ? 1f : 0f);                               // 15: Stop (정지)
         }
+
+        // ─── Safety Override Level 관측 (인덱스 16) ───
+        // Agent가 override 상태를 인지 → "위험 상태에서는 스스로 브레이크" 학습 가능
+        sensor.AddObservation(ComputeSafetyOverrideLevel());                               // 16: safety override level (0~1)
     }
 
     /// <summary>
@@ -562,10 +567,10 @@ public class AutoDriverRLAgent : Agent
         if (!applyTrainingStabilityTuning)
             return;
 
-        // 조향 보정 스케일을 0.12~0.2 범위로 제한
-        residualSteerScale = Mathf.Clamp(tunedResidualSteerScale, 0.12f, 0.2f);
-        // 가속 보정 스케일을 0.1~0.15 범위로 제한
-        residualAccelScale = Mathf.Clamp(tunedResidualAccelScale, 0.1f, 0.15f);
+        // 조향 보정 스케일을 0.2~0.5 범위로 제한 (커브 교정 유효 범위 확대)
+        residualSteerScale = Mathf.Clamp(tunedResidualSteerScale, 0.2f, 0.5f);
+        // 가속 보정 스케일을 0.15~0.35 범위로 제한
+        residualAccelScale = Mathf.Clamp(tunedResidualAccelScale, 0.15f, 0.35f);
         // 경고 시 브레이크 강도를 0.1~0.2 범위로 제한
         warningBrake = Mathf.Clamp(tunedWarningBrake, 0.1f, 0.2f);
     }
@@ -977,6 +982,26 @@ public class AutoDriverRLAgent : Agent
         // 분모가 0에 가까울 때 나눗셈 오류 방지
         float safeDenom = Mathf.Max(1e-4f, denom);
         return Mathf.Clamp(value / safeDenom, -1f, 1f);
+    }
+
+    /// <summary>
+    /// 현재 Safety Override 강도를 0~1로 변환한다.
+    /// Agent가 override 상태를 관측하여 위험 상황에서 스스로 제동을 학습할 수 있도록 한다.
+    /// Safe/Caution → 0, SlowDown → 0.3, Warning → 0.6, Brake/Emergency → 1.0
+    /// </summary>
+    float ComputeSafetyOverrideLevel()
+    {
+        if (collisionWarningEngine == null)
+            return 0f;
+
+        return collisionWarningEngine.GetWarningLevel() switch
+        {
+            CollisionWarningEngine.WarningLevel.SlowDown    => 0.3f,
+            CollisionWarningEngine.WarningLevel.Warning     => 0.6f,
+            CollisionWarningEngine.WarningLevel.Brake       => 1.0f,
+            CollisionWarningEngine.WarningLevel.EmergencyStop => 1.0f,
+            _ => 0f
+        };
     }
 
     /// <summary>

@@ -85,9 +85,9 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
     [Header("Scoring")]
     /// <summary>성공(Finish) 시 보상에 가산되는 보너스 점수.</summary>
-    public float finishBonus = 20f;
+    public float finishBonus = 30f;
     /// <summary>실패 시 공통으로 차감되는 기본 페널티.</summary>
-    public float baseFailurePenalty = 10f;
+    public float baseFailurePenalty = 20f;
     /// <summary>FailRiskStop(위험 정지) 실패 시 추가 차감 페널티.</summary>
     public float riskStopExtraPenalty = 6f;
     /// <summary>FailCollision(물리 충돌) 실패 시 추가 차감 페널티.</summary>
@@ -96,6 +96,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public float timeoutExtraPenalty = 4f;
     /// <summary>FailStuck(이동 불능) 실패 시 추가 차감 페널티.</summary>
     public float stuckExtraPenalty = 8f;
+    /// <summary>FailWrongLane(반대 차선 통과) 실패 시 추가 차감 페널티.</summary>
+    public float wrongLaneExtraPenalty = 15f;
     /// <summary>실패 에피소드에서 경로 진행률이 이 비율 미만이면 "쓰레기 학습(trash)"으로 라벨링.</summary>
     [Tooltip("실패 시 progress ratio가 이 값 미만이면 쓰레기 학습으로 라벨")]
     [Range(0f, 1f)] public float lowProgressTrashThreshold = 0.1f;
@@ -478,8 +480,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
                     episodeScore -= stuckExtraPenalty;
                     break;
                 case TerminalType.FailWrongLane:
-                    // 추가 페널티 없음 — baseFailurePenalty는 switch 바깥 공통 로직에서 이미 차감됨
-                    // isTrashEpisode는 lowProgress 조건으로만 판정 (진행도가 높으면 학습 데이터로 활용)
+                    episodeScore -= wrongLaneExtraPenalty;
                     break;
             }
 

@@ -5,10 +5,10 @@ behaviors:
 
     # --- 하이퍼파라미터 ---
     hyperparameters:
-      batch_size: 1024
-      buffer_size: 10240
+      batch_size: 4096            # 8대 기준: buffer/batch 비율 10:1 유지
+      buffer_size: 40960          # 8대 × 512 × 10 rounds (충분한 다양성 확보)
       learning_rate: 3.0e-4
-      beta: 1.0e-2                # Residual RL은 탐색 범위가 좁으므로 엔트로피 약간 높임
+      beta: 5.0e-3                # 8대 동시 탐색으로 entropy 충분 → 과도한 탐색 억제
       epsilon: 0.2                # PPO 클리핑 범위
       lambd: 0.95                 # GAE lambda
       num_epoch: 3
@@ -19,6 +19,9 @@ behaviors:
       normalize: true             # observation running mean/std 정규화
       hidden_units: 256
       num_layers: 2
+      memory:
+        memory_size: 128          # LSTM hidden state 크기 (hidden_units의 절반)
+        sequence_length: 64       # BPTT 길이 - batch_size(4096)의 약수 필수 (4096/64=64 ✅)
 
     # --- 보상 신호 ---
     reward_signals:
@@ -28,9 +31,9 @@ behaviors:
 
     # --- 학습 제어 ---
     # Residual RL은 base policy 위에 보정하므로 수렴이 빠름
-    max_steps: 1000000
-    time_horizon: 512
-    summary_freq: 5000
+    max_steps: 5000000            # 8대 동시 학습 기준 충분한 총 스텝
+    time_horizon: 256             # heading/lateral dense reward 추가 → 짧은 horizon에서 credit assignment 효율적
+    summary_freq: 10000           # 8대 수집 속도에 맞춘 로그 주기
     keep_checkpoints: 5
     checkpoint_interval: 50000
     threaded: true
