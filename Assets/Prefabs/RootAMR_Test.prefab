@@ -4006,7 +4006,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3394345786966611038}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b49ef836c98bb599aaa9fb681b685ff0, type: 3}
   m_Name: 
@@ -5535,6 +5535,56 @@ MonoBehaviour:
   autoOutputTopicFromSensorPosition: 1
   outputTopicName: 
   resolvedOutputTopicName: 
+--- !u!1 &4333046474949502840
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4134171064763522063}
+  - component: {fileID: 1718994505108234696}
+  m_Layer: 11
+  m_Name: RL Debug
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4134171064763522063
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4333046474949502840}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 927500850071880540}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1718994505108234696
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4333046474949502840}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 276b0c4d4b3558bf5b83636b87cc2de9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  episodeEvaluator: {fileID: 2755947177669669440}
+  progressRewardProvider: {fileID: 4711191307475830511}
+  autoDriverRLAgent: {fileID: 6225962121484438980}
+  outputFolder: Logs/RL
+  filePrefix: rl_episodes
+  autoFindReferences: 1
 --- !u!1 &4418340891381346384
 GameObject:
   m_ObjectHideFlags: 0
@@ -6339,7 +6389,7 @@ GameObject:
   - component: {fileID: 1662412574697323824}
   - component: {fileID: 1008550436067625208}
   m_Layer: 0
-  m_Name: RootAMR
+  m_Name: RootAMR_Test
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6607,6 +6657,7 @@ Transform:
   - {fileID: 5314914578954163809}
   - {fileID: 7939786937693545309}
   - {fileID: 3938582680591545139}
+  - {fileID: 4134171064763522063}
   m_Father: {fileID: 5934737890180684852}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5591224253179308374
@@ -6837,7 +6888,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_BrainParameters:
-    VectorObservationSize: 17
+    VectorObservationSize: 8
     NumStackedVectorObservations: 1
     m_ActionSpec:
       m_NumContinuousActions: 2
@@ -6876,7 +6927,7 @@ MonoBehaviour:
   episodeEvaluator: {fileID: 2755947177669669440}
   collisionWarningEngine: {fileID: 4887158630418357921}
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
-  regressionDrivingController: {fileID: 3411824885766192326}
+  regressionDrivingController: {fileID: 0}
   vehicleCmdSubscriber: {fileID: 726012837616418817}
   decisionRequester: {fileID: 7593338097266831288}
   autoFindReferences: 0
@@ -6891,14 +6942,14 @@ MonoBehaviour:
   episodeStartTransform: {fileID: 5135929511051420050}
   useEpisodeStartTransformHeight: 0
   useEpisodeStartTransformRotation: 1
-  residualSteerScale: 0.3
-  residualAccelScale: 0.3
-  applyTrainingStabilityTuning: 1
+  residualSteerScale: 1
+  residualAccelScale: 1
+  applyTrainingStabilityTuning: 0
   tunedResidualSteerScale: 0.35
   tunedResidualAccelScale: 0.25
   tunedWarningBrake: 0.15
   allowReverse: 1
-  enableSafetyOverride: 1
+  enableSafetyOverride: 0
   cautionThrottleScale: 0.55
   warningBrake: 0.35
   brakeLevelBrake: 0.8
@@ -6911,7 +6962,10 @@ MonoBehaviour:
   headingErrorNormalizeDeg: 45
   ttcNormalizeSeconds: 8
   stopLineDistanceNormalize: 30
-  includeTrafficDecisionOneHot: 1
+  includeStopLineDistance: 0
+  includeBasePredictions: 0
+  includeTrafficDecisionOneHot: 0
+  includeSafetyOverrideLevel: 0
   successTerminalReward: 30
   failureTerminalPenalty: -30
   lastBaseSteering: 0
@@ -7081,10 +7135,10 @@ MonoBehaviour:
   zoneRewardWeight: 0.5
   zoneRewardNoProgressScale: 0
   zoneRewardFullScaleProgressSpeed: 0.5
-  headingRewardWeight: 0.3
-  headingErrorNormalizeDeg: 45
-  lateralRewardWeight: 0.2
-  lateralErrorNormalizeM: 2
+  headingRewardWeight: 2
+  headingErrorNormalizeDeg: 20
+  lateralRewardWeight: 1.5
+  lateralErrorNormalizeM: 15
   collisionWarningEngine: {fileID: 4887158630418357921}
   cautionPenaltyPerSec: 0.05
   warningPenaltyPerSec: 0.15
@@ -7456,7 +7510,7 @@ MonoBehaviour:
   autoBeginOnStart: 1
   stopVehicleOnTerminal: 1
   maxEpisodeSeconds: 0
-  enableFinishLineTerminal: 0
+  enableFinishLineTerminal: 1
   dangerLevelThreshold: 5
   dangerStopHoldSeconds: 0.7
   stoppedSpeedThreshold: 0.05
@@ -7476,10 +7530,6 @@ MonoBehaviour:
   stuckExtraPenalty: 8
   wrongLaneExtraPenalty: 15
   lowProgressTrashThreshold: 0.1
-  saveEpisodeReportCsv: 1
-  csvFileName: rl_episode_report.csv
-  appendSessionTimestampToCsv: 1
-  csvSessionLabel: 
   episodeIndex: 0
   episodeActive: 0
   terminalReached: 0
@@ -7500,8 +7550,6 @@ MonoBehaviour:
   minObservedTtc: Infinity
   stuckTimer: 0
   stuckDistanceAccum: 0
-  resolvedCsvFileName: rl_episode_report.csv
-  resolvedNamespace: 
 --- !u!1 &6382269664780757075
 GameObject:
   m_ObjectHideFlags: 0
