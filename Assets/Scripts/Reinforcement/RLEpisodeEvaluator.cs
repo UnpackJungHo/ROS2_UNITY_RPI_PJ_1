@@ -1,15 +1,11 @@
 using System;
-using System.Globalization;
-using System.IO;
-using System.Text;
-using Unity.Robotics.ROSTCPConnector;
 using UnityEngine;
 
 /// <summary>
 /// 강화학습 에피소드 종료/평가기.
 /// - 성공: FinishLineGate 통과
 /// - 실패: 위험단계(5,6) 정지 지속, 충돌, 타임아웃
-/// - 종료 시 점수 산출 + 쓰레기 학습 여부 라벨링 + CSV 로깅
+/// - 종료 시 점수 산출 + 쓰레기 학습 여부 라벨링
 /// </summary>
 public class RLEpisodeEvaluator : MonoBehaviour
 {
@@ -40,8 +36,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public AutoDriverRLAgent autoDriverRLAgent;
 
     [Header("Episode Control")]
-    /// <summary>Start() 시 씬 내 참조 컴포넌트를 자동으로 탐색할지 여부.</summary>
-    public bool autoFindReferences = true;
     /// <summary>Start() 시 에피소드를 즉시 시작할지 여부.</summary>
     public bool autoBeginOnStart = true;
     /// <summary>에피소드 종료 시 차량을 강제 정지(브레이크 100%)시킬지 여부.</summary>
@@ -102,16 +96,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [Tooltip("실패 시 progress ratio가 이 값 미만이면 쓰레기 학습으로 라벨")]
     [Range(0f, 1f)] public float lowProgressTrashThreshold = 0.1f;
 
-    [Header("Episode Report CSV")]
-    /// <summary>에피소드 종료 시 결과를 CSV 파일에 자동 저장할지 여부.</summary>
-    public bool saveEpisodeReportCsv = true;
-    /// <summary>CSV 파일명. Assets/Resources/RL/ 하위에 생성됨.</summary>
-    public string csvFileName = "rl_episode_report.csv";
-    [Tooltip("true면 실행 세션마다 csvFileName 뒤에 타임스탬프를 붙여 파일을 분리 저장")]
-    public bool appendSessionTimestampToCsv = true;
-    [Tooltip("선택: 실행 세션 라벨(파일명 suffix). run-id를 수동으로 넣고 싶을 때 사용")]
-    public string csvSessionLabel = "";
-
     [Header("Debug (Read Only)")]
     /// <summary>현재까지 실행된 에피소드 누적 인덱스 (1부터 시작).</summary>
     [SerializeField] private int episodeIndex = 0;
@@ -154,8 +138,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [SerializeField] private float stuckTimer = 0f;
     /// <summary>stuck 감지 윈도우 내 경로 진행 거리(m). pathS 기반.</summary>
     [SerializeField] private float stuckDistanceAccum = 0f;
-    [SerializeField] private string resolvedCsvFileName = "rl_episode_report.csv";
-    [SerializeField] private string resolvedNamespace = "";
     /// <summary>stuck 감지를 위해 이전 프레임의 차량 월드 위치를 저장 (fallback용).</summary>
     private Vector3 stuckLastPosition;
     /// <summary>stuck 감지 윈도우 시작 시점의 경로 진행거리(pathS). 경로 진행 기반 stuck 판정에 사용.</summary>
@@ -166,12 +148,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
     void Start()
     {
-        if (autoFindReferences)
-            AutoFindReferences();
-
-        ResolveCsvFileName();
-        ResolveNamespace();
-
         if (autoBeginOnStart)
         {
             // When an ML-Agent exists, its OnEpisodeBegin should be the single owner
@@ -216,22 +192,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
         }
 
         UpdateStuckDetection(dt);
-    }
-
-    void AutoFindReferences()
-    {
-        if (progressRewardProvider == null)
-            progressRewardProvider = FindObjectOfType<ProgressRewardProvider>();
-        if (collisionWarningEngine == null)
-            collisionWarningEngine = FindObjectOfType<CollisionWarningEngine>();
-        if (wheelController == null)
-            wheelController = FindObjectOfType<WheelTest>();
-        if (trafficLightDecisionEngine == null)
-            trafficLightDecisionEngine = FindObjectOfType<TrafficLightDecisionEngine>();
-        if (regressionDrivingController == null)
-            regressionDrivingController = FindObjectOfType<RegressionDrivingController>();
-        if (autoDriverRLAgent == null)
-            autoDriverRLAgent = FindObjectOfType<AutoDriverRLAgent>();
     }
 
     /// <summary>
@@ -440,7 +400,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
     /// 에피소드를 종료 처리하는 핵심 메서드.
     /// 1) 종료 유형과 사유 기록  2) 누적 보상 + 보너스/페널티로 최종 점수 산출
     /// 3) 쓰레기 학습 여부 라벨링  4) 차량 정지 및 자율주행 비활성화
-    /// 5) CSV 로깅  6) OnEpisodeTerminated 이벤트 발행
+    /// 5) OnEpisodeTerminated 이벤트 발행
     /// </summary>
     void SetTerminal(TerminalType type, string reason)
     {
@@ -510,208 +470,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
             wheelController.SetBrake(1f);
         }
 
-        if (saveEpisodeReportCsv)
-            AppendEpisodeCsv();
-
         OnEpisodeTerminated?.Invoke(this);
-    }
-
-    /// <summary>
-    /// 에피소드 결과를 CSV 파일에 한 행으로 추가한다.
-    /// 진행 보상, 구역 보상, 안전 페널티, 교통 페널티 등 세분화된 보상 항목과
-    /// TTC, 경고 레벨, 경로 진행률 등 주행 품질 지표를 함께 기록한다.
-    /// </summary>
-    void AppendEpisodeCsv()
-    {
-        try
-        {
-            string dir = Path.Combine(Application.dataPath, "Resources", "RL");
-            if (!Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-            if (string.IsNullOrEmpty(resolvedCsvFileName))
-                ResolveCsvFileName();
-
-            string path = Path.Combine(dir, resolvedCsvFileName);
-            bool writeHeader = !File.Exists(path);
-            using (var sw = new StreamWriter(path, true))
-            {
-                if (writeHeader)
-                {
-                    sw.WriteLine(
-                        "utc_time,episode_index,terminal_type,success,trash,trash_reason,score,reward_base," +
-                        "reward_progress,reward_zone,penalty_safety,penalty_traffic,elapsed_sec,progress_ratio," +
-                        "path_s,total_path,lateral_error,max_warning_level,time_at_danger,danger_stop_hold,collision_count,min_ttc,terminal_reason"
-                    );
-                }
-
-                float rewardProgress = progressRewardProvider != null ? progressRewardProvider.GetCumulativeProgressReward() : 0f;
-                float rewardZone = progressRewardProvider != null ? progressRewardProvider.GetCumulativeZoneReward() : 0f;
-                float penaltySafety = progressRewardProvider != null ? progressRewardProvider.GetCumulativeSafetyPenalty() : 0f;
-                float penaltyTraffic = progressRewardProvider != null ? progressRewardProvider.GetCumulativeTrafficPenalty() : 0f;
-                float progressRatio = progressRewardProvider != null ? progressRewardProvider.GetPathProgressRatio() : 0f;
-                float pathS = progressRewardProvider != null ? progressRewardProvider.GetCurrentPathS() : 0f;
-                float totalPath = progressRewardProvider != null ? progressRewardProvider.GetTotalPathLength() : 0f;
-                float lateral = progressRewardProvider != null ? progressRewardProvider.GetCurrentLateralError() : 0f;
-                string minTtcStr = float.IsInfinity(minObservedTtc) ? "inf" : F(minObservedTtc);
-
-                sw.WriteLine(
-                    $"{DateTime.UtcNow:O},{episodeIndex},{terminalType},{episodeSuccess},{isTrashEpisode}," +
-                    $"{Esc(trashReason)},{F(episodeScore)},{F(episodeRewardBase)}," +
-                    $"{F(rewardProgress)},{F(rewardZone)},{F(penaltySafety)},{F(penaltyTraffic)}," +
-                    $"{F(elapsedSeconds)},{F(progressRatio)},{F(pathS)},{F(totalPath)},{F(lateral)}," +
-                    $"{(int)maxWarningLevel},{F(timeAtDangerLevel)},{F(dangerStoppedDuration)},{collisionCount},{minTtcStr},{Esc(terminalReason)}"
-                );
-            }
-        }
-        catch (Exception e)
-        {
-            Debug.LogWarning($"[RLEpisode] CSV 저장 실패: {e.Message}");
-        }
-    }
-
-    string BuildTerminalDiagnosticLine()
-    {
-        float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
-        float wheelSteer = wheelController != null ? wheelController.GetSteeringInput() : 0f;
-        float wheelThrottle = wheelController != null ? wheelController.GetThrottleInput() : 0f;
-        float wheelBrake = wheelController != null ? wheelController.GetBrakeInput() : 0f;
-
-        CollisionWarningEngine.WarningLevel warningLevel = collisionWarningEngine != null
-            ? collisionWarningEngine.GetWarningLevel()
-            : CollisionWarningEngine.WarningLevel.Safe;
-        float ttc = collisionWarningEngine != null
-            ? collisionWarningEngine.GetTimeToCollision()
-            : float.PositiveInfinity;
-        float obstacleDist = collisionWarningEngine != null
-            ? collisionWarningEngine.GetDistanceToObstacle()
-            : float.PositiveInfinity;
-        float pathObstacleDist = collisionWarningEngine != null
-            ? collisionWarningEngine.GetPathDistanceToObstacle()
-            : float.PositiveInfinity;
-        float sideObstacleDist = collisionWarningEngine != null
-            ? collisionWarningEngine.GetSideDistanceToObstacle()
-            : float.PositiveInfinity;
-        (string source, string sensor, float distance) closestObstacleInfo = collisionWarningEngine != null
-            ? collisionWarningEngine.GetClosestObstacleInfo()
-            : ("None", "None", float.PositiveInfinity);
-        float closestUltraConfidence = collisionWarningEngine != null
-            ? collisionWarningEngine.CurrentSensorData.ultrasonicClosestConfidence
-            : 0f;
-        string ttcText = float.IsInfinity(ttc)
-            ? "inf"
-            : (float.IsNaN(ttc) ? "nan" : ttc.ToString("F3", CultureInfo.InvariantCulture));
-        string obstacleDistText = float.IsInfinity(obstacleDist)
-            ? "inf"
-            : obstacleDist.ToString("F3", CultureInfo.InvariantCulture);
-        string pathObstacleDistText = float.IsInfinity(pathObstacleDist)
-            ? "inf"
-            : pathObstacleDist.ToString("F3", CultureInfo.InvariantCulture);
-        string sideObstacleDistText = float.IsInfinity(sideObstacleDist)
-            ? "inf"
-            : sideObstacleDist.ToString("F3", CultureInfo.InvariantCulture);
-
-        TrafficLightDecisionEngine.TrafficDecision trafficDecision = trafficLightDecisionEngine != null
-            ? trafficLightDecisionEngine.GetDecision()
-            : TrafficLightDecisionEngine.TrafficDecision.Go;
-        bool shouldStop = trafficLightDecisionEngine != null && trafficLightDecisionEngine.ShouldStop();
-
-        float progressRatio = progressRewardProvider != null ? progressRewardProvider.GetPathProgressRatio() : 0f;
-        float pathS = progressRewardProvider != null ? progressRewardProvider.GetCurrentPathS() : 0f;
-        float lateral = progressRewardProvider != null ? progressRewardProvider.GetCurrentLateralError() : 0f;
-        float zoneScore = progressRewardProvider != null ? progressRewardProvider.GetCurrentZoneScore() : 0f;
-        float zoneScale = progressRewardProvider != null ? progressRewardProvider.GetLastZoneProgressScale() : 1f;
-        float rewardStep = progressRewardProvider != null ? progressRewardProvider.GetLastStepReward() : 0f;
-        float rawDeltaS = progressRewardProvider != null ? progressRewardProvider.GetLastRawDeltaS() : 0f;
-        float usedDeltaS = progressRewardProvider != null ? progressRewardProvider.GetLastUsedDeltaS() : 0f;
-        bool deltaSClamped = progressRewardProvider != null && progressRewardProvider.WasLastDeltaSClamped();
-
-        if (autoDriverRLAgent == null)
-            autoDriverRLAgent = FindObjectOfType<AutoDriverRLAgent>();
-
-        string rlDebug = autoDriverRLAgent != null
-            ? autoDriverRLAgent.GetActionDebugSummary()
-            : "base=(0.000,0.000) delta=(0.000,0.000) final=(0.000,0.000,0.000) stepReward=0.000";
-
-        string regressionDebug = regressionDrivingController != null
-            ? $"regBase=({regressionDrivingController.GetPredictedSteering():F3},{regressionDrivingController.GetPredictedThrottle():F3}) " +
-              $"regApplied=({regressionDrivingController.GetAppliedSteering():F3},{regressionDrivingController.GetAppliedThrottle():F3}) " +
-              $"regAuto={regressionDrivingController.isAutonomousMode}"
-            : "regBase=(0.000,0.000) regApplied=(0.000,0.000) regAuto=False";
-
-        return
-            $"ep={episodeIndex} type={terminalType} reason={terminalReason} " +
-            $"speed={speed:F3}m/s movedWin={stuckDistanceAccum:F3}/{stuckDistanceThreshold:F3}m " +
-            $"warning={(int)warningLevel}({warningLevel}) ttc={ttcText}s " +
-            $"obs={obstacleDistText}(path:{pathObstacleDistText},side:{sideObstacleDistText}) " +
-            $"closest={closestObstacleInfo.source}-{closestObstacleInfo.sensor}@{(float.IsInfinity(closestObstacleInfo.distance) ? "inf" : closestObstacleInfo.distance.ToString("F3", CultureInfo.InvariantCulture))} " +
-            $"ultraConf={closestUltraConfidence:F2} traffic={trafficDecision} stop={shouldStop} " +
-            $"wheel=({wheelSteer:F3},{wheelThrottle:F3},{wheelBrake:F3}) " +
-            $"progress=(s:{pathS:F3},ratio:{progressRatio:F3},lat:{lateral:F3}) " +
-            $"zone=(score:{zoneScore:F3},scale:{zoneScale:F3}) " +
-            $"dS(raw:{rawDeltaS:F3},used:{usedDeltaS:F3},clamped:{deltaSClamped}) stepReward={rewardStep:F3} " +
-            $"{regressionDebug} rl[{rlDebug}]";
-    }
-
-    void ResolveNamespace()
-    {
-        const string probeSuffix = "/X";
-        string probe = RosTopicNamespace.Resolve(gameObject, probeSuffix);
-        resolvedNamespace = probe.EndsWith(probeSuffix)
-            ? probe.Substring(0, probe.Length - probeSuffix.Length).TrimEnd('/')
-            : "";
-    }
-
-    void ResolveCsvFileName()
-    {
-        string configured = string.IsNullOrWhiteSpace(csvFileName) ? "rl_episode_report.csv" : csvFileName.Trim();
-        string ext = Path.GetExtension(configured);
-        if (string.IsNullOrEmpty(ext))
-            ext = ".csv";
-
-        string baseName = Path.GetFileNameWithoutExtension(configured);
-        if (string.IsNullOrWhiteSpace(baseName))
-            baseName = "rl_episode_report";
-
-        string suffix = "";
-        if (appendSessionTimestampToCsv)
-            suffix += "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-
-        if (!string.IsNullOrWhiteSpace(csvSessionLabel))
-            suffix += "_" + SanitizeFileToken(csvSessionLabel);
-
-        resolvedCsvFileName = baseName + suffix + ext;
-
-        if (saveEpisodeReportCsv)
-        {
-            string dir = Path.Combine(Application.dataPath, "Resources", "RL");
-            string path = Path.Combine(dir, resolvedCsvFileName);
-            //Debug.Log($"[RLEpisode] CSV output: {path}");
-        }
-    }
-
-    string SanitizeFileToken(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return "session";
-
-        StringBuilder sb = new StringBuilder(input.Length);
-        for (int i = 0; i < input.Length; i++)
-        {
-            char c = input[i];
-            if (char.IsLetterOrDigit(c) || c == '_' || c == '-')
-                sb.Append(c);
-        }
-
-        return sb.Length > 0 ? sb.ToString() : "session";
-    }
-
-    string F(float value) => value.ToString("F6", CultureInfo.InvariantCulture);
-
-    string Esc(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return "\"\"";
-        return "\"" + text.Replace("\"", "\"\"") + "\"";
     }
 
     public bool IsEpisodeActive() => episodeActive;

@@ -14,12 +14,21 @@ using UnityEngine;
 ///   0: delta_steering [-1, 1] (실제 효과는 residualScale로 제한)
 ///   1: delta_accel    [-1, 1]
 ///
-/// Observation space (17, includeTrafficDecisionOneHot=true):
-///   0-7:   환경 상태 (speed, lateral, heading, progress, ttc, warning, stopLine)
-///   8-10:  현재 차량 입력 (steer, throttle, brake)
-///   11-12: 모방학습 base 예측 (baseSteering, baseThrottle)
-///   13-15: 신호등 one-hot (Go, Caution, Stop)
-///   16:    safety override level (0~1, Agent가 override 상태 인지 가능)
+/// Observation space (8, 기본 활성):
+///   0: speed (속도)
+///   1: signedLateralError (부호 있는 횡방향 오차)
+///   2: headingError (헤딩 오차)
+///   3: ttc (충돌까지 남은 시간)
+///   4: warningLevel (충돌 경고 레벨)
+///   5: currentSteer (현재 조향 입력)
+///   6: currentThrottle (현재 스로틀 입력)
+///   7: currentBrake (현재 브레이크 입력)
+///
+///   비활성 (Inspector 플래그로 재활성화 가능):
+///   includeStopLineDistance      → 정지선 거리 (+1D)
+///   includeBasePredictions       → 모방학습 base 예측 steer/throttle (+2D)
+///   includeTrafficDecisionOneHot → 신호등 one-hot Go/Caution/Stop (+3D)
+///   includeSafetyOverrideLevel   → safety override level (+1D)
 /// </summary>
 public class AutoDriverRLAgent : Agent
 {
@@ -101,7 +110,16 @@ public class AutoDriverRLAgent : Agent
     public float headingErrorNormalizeDeg = 45f;
     public float ttcNormalizeSeconds = 8f;
     public float stopLineDistanceNormalize = 30f;
-    public bool includeTrafficDecisionOneHot = true;
+
+    [Header("Optional Observations")]
+    [Tooltip("true면 정지선 거리를 관측에 포함 (+1D). 현재 맵에 정지선 학습 미포함 시 비활성 권장.")]
+    public bool includeStopLineDistance = false;
+    [Tooltip("true면 모방학습 base 예측 (steer, throttle)을 관측에 포함 (+2D). regressionDrivingController=null이면 항상 0.")]
+    public bool includeBasePredictions = false;
+    [Tooltip("true면 신호등 one-hot (Go, Caution, Stop)을 관측에 포함 (+3D). 신호등 null이면 항상 Go=1.")]
+    public bool includeTrafficDecisionOneHot = false;
+    [Tooltip("true면 safety override level (0~1)을 관측에 포함 (+1D). 학습 중 Override 비활성 시 의미 없음.")]
+    public bool includeSafetyOverrideLevel = false;
 
     [Header("Terminal Reward Shaping")]
     public float successTerminalReward = 1f;
@@ -288,27 +306,27 @@ public class AutoDriverRLAgent : Agent
             progressRewardProvider.ResetRewardState();
         }
 
-        // 9) 디버그 상태 초기화
+        // 9) 학습/테스트 모드에 따라 SafetyOverride 자동 전환
+        AutoConfigureSafetyOverride();
+
+        // 10) 디버그 상태 초기화
         lastTerminalReason = "None";
         lastConsumedStepReward = 0f;
     }
 
     /// <summary>
     /// 매 스텝마다 환경 관측값(observation)을 수집하여 정책 네트워크에 전달한다.
-    /// 총 16개의 연속 관측값: 환경 상태(8) + 현재 차량 입력(3) + base 예측(2) + 신호등 one-hot(3)
+    /// 기본 8D: speed, signedLateralError, headingError, ttc, warningLevel, steer, throttle, brake
+    /// Optional 플래그로 stopLineDistance(+1), basePredictions(+2), trafficOneHot(+3), safetyOverrideLevel(+1) 추가 가능.
     /// </summary>
     public override void CollectObservations(VectorSensor sensor)
     {
         // SyncToFollowTarget() ← 제거: FixedUpdate()에서 이미 수행됨
 
-        // ─── 환경 상태 관측 (인덱스 0~7) ───
+        // ─── 환경 상태 관측 (인덱스 0~4, 필수) ───
 
         // 현재 차량 속도 (m/s)
         float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
-        // 경로 대비 횡방향 오차 (절대값)
-        float lateralErrorAbs = progressRewardProvider != null ? progressRewardProvider.GetCurrentLateralError() : 0f;
-        // 경로 진행률 (0~1)
-        float progressRatio = progressRewardProvider != null ? progressRewardProvider.GetPathProgressRatio() : 0f;
         // 충돌까지 남은 시간 (TTC, seconds)
         float ttc = collisionWarningEngine != null
             ? collisionWarningEngine.GetTimeToCollision()
@@ -338,49 +356,53 @@ public class AutoDriverRLAgent : Agent
         lastHeadingErrorDeg = headingErrorDeg;
         lastSignedLateralError = signedLateralError;
 
-        // 관측값을 정규화하여 센서에 추가
+        // 관측값을 정규화하여 센서에 추가 (기본 8D)
         sensor.AddObservation(NormalizeSigned(speed, speedNormalize));                    // 0: 속도 (부호 있는 정규화)
-        sensor.AddObservation(Normalize01(lateralErrorAbs, lateralErrorNormalize, 0f));   // 1: 횡방향 오차 절대값 (0~1)
-        sensor.AddObservation(NormalizeSigned(signedLateralError, lateralErrorNormalize)); // 2: 횡방향 오차 부호 포함 (-1~1)
-        sensor.AddObservation(NormalizeSigned(headingErrorDeg, headingErrorNormalizeDeg)); // 3: 헤딩 오차 (-1~1)
-        sensor.AddObservation(Mathf.Clamp01(progressRatio));                              // 4: 경로 진행률 (0~1)
-        sensor.AddObservation(Normalize01(ttc, ttcNormalizeSeconds, 1f));                  // 5: TTC (0~1, 무한대→1)
-        sensor.AddObservation(warningLevelNorm);                                           // 6: 충돌 경고 레벨 (0~1)
-        sensor.AddObservation(Normalize01(stopLineDistance, stopLineDistanceNormalize, 1f)); // 7: 정지선 거리 (0~1)
+        sensor.AddObservation(NormalizeSigned(signedLateralError, lateralErrorNormalize)); // 1: 횡방향 오차 부호 포함 (-1~1)
+        sensor.AddObservation(NormalizeSigned(headingErrorDeg, headingErrorNormalizeDeg)); // 2: 헤딩 오차 (-1~1)
+        sensor.AddObservation(Normalize01(ttc, ttcNormalizeSeconds, 1f));                  // 3: TTC (0~1, 무한대→1)
+        sensor.AddObservation(warningLevelNorm);                                           // 4: 충돌 경고 레벨 (0~1)
 
-        // ─── 현재 차량 입력 관측 (인덱스 8~10) ───
+        if (includeStopLineDistance)
+            sensor.AddObservation(Normalize01(stopLineDistance, stopLineDistanceNormalize, 1f)); // opt: 정지선 거리 (0~1)
+
+        // ─── 현재 차량 입력 관측 (인덱스 5~7) ───
 
         float currentSteer = wheelController != null ? wheelController.GetSteeringInput() : 0f;
         float currentThrottle = wheelController != null ? wheelController.GetThrottleInput() : 0f;
         float currentBrake = wheelController != null ? wheelController.GetBrakeInput() : 0f;
-        sensor.AddObservation(Mathf.Clamp(currentSteer, -1f, 1f));                        // 8: 현재 조향 입력
-        sensor.AddObservation(Mathf.Clamp(currentThrottle, -1f, 1f));                     // 9: 현재 스로틀 입력
-        sensor.AddObservation(Mathf.Clamp01(currentBrake));                                // 10: 현재 브레이크 입력
+        sensor.AddObservation(Mathf.Clamp(currentSteer, -1f, 1f));                        // 5: 현재 조향 입력
+        sensor.AddObservation(Mathf.Clamp(currentThrottle, -1f, 1f));                     // 6: 현재 스로틀 입력
+        sensor.AddObservation(Mathf.Clamp01(currentBrake));                                // 7: 현재 브레이크 입력
 
-        // ─── 모방학습 base 예측값 관측 (인덱스 11~12) ───
+        // ─── 모방학습 base 예측값 관측 (Optional, includeBasePredictions=true 시 +2D) ───
 
         float baseSteering = regressionDrivingController != null ? regressionDrivingController.GetPredictedSteering() : 0f;
         float baseThrottle = regressionDrivingController != null ? regressionDrivingController.GetPredictedThrottle() : 0f;
-        sensor.AddObservation(Mathf.Clamp(baseSteering, -1f, 1f));                        // 11: base 조향 예측
-        sensor.AddObservation(Mathf.Clamp(baseThrottle, 0f, 1f));                         // 12: base 스로틀 예측
+
+        if (includeBasePredictions)
+        {
+            sensor.AddObservation(Mathf.Clamp(baseSteering, -1f, 1f));                    // opt: base 조향 예측
+            sensor.AddObservation(Mathf.Clamp(baseThrottle, 0f, 1f));                     // opt: base 스로틀 예측
+        }
 
         // 디버그용 마지막 base 값 기록
         lastBaseSteering = baseSteering;
         lastBaseThrottle = baseThrottle;
 
-        // ─── 신호등 결정 one-hot 관측 (인덱스 13~15) ───
+        // ─── 신호등 결정 one-hot 관측 (Optional, includeTrafficDecisionOneHot=true 시 +3D) ───
 
         if (includeTrafficDecisionOneHot)
         {
             int decision = trafficLightDecisionEngine != null ? (int)trafficLightDecisionEngine.GetDecision() : 0;
-            sensor.AddObservation(decision == 0 ? 1f : 0f);                               // 13: Go (진행)
-            sensor.AddObservation(decision == 1 ? 1f : 0f);                               // 14: Caution (주의)
-            sensor.AddObservation(decision == 2 ? 1f : 0f);                               // 15: Stop (정지)
+            sensor.AddObservation(decision == 0 ? 1f : 0f);                               // opt: Go (진행)
+            sensor.AddObservation(decision == 1 ? 1f : 0f);                               // opt: Caution (주의)
+            sensor.AddObservation(decision == 2 ? 1f : 0f);                               // opt: Stop (정지)
         }
 
-        // ─── Safety Override Level 관측 (인덱스 16) ───
-        // Agent가 override 상태를 인지 → "위험 상태에서는 스스로 브레이크" 학습 가능
-        sensor.AddObservation(ComputeSafetyOverrideLevel());                               // 16: safety override level (0~1)
+        // ─── Safety Override Level 관측 (Optional, includeSafetyOverrideLevel=true 시 +1D) ───
+        if (includeSafetyOverrideLevel)
+            sensor.AddObservation(ComputeSafetyOverrideLevel());                           // opt: safety override level (0~1)
     }
 
     /// <summary>
@@ -524,6 +546,21 @@ public class AutoDriverRLAgent : Agent
     // ──────────────────────────────────────────────
     //  제어 모드 & 학습 안정화
     // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// 학습(Communicator 연결) 여부에 따라 enableSafetyOverride를 자동 전환한다.
+    /// 학습 시: false (Override가 PPO credit assignment를 방해하지 않도록)
+    /// 테스트/추론 시: true (실제 주행 안전 보장)
+    /// </summary>
+    void AutoConfigureSafetyOverride()
+    {
+        bool isTraining = IsTrainingMode();
+        if (enableSafetyOverride == isTraining)
+        {
+            enableSafetyOverride = !isTraining;
+            Debug.Log($"[AutoDriverRLAgent] AutoConfigureSafetyOverride: enableSafetyOverride={enableSafetyOverride} (isTraining={isTraining})");
+        }
+    }
 
     /// <summary>
     /// 모방학습 컨트롤러를 predictionOnly 모드로 설정하고,
@@ -798,7 +835,7 @@ public class AutoDriverRLAgent : Agent
     bool IsExternalRosCmdInputActive()
     {
         // ML-Agents Communicator(학습 파이썬 프로세스)가 연결되어 있는지 확인
-        bool communicatorOn = Academy.Instance != null && Academy.Instance.IsCommunicatorOn;
+        bool communicatorOn = IsTrainingMode();
 
         // 학습 중이면 내부 제어를 강제 사용 (외부 ROS cmd 무시)
         runtimeForceInternalControlActive = forceInternalControlWhenTraining && communicatorOn;
@@ -962,6 +999,12 @@ public class AutoDriverRLAgent : Agent
     // ──────────────────────────────────────────────
     //  정규화 & 유틸리티 헬퍼
     // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// ML-Agents Communicator(학습 파이썬 프로세스)가 연결된 학습 모드인지 반환한다.
+    /// AutoConfigureSafetyOverride, IsExternalRosCmdInputActive 등에서 공유 사용.
+    /// </summary>
+    static bool IsTrainingMode() => Academy.Instance != null && Academy.Instance.IsCommunicatorOn;
 
     /// <summary>
     /// float 값이 유한한지(NaN이나 Infinity가 아닌지) 검사한다.

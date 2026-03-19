@@ -17,11 +17,12 @@ public class ProgressRewardProvider : MonoBehaviour
     [Tooltip("트리거 감지할 대상 (base_link 등). 미할당 시 자기 자신의 OnTrigger 사용")]
     public GameObject triggerTarget;
 
-    [Header("Reward Weights")]
+    [Header("Progress Weights")]
     [Tooltip("전진 진행 보상 스케일 (velocity·segDirection * scale * dt)")]
     public float progressRewardScale = 1.0f;
     [Tooltip("역주행(음의 progress)에 대한 추가 패널티 배율")]
     public float reverseProgressPenaltyScale = 1.4f;
+    [Header("Zone Weights")]
     [Tooltip("Zone 점수 가중치 (초당)")]
     public float zoneRewardWeight = 0.25f;
     [Tooltip("전진 진행이 없을 때 양의 Zone 보상 스케일. 0이면 전진 없이 zone 보상 0")]
@@ -34,9 +35,12 @@ public class ProgressRewardProvider : MonoBehaviour
     public float headingRewardWeight = 0.3f;
     [Tooltip("헤딩 오차 정규화 기준각(도)")]
     public float headingErrorNormalizeDeg = 45f;
-    [Tooltip("횡오차 패널티 가중치 (초당)")]
+    [Tooltip("횡오차 패널티 가중치 (초당)\n" +
+             "lateral error는 targetZone(+zone) 중심 기준으로 측정됨.\n" +
+             "Zone_m에 있으면 Zone_R1 중심까지의 거리가 그대로 패널티로 반영.")]
     public float lateralRewardWeight = 0.2f;
-    [Tooltip("횡오차 정규화 기준(m)")]
+    [Tooltip("횡오차 정규화 기준(m) - 이 거리에서 패널티가 최대(1.0)에 도달\n" +
+             "targetZone 중심 기준이므로 2~3m 수준이 적절.")]
     public float lateralErrorNormalizeM = 2f;
 
     [Header("Safety Penalty")]
@@ -74,6 +78,7 @@ public class ProgressRewardProvider : MonoBehaviour
     [SerializeField] private float lastZoneReward = 0f;
     [SerializeField] private float lastHeadingReward = 0f;
     [SerializeField] private float lastLateralReward = 0f;
+    [SerializeField] private string targetZoneName = "None";
     [SerializeField] private float lastSafetyPenalty = 0f;
     [SerializeField] private float lastTrafficPenalty = 0f;
     [SerializeField] private float lastStepReward = 0f;
@@ -100,6 +105,16 @@ public class ProgressRewardProvider : MonoBehaviour
     private SegmentInfo primarySegInfo;
     private bool hasPrimaryZone = false;
 
+    // ── Positive Zone 캐시: score > 0인 모든 zone (lateral error 기준 후보) ──
+    // lateral error는 매 프레임 차량에서 횡방향 거리가 가장 가까운 +zone 중심선 기준으로 측정됨.
+    // +zone이 1개면 항상 그 zone 기준, 여러 개면 현재 위치에서 가장 가까운 +zone 기준.
+    private struct PositiveZoneEntry
+    {
+        public RewardZone zone;
+        public SegmentInfo seg;
+    }
+    private readonly List<PositiveZoneEntry> positiveZones = new List<PositiveZoneEntry>();
+
     // ── 캐시 (외부에서 읽는 값) ──
     private float cachedHeadingErrorDeg = 0f;
     private float cachedSignedLateralError = 0f;
@@ -121,6 +136,65 @@ public class ProgressRewardProvider : MonoBehaviour
                 proxy = triggerTarget.AddComponent<ProgressRewardProxy>();
             proxy.owner = this;
         }
+
+        PreCachePositiveZones();
+    }
+
+    /// <summary>
+    /// 씬 내 모든 RewardZone 중 score > 0인 zone을 전부 캐시한다.
+    /// lateral error는 매 프레임 차량에서 가장 가까운 +zone 중심선 기준으로 동적 측정됨.
+    /// +zone이 1개여도, 여러 개여도 동일하게 동작한다.
+    /// </summary>
+    void PreCachePositiveZones()
+    {
+        positiveZones.Clear();
+        var allZones = FindObjectsOfType<RewardZone>(true);
+
+        foreach (var zone in allZones)
+        {
+            if (zone.score <= 0f) continue;
+
+            var col = zone.GetComponent<Collider>();
+            if (col != null)
+                TryCacheSegmentInfo(zone, col);
+
+            if (segCache.TryGetValue(zone, out var info))
+                positiveZones.Add(new PositiveZoneEntry { zone = zone, seg = info });
+        }
+
+        targetZoneName = positiveZones.Count > 0 ? positiveZones[0].zone.zoneName : "None";
+        if (positiveZones.Count > 0)
+            Debug.Log($"[ProgressRewardProvider] +zone 캐시: {positiveZones.Count}개");
+    }
+
+    /// <summary>
+    /// 차량 위치에서 횡방향 거리가 가장 가까운 +zone의 SegmentInfo를 반환한다.
+    /// +zone이 1개면 항상 그 zone 반환. 없으면 primarySegInfo fallback.
+    /// </summary>
+    SegmentInfo GetNearestPositiveSegInfo(Vector3 vehiclePos, out string zoneName)
+    {
+        if (positiveZones.Count == 1)
+        {
+            zoneName = positiveZones[0].zone.zoneName;
+            return positiveZones[0].seg;
+        }
+
+        float minLateralDist = float.MaxValue;
+        int nearestIdx = 0;
+
+        for (int i = 0; i < positiveZones.Count; i++)
+        {
+            Vector3 offset = vehiclePos - positiveZones[i].seg.center;
+            float lateralDist = Mathf.Abs(Vector3.Dot(offset, positiveZones[i].seg.right));
+            if (lateralDist < minLateralDist)
+            {
+                minLateralDist = lateralDist;
+                nearestIdx = i;
+            }
+        }
+
+        zoneName = positiveZones[nearestIdx].zone.zoneName;
+        return positiveZones[nearestIdx].seg;
     }
 
     void FixedUpdate()
@@ -212,12 +286,17 @@ public class ProgressRewardProvider : MonoBehaviour
         Vector3 vehiclePos = GetTrackedPosition();
         Transform vehicleT = GetTrackedTransform();
 
-        // 세그먼트 중심선으로부터의 횡방향 오프셋
-        Vector3 offset = vehiclePos - primarySegInfo.center;
-        cachedSignedLateralError = Vector3.Dot(offset, primarySegInfo.right);
+        // 횡오차: 현재 위치에서 가장 가까운 +zone 중심선 기준.
+        // +zone이 없으면 primaryZone fallback.
+        // → lateral=0은 오직 해당 +zone 중앙에 있을 때만 성립.
+        SegmentInfo lateralRef = positiveZones.Count > 0
+            ? GetNearestPositiveSegInfo(vehiclePos, out targetZoneName)
+            : primarySegInfo;
+        Vector3 lateralOffset = vehiclePos - lateralRef.center;
+        cachedSignedLateralError = Vector3.Dot(lateralOffset, lateralRef.right);
         currentLateralError = Mathf.Abs(cachedSignedLateralError);
 
-        // 세그먼트 진행 방향 vs 차량 heading
+        // 헤딩오차: primaryZone(현재 주행 중인 zone)의 진행 방향 기준 유지.
         cachedHeadingErrorDeg = Vector3.SignedAngle(
             primarySegInfo.direction, vehicleT.forward, Vector3.up);
 
@@ -275,7 +354,9 @@ public class ProgressRewardProvider : MonoBehaviour
             Mathf.Abs(cachedHeadingErrorDeg) / Mathf.Max(1f, headingErrorNormalizeDeg));
         float headingReward = -headingRewardWeight * headingErrorNorm * dt;
 
-        // Lateral shaping
+        // Lateral shaping: targetZone(+zone) 중심 기준 횡오차 패널티.
+        // currentLateralError는 UpdateLateralAndHeading에서 targetZone 기준으로 이미 계산됨.
+        // Zone_m에 있으면 Zone_R1 중심까지의 거리가 lateral error로 들어옴.
         float lateralErrorNorm = Mathf.Clamp01(
             currentLateralError / Mathf.Max(0.01f, lateralErrorNormalizeM));
         float lateralReward = -lateralRewardWeight * lateralErrorNorm * dt;
@@ -444,6 +525,8 @@ public class ProgressRewardProvider : MonoBehaviour
     public float GetCumulativeZoneReward() => cumulativeZoneReward;
     public float GetCumulativeSafetyPenalty() => cumulativeSafetyPenalty;
     public float GetCumulativeTrafficPenalty() => cumulativeTrafficPenalty;
+    public float GetCumulativeHeadingReward() => cumulativeHeadingReward;
+    public float GetCumulativeLateralReward() => cumulativeLateralReward;
     public float GetCurrentLateralError() => currentLateralError;
     public string GetCurrentZoneName() => string.IsNullOrEmpty(currentZoneName) ? "None" : currentZoneName;
     public int GetActiveZoneCount() => activeZoneCount;
