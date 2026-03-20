@@ -7135,10 +7135,10 @@ MonoBehaviour:
   zoneRewardWeight: 0.5
   zoneRewardNoProgressScale: 0
   zoneRewardFullScaleProgressSpeed: 0.5
-  headingRewardWeight: 2
-  headingErrorNormalizeDeg: 20
-  lateralRewardWeight: 1.5
-  lateralErrorNormalizeM: 15
+  headingRewardWeight: 2.5
+  headingErrorNormalizeDeg: 30
+  lateralRewardWeight: 1
+  lateralErrorMaxM: 5
   collisionWarningEngine: {fileID: 4887158630418357921}
   cautionPenaltyPerSec: 0.05
   warningPenaltyPerSec: 0.15
@@ -7150,6 +7150,7 @@ MonoBehaviour:
   redViolationPenaltyPerSec: 0.6
   accumulateOnlyWhenEpisodeActive: 1
   episodeEvaluator: {fileID: 2755947177669669440}
+  showSegmentGizmos: 0
   cumulativeReward: 0
   cumulativeProgressReward: 0
   cumulativeZoneReward: 0
@@ -7165,6 +7166,7 @@ MonoBehaviour:
   lastZoneReward: 0
   lastHeadingReward: 0
   lastLateralReward: 0
+  targetZoneName: None
   lastSafetyPenalty: 0
   lastTrafficPenalty: 0
   lastStepReward: 0
@@ -7506,7 +7508,6 @@ MonoBehaviour:
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
   regressionDrivingController: {fileID: 3411824885766192326}
   autoDriverRLAgent: {fileID: 6225962121484438980}
-  autoFindReferences: 1
   autoBeginOnStart: 1
   stopVehicleOnTerminal: 1
   maxEpisodeSeconds: 0
