@@ -1446,17 +1446,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trafficLightSubscriber: {fileID: 1705282846092381160}
   stopLineSubscriber: {fileID: 8986186853342084585}
-  wheelController: {fileID: 8767988594840380841}
+  vehicleMotionController: {fileID: 5307598328287140471}
   egoTransform: {fileID: 7530947417517179381}
   useSceneTrafficLightState: 1
-  sceneTrafficLights:
-  - {fileID: 0}
-  - {fileID: 0}
+  sceneTrafficLights: []
   maxSceneSignalLateralOffset: 8
   fallbackToRosSubscriberState: 0
-  stopLineTransforms:
-  - {fileID: 0}
-  - {fileID: 0}
+  stopLineTransforms: []
   maxStopLineLateralOffset: 4
   minStateConfidence: 0.35
   minBBoxAreaNormalized: 0.0012
@@ -1604,6 +1600,7 @@ GameObject:
   - component: {fileID: 9100110014134829094}
   - component: {fileID: 63079322547879358}
   - component: {fileID: 7775812616133294923}
+  - component: {fileID: 1166663639262571224}
   m_Layer: 11
   m_Name: rear_right_wheel
   m_TagString: Untagged
@@ -1741,6 +1738,27 @@ MonoBehaviour:
   jointName: rear_right_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &1166663639262571224
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1554884335248611926}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.1
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1570008345956008508
 GameObject:
   m_ObjectHideFlags: 0
@@ -3990,7 +4008,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraPublisher: {fileID: 8526092224972961840}
-  wheelController: {fileID: 8767988594840380841}
+  wheelController: {fileID: 0}
   aiController: {fileID: 3411824885766192326}
   recordKey: 114
   saveKey: 116
@@ -4012,7 +4030,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   modelAsset: {fileID: 5022602860645237092, guid: c1da72427794be34d9cfba2f69809bcd, type: 3}
-  wheelController: {fileID: 8767988594840380841}
+  wheelController: {fileID: 0}
   cameraPublisher: {fileID: 8526092224972961840}
   dataCollector: {fileID: 2724679006326700055}
   collisionWarningEngine: {fileID: 4887158630418357921}
@@ -4072,7 +4090,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0e0dbf1aeff8c3edb00662acc4fef05, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  wheelController: {fileID: 8767988594840380841}
+  wheelController: {fileID: 0}
   autoFindWheelController: 1
   useRegressionAutonomyGate: 1
   regressionDrivingController: {fileID: 3411824885766192326}
@@ -4636,7 +4654,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3386489033171134660}
-  - component: {fileID: 4736498375722604055}
   m_Layer: 11
   m_Name: Cylinder
   m_TagString: Untagged
@@ -4659,28 +4676,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1489513529888792411}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!64 &4736498375722604055
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3761805975561260352}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 4300000, guid: 51abca3e29443eb23a896fd793861aa6, type: 2}
 --- !u!1 &3766269682132202158
 GameObject:
   m_ObjectHideFlags: 0
@@ -4854,7 +4849,7 @@ MonoBehaviour:
   lowSpeedWarningDistance: 0.8
   velocitySource: {fileID: 812707999201916778}
   useVelocityForTTC: 1
-  wheelController: {fileID: 8767988594840380841}
+  wheelController: {fileID: 0}
   enablePathAwareRiskSplit: 1
   sideAdvisoryDistance: 0.45
   sideTurnBrakeDistance: 0.25
@@ -5915,6 +5910,7 @@ GameObject:
   - component: {fileID: 4841307956064660459}
   - component: {fileID: 8904987795443473658}
   - component: {fileID: 1816489111904536839}
+  - component: {fileID: 5775785940489339499}
   m_Layer: 11
   m_Name: front_left_wheel
   m_TagString: Untagged
@@ -6052,6 +6048,27 @@ MonoBehaviour:
   jointName: front_left_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &5775785940489339499
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4768278461222121423}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.1
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4882843904110005498
 GameObject:
   m_ObjectHideFlags: 0
@@ -6434,7 +6451,7 @@ MonoBehaviour:
   regressionDrivingController: {fileID: 3411824885766192326}
   drivingStatusUIController: {fileID: 0}
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
-  wheelController: {fileID: 8767988594840380841}
+  wheelController: {fileID: 0}
   behaviorParameters: {fileID: 5946125840319052595}
   rosTopics:
   - component: {fileID: 8526092224972961840}
@@ -6922,7 +6939,7 @@ MonoBehaviour:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
   MaxStep: 0
-  wheelController: {fileID: 8767988594840380841}
+  vehicleMotionController: {fileID: 5307598328287140471}
   progressRewardProvider: {fileID: 4711191307475830511}
   episodeEvaluator: {fileID: 2755947177669669440}
   collisionWarningEngine: {fileID: 4887158630418357921}
@@ -7145,7 +7162,7 @@ MonoBehaviour:
   brakePenaltyPerSec: 0.35
   emergencyPenaltyPerSec: 1.2
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
-  wheelController: {fileID: 8767988594840380841}
+  vehicleMotionController: {fileID: 5307598328287140471}
   redViolationSpeedThreshold: 0.2
   redViolationPenaltyPerSec: 0.6
   accumulateOnlyWhenEpisodeActive: 1
@@ -7171,10 +7188,10 @@ MonoBehaviour:
   lastTrafficPenalty: 0
   lastStepReward: 0
   lastForwardProgress: 0
-  cachedHeadingErrorDegDebug: 0
-  cachedSignedLateralErrorDebug: 0
   progressWaypoints: []
   isLoopedPath: 0
+  cachedHeadingErrorDeg: 0
+  cachedSignedLateralError: 0
 --- !u!114 &2660801402183037605
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7504,7 +7521,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   progressRewardProvider: {fileID: 4711191307475830511}
   collisionWarningEngine: {fileID: 4887158630418357921}
-  wheelController: {fileID: 8767988594840380841}
+  vehicleMotionController: {fileID: 5307598328287140471}
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
   regressionDrivingController: {fileID: 3411824885766192326}
   autoDriverRLAgent: {fileID: 6225962121484438980}
@@ -8347,6 +8364,7 @@ GameObject:
   - component: {fileID: 2099866575517393659}
   - component: {fileID: 600500455268399109}
   - component: {fileID: 4570953500250004753}
+  - component: {fileID: 3240249307422997967}
   m_Layer: 11
   m_Name: rear_left_wheel
   m_TagString: Untagged
@@ -8484,6 +8502,27 @@ MonoBehaviour:
   jointName: rear_left_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &3240249307422997967
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6979495202641933323}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.1
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &7008321178003895411
 GameObject:
   m_ObjectHideFlags: 0
@@ -8846,7 +8885,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4111982534023175443}
-  - component: {fileID: 2798010683238706755}
   m_Layer: 11
   m_Name: Cylinder
   m_TagString: Untagged
@@ -8869,28 +8907,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 6241592572850508817}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!64 &2798010683238706755
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7636717541193079574}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 4300000, guid: 51abca3e29443eb23a896fd793861aa6, type: 2}
 --- !u!1 &7654394196571254175
 GameObject:
   m_ObjectHideFlags: 0
@@ -9475,7 +9491,7 @@ GameObject:
   - component: {fileID: 812707999201916778}
   - component: {fileID: 8127667464052672463}
   - component: {fileID: 4514414543253568386}
-  - component: {fileID: 8767988594840380841}
+  - component: {fileID: 5307598328287140471}
   - component: {fileID: 2176580151158033785}
   m_Layer: 11
   m_Name: base_link
@@ -9629,7 +9645,7 @@ MonoBehaviour:
   jointName: base_footprint_joint
   EffortLimit: 1000
   VelocityLimit: 1000
---- !u!114 &8767988594840380841
+--- !u!114 &5307598328287140471
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -9638,7 +9654,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 8085041038903891360}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2dbcdebfefc25aa25a79c2074c2c74e5, type: 3}
+  m_Script: {fileID: 11500000, guid: 4ac49b6021da5bf1fbee9d23961e273a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   frontLeftSteering: {fileID: 0}
@@ -9663,7 +9679,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   reductionRatio: 3
-  maxSpeed: 2
+  maxSpeed: 2.8
   maxAcceleration: 0.5
   maxDeceleration: 1
   enableSpeedBasedSteeringLimit: 1
@@ -9673,16 +9689,13 @@ MonoBehaviour:
   frontalArea: 0.4
   airDensity: 1.225
   peakFriction: 0.8
-  optimalSlipRatio: 0.15
-  tireStiffness: 10
   maxBrakeForce: 300
   engineBrakeForce: 30
   autoFindReferences: 1
-  externalControlEnabled: 1
+  externalControlEnabled: 0
   currentSpeed_ms: 0
   currentSpeed_kmh: 0
   commandedSpeed_ms: 0
-  physicsSpeed_ms: 0
   currentMotorRPM: 0
   currentAcceleration: 0
   currentDriveForce: 0
@@ -10043,6 +10056,7 @@ GameObject:
   - component: {fileID: 252276897695449092}
   - component: {fileID: 7087521946043047478}
   - component: {fileID: 1912813262160355890}
+  - component: {fileID: 2686736589450862387}
   m_Layer: 11
   m_Name: front_right_wheel
   m_TagString: Untagged
@@ -10180,6 +10194,27 @@ MonoBehaviour:
   jointName: front_right_wheel_joint
   EffortLimit: 1000
   VelocityLimit: 1000
+--- !u!135 &2686736589450862387
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8249163951790167188}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.1
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &8268173505983117451
 GameObject:
   m_ObjectHideFlags: 0
@@ -10282,7 +10317,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8856395280936752734}
-  - component: {fileID: 36573175544725061}
   m_Layer: 11
   m_Name: Cylinder
   m_TagString: Untagged
@@ -10305,28 +10339,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 5593327870614565632}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!64 &36573175544725061
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8352134558242741935}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 4300000, guid: 51abca3e29443eb23a896fd793861aa6, type: 2}
 --- !u!1 &8385744287533232822
 GameObject:
   m_ObjectHideFlags: 0
@@ -11288,7 +11300,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5444925232387987578}
-  - component: {fileID: 3487175251489154519}
   m_Layer: 11
   m_Name: Cylinder
   m_TagString: Untagged
@@ -11311,28 +11322,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 2484078325396107727}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!64 &3487175251489154519
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8928744767612036532}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 4300000, guid: 51abca3e29443eb23a896fd793861aa6, type: 2}
 --- !u!1 &8976029954866653788
 GameObject:
   m_ObjectHideFlags: 0
