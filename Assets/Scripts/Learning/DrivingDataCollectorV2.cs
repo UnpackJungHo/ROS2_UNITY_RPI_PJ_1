@@ -49,7 +49,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     public CameraPublisher cameraPublisher;
 
     [Tooltip("차량 컨트롤러")]
-    public WheelTest wheelController;
+    public VehicleMotionController wheelController;
 
     [Header("DAgger Settings")]
     [Tooltip("회귀 자율주행 컨트롤러 (AI 모드 및 개입 상태 확인)")]
@@ -174,11 +174,11 @@ public class DrivingDataCollectorV2 : MonoBehaviour
 
         if (wheelController == null)
         {
-            wheelController = GetComponent<WheelTest>();
+            wheelController = GetComponent<VehicleMotionController>();
             if (wheelController == null)
-                wheelController = GetComponentInParent<WheelTest>();
+                wheelController = GetComponentInParent<VehicleMotionController>();
             if (wheelController == null)
-                wheelController = FindObjectOfType<WheelTest>();
+                wheelController = FindObjectOfType<VehicleMotionController>();
         }
     }
 
@@ -187,7 +187,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         if (cameraPublisher == null)
             Debug.LogError("[DataCollectorV2] CameraPublisher를 찾을 수 없습니다!");
         if (wheelController == null)
-            Debug.LogError("[DataCollectorV2] WheelTest를 찾을 수 없습니다!");
+            Debug.LogError("[DataCollectorV2] VehicleMotionController를 찾을 수 없습니다!");
     }
 
     void Update()
@@ -352,7 +352,7 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_3", $"frame_{frameNum}.png"), data = pngSmall });    // 활성
         // writeQueue.Enqueue(new WriteTask { path = Path.Combine(sessionFolder, "front_4", $"frame_{frameNum}.png"), data = pngLarge }); // 비활성화
 
-        // WheelTest에서 회귀 학습용 데이터 추출
+        // VehicleMotionController에서 회귀 학습용 데이터 추출
         float steeringInput = wheelController != null ? wheelController.GetSteeringInput() : 0f;
         float throttleInput = wheelController != null ? wheelController.GetThrottleInput() : 0f;
         float brakeInput = wheelController != null ? wheelController.GetBrakeInput() : 0f;

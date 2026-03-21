@@ -7,7 +7,8 @@ using UnityEngine;
 ///
 /// 조작:
 ///   Z 키       - 차량 목록 순차 전환 / 자유 관찰 모드에서는 차량 모드 복귀
-///   1/2/3 키   - Front/Top/Back 뷰 전환 (차량 모드에서만)
+///   1/2 키     - Front/Top 뷰 전환 (차량 모드에서만)
+///   // 3 키(Back 뷰) 비활성화
 ///   G 키       - 자유 관찰 모드 진입
 ///   자유 관찰 모드: 마우스 우클릭 유지 + WASD/QE 이동, 마우스 시야 회전
 ///                  Shift 키로 고속 이동
@@ -27,7 +28,7 @@ public class VehicleSelector : MonoBehaviour
     public VehicleViewProvider.ViewMode defaultViewMode = VehicleViewProvider.ViewMode.TopView;
     public KeyCode frontViewHotkey  = KeyCode.Alpha1;
     public KeyCode topViewHotkey    = KeyCode.Alpha2;
-    public KeyCode backViewHotkey   = KeyCode.Alpha3;
+    // public KeyCode backViewHotkey   = KeyCode.Alpha3;
     public KeyCode cycleVehicleHotkey = KeyCode.Z;
 
     [Header("Free Camera")]
@@ -147,8 +148,8 @@ public class VehicleSelector : MonoBehaviour
                 SetViewMode(VehicleViewProvider.ViewMode.FrontView);
             else if (Input.GetKeyDown(topViewHotkey))
                 SetViewMode(VehicleViewProvider.ViewMode.TopView);
-            else if (Input.GetKeyDown(backViewHotkey))
-                SetViewMode(VehicleViewProvider.ViewMode.BackView);
+            // else if (Input.GetKeyDown(backViewHotkey))
+            //     SetViewMode(VehicleViewProvider.ViewMode.BackView);
         }
     }
 

@@ -70,7 +70,7 @@ public class CollisionWarningEngine : MonoBehaviour
     public ArticulationBody velocitySource;
     public bool useVelocityForTTC = true; // TTC(충돌 예측 시간) 계산에 속도 반영 여부
     [Tooltip("조향 입력 참조(측면 근접의 제동 반영 여부 판단용)")]
-    public WheelTest wheelController;
+    public VehicleMotionController wheelController;
 
     [Header("Path-Aware Risk Split (경로축/측면 분리)")]
     [Tooltip("true면 정면 진행축 위험(currentMinDistance)을 우선 사용하고 측면은 보조로 처리")]
@@ -160,7 +160,7 @@ public class CollisionWarningEngine : MonoBehaviour
     void Start()
     {
         if (wheelController == null)
-            wheelController = FindObjectOfType<WheelTest>();
+            wheelController = FindObjectOfType<VehicleMotionController>();
         ValidateSensorReferences();
         SyncScanIntervals();
 
@@ -276,7 +276,7 @@ public class CollisionWarningEngine : MonoBehaviour
             return;
         }
 
-        // 차량의 실제 이동 속도(스칼라 값, m/s 단위 -> 최종 속도는 WheelTest 에서 설정한 값에 따라 달라짐)
+        // 차량의 실제 이동 속도(스칼라 값, m/s 단위 -> 최종 속도는 VehicleMotionController 에서 설정한 값에 따라 달라짐)
         currentSpeed = velocitySource.velocity.magnitude;
     }
 

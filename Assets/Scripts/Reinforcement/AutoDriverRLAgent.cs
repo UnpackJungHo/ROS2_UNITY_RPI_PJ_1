@@ -33,7 +33,7 @@ using UnityEngine;
 public class AutoDriverRLAgent : Agent
 {
     [Header("References")]
-    public WheelTest wheelController;
+    public VehicleMotionController vehicleMotionController;
     public ProgressRewardProvider progressRewardProvider;
     public RLEpisodeEvaluator episodeEvaluator;
     public CollisionWarningEngine collisionWarningEngine;
@@ -231,8 +231,8 @@ public class AutoDriverRLAgent : Agent
             if (regressionDrivingController != null && !regressionDrivingController.predictionOnlyMode)
                 regressionDrivingController.predictionOnlyMode = true;
 
-            if (wheelController != null && !wheelController.externalControlEnabled)
-                wheelController.externalControlEnabled = true;
+            if (vehicleMotionController != null && !vehicleMotionController.externalControlEnabled)
+                vehicleMotionController.externalControlEnabled = true;
         }
         // DecisionRequester 없이 수동 결정 요청 (fallback)
         else if (requestDecisionInFixedUpdateWithoutRequester && decisionRequester == null)
@@ -326,7 +326,7 @@ public class AutoDriverRLAgent : Agent
         // ─── 환경 상태 관측 (인덱스 0~4, 필수) ───
 
         // 현재 차량 속도 (m/s)
-        float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
+        float speed = vehicleMotionController != null ? vehicleMotionController.GetSpeedMS() : 0f;
         // 충돌까지 남은 시간 (TTC, seconds)
         float ttc = collisionWarningEngine != null
             ? collisionWarningEngine.GetTimeToCollision()
@@ -368,9 +368,9 @@ public class AutoDriverRLAgent : Agent
 
         // ─── 현재 차량 입력 관측 (인덱스 5~7) ───
 
-        float currentSteer = wheelController != null ? wheelController.GetSteeringInput() : 0f;
-        float currentThrottle = wheelController != null ? wheelController.GetThrottleInput() : 0f;
-        float currentBrake = wheelController != null ? wheelController.GetBrakeInput() : 0f;
+        float currentSteer = vehicleMotionController != null ? vehicleMotionController.GetSteeringInput() : 0f;
+        float currentThrottle = vehicleMotionController != null ? vehicleMotionController.GetThrottleInput() : 0f;
+        float currentBrake = vehicleMotionController != null ? vehicleMotionController.GetBrakeInput() : 0f;
         sensor.AddObservation(Mathf.Clamp(currentSteer, -1f, 1f));                        // 5: 현재 조향 입력
         sensor.AddObservation(Mathf.Clamp(currentThrottle, -1f, 1f));                     // 6: 현재 스로틀 입력
         sensor.AddObservation(Mathf.Clamp01(currentBrake));                                // 7: 현재 브레이크 입력
@@ -443,8 +443,8 @@ public class AutoDriverRLAgent : Agent
     void AutoFindReferences()
     {
         // 각 컴포넌트가 null이면 자신 → 부모 순으로 탐색
-        if (wheelController == null)
-            wheelController = GetComponent<WheelTest>() ?? GetComponentInParent<WheelTest>();
+        if (vehicleMotionController == null)
+            vehicleMotionController = GetComponent<VehicleMotionController>() ?? GetComponentInParent<VehicleMotionController>();
 
         if (progressRewardProvider == null)
             progressRewardProvider = GetComponent<ProgressRewardProvider>() ?? GetComponentInParent<ProgressRewardProvider>();
@@ -468,13 +468,13 @@ public class AutoDriverRLAgent : Agent
         if (decisionRequester == null)
             decisionRequester = GetComponent<DecisionRequester>();
 
-        // followTarget이 미할당이면 wheelController의 Transform을 기본값으로 사용
-        if (followTargetTransform == null && wheelController != null)
-            followTargetTransform = wheelController.transform;
+        // followTarget이 미할당이면 vehicleMotionController의 Transform을 기본값으로 사용
+        if (followTargetTransform == null && vehicleMotionController != null)
+            followTargetTransform = vehicleMotionController.transform;
 
-        // ArticulationBody 루트를 wheelController → followTarget → self 순으로 탐색
+        // ArticulationBody 루트를 vehicleMotionController → followTarget → self 순으로 탐색
         if (rootArticulation == null)
-            rootArticulation = ResolveArticulationRoot(wheelController != null ? wheelController.transform : null);
+            rootArticulation = ResolveArticulationRoot(vehicleMotionController != null ? vehicleMotionController.transform : null);
 
         if (rootArticulation == null)
             rootArticulation = ResolveArticulationRoot(followTargetTransform);
@@ -577,8 +577,8 @@ public class AutoDriverRLAgent : Agent
                 regressionDrivingController.predictionOnlyMode = true;
             }
 
-            if (wheelController != null)
-                wheelController.externalControlEnabled = true;
+            if (vehicleMotionController != null)
+                vehicleMotionController.externalControlEnabled = true;
 
             return;
         }
@@ -591,8 +591,8 @@ public class AutoDriverRLAgent : Agent
         }
 
         // 휠 컨트롤러를 외부 제어 모드로 설정 (RL Agent가 직접 조향/스로틀/브레이크 제어)
-        if (wheelController != null)
-            wheelController.externalControlEnabled = true;
+        if (vehicleMotionController != null)
+            vehicleMotionController.externalControlEnabled = true;
     }
 
     /// <summary>
@@ -668,10 +668,10 @@ public class AutoDriverRLAgent : Agent
         if (!hasStartPose)
             CacheStartPose();
 
-        // 리셋 대상 Transform 결정 (followTarget → wheelController → self)
+        // 리셋 대상 Transform 결정 (followTarget → vehicleMotionController → self)
         Transform resetTarget = followTargetTransform != null
             ? followTargetTransform
-            : (wheelController != null ? wheelController.transform : transform);
+            : (vehicleMotionController != null ? vehicleMotionController.transform : transform);
 
         // 물리 텔레포트로 위치/회전 리셋
         ArticulationBody articulationRoot = ResolveArticulationRoot(resetTarget);
@@ -712,11 +712,11 @@ public class AutoDriverRLAgent : Agent
         }
 
         // 휠 컨트롤러 입력 초기화 (조향/스로틀/브레이크 모두 0)
-        if (wheelController != null)
+        if (vehicleMotionController != null)
         {
-            wheelController.SetSteering(0f);
-            wheelController.SetThrottle(0f);
-            wheelController.SetBrake(0f);
+            vehicleMotionController.SetSteering(0f);
+            vehicleMotionController.SetThrottle(0f);
+            vehicleMotionController.SetBrake(0f);
         }
 
         // 리셋 후 Agent Transform을 다시 동기화
@@ -753,13 +753,13 @@ public class AutoDriverRLAgent : Agent
     /// </summary>
     void ApplyResidualAction(ActionBuffers actions)
     {
-        if (wheelController == null)
+        if (vehicleMotionController == null)
             return;
 
         // 외부 ROS cmd 모드면 차량 제어를 건드리지 않음
         if (IsExternalRosCmdInputActive())
         {
-            wheelController.externalControlEnabled = true;
+            vehicleMotionController.externalControlEnabled = true;
             return;
         }
 
@@ -814,10 +814,10 @@ public class AutoDriverRLAgent : Agent
         float clampedThrottle = Mathf.Clamp(throttle, allowReverse ? -1f : 0f, 1f);
         float clampedBrake = Mathf.Clamp01(brake);
 
-        wheelController.externalControlEnabled = true;
-        wheelController.SetSteering(finalSteer);
-        wheelController.SetThrottle(clampedThrottle);
-        wheelController.SetBrake(clampedBrake);
+        vehicleMotionController.externalControlEnabled = true;
+        vehicleMotionController.SetSteering(finalSteer);
+        vehicleMotionController.SetThrottle(clampedThrottle);
+        vehicleMotionController.SetBrake(clampedBrake);
 
         // 7) 디버그용 마지막 적용값 기록
         lastDeltaSteering = deltaSteer;
@@ -871,7 +871,7 @@ public class AutoDriverRLAgent : Agent
             {
                 // 경고 단계: 스로틀 제한, 최소 속도 이상이면 브레이크 적용
                 throttle = Mathf.Min(throttle, 0.15f);
-                float speed = wheelController != null ? wheelController.GetSpeedMS() : 0f;
+                float speed = vehicleMotionController != null ? vehicleMotionController.GetSpeedMS() : 0f;
                 if (Mathf.Abs(speed) >= Mathf.Max(0f, warningBrakeMinSpeed))
                     brake = Mathf.Max(brake, warningBrake);
             }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class WheelTest : MonoBehaviour
+public class VehicleMotionController : MonoBehaviour
 {
     [Header("Steering Links (Auto-assigned)")]
     public ArticulationBody frontLeftSteering;
@@ -69,10 +69,6 @@ public class WheelTest : MonoBehaviour
     [Header("Tire Physics")]
     [Tooltip("최대 마찰 계수")]
     public float peakFriction = 0.8f;
-    [Tooltip("최적 슬립률 (0.1 = 10%)")]
-    public float optimalSlipRatio = 0.15f;
-    [Tooltip("타이어 그립 강성")]
-    public float tireStiffness = 10f;
 
     [Header("Brakes")]
     [Tooltip("최대 브레이크 힘 (N)")]
@@ -91,7 +87,6 @@ public class WheelTest : MonoBehaviour
     [SerializeField] private float currentSpeed_ms;      // 실제 물리 속도 (m/s) — RL 에이전트 관찰값
     [SerializeField] private float currentSpeed_kmh;     // 실제 물리 속도 (km/h)
     [SerializeField] private float commandedSpeed_ms;    // 스크립트 명령 속도 (m/s) — 바퀴 targetVelocity 소스
-    [SerializeField] private float physicsSpeed_ms;      // PhysX 속도 raw (= currentSpeed_ms)
     [SerializeField] private float currentMotorRPM;      // 현재 모터 RPM
     [SerializeField] private float currentAcceleration;  // 현재 가속도 (m/s²)
     [SerializeField] private float currentDriveForce;    // 현재 구동력 (N)
@@ -107,6 +102,10 @@ public class WheelTest : MonoBehaviour
     private const float GRAVITY = 9.81f;
     private ArticulationBody rootBody;
 
+    // 디퍼렌셜 속도 비율 (UpdateSteering에서 계산 → ApplyWheelVelocities에서 사용)
+    private float leftSpeedRatio = 1f;
+    private float rightSpeedRatio = 1f;
+
     void Start()
     {
         if (autoFindReferences)
@@ -114,7 +113,10 @@ public class WheelTest : MonoBehaviour
             FindReferences();
         }
 
-        CacheRootArticulationBody();
+        // 한 번의 탐색으로 루트 캐시 + 물리 파라미터 보정 수행
+        ArticulationBody[] allBodies = GetComponentsInChildren<ArticulationBody>(true);
+        CacheRootArticulationBody(allBodies);
+        CorrectPhysicsDamping(allBodies);
 
         // 토크 커브 기본값 설정 (전기모터 특성: 저속에서 최대 토크)
         if (torqueCurve == null || torqueCurve.keys.Length == 0)
@@ -132,11 +134,48 @@ public class WheelTest : MonoBehaviour
         rearAxleLoad = totalWeight * 0.5f;
     }
 
-    void CacheRootArticulationBody()
+    // ============================================
+    // 물리 파라미터 보정
+    // URDF Importer가 joint damping을 body의 angularDamping으로 잘못 적용하는 문제 수정.
+    // 바퀴 angularDamping=1.0이면 20 rad/s(2 m/s)에서 20 Nm 저항 → 주행 불가.
+    // 조향 linearDamping=50이면 1 m/s에서 수백 N 저항 → 최고속도 1 m/s 한계.
+    // ============================================
+    void CorrectPhysicsDamping(ArticulationBody[] allBodies)
+    {
+        foreach (ArticulationBody body in allBodies)
+        {
+            // 바퀴 4개: body angularDamping을 joint용 값(1.0)에서 body 용(0.05)으로 수정
+            bool isWheel = body == frontLeftWheel || body == frontRightWheel
+                        || body == rearLeftWheel  || body == rearRightWheel;
+            if (isWheel)
+            {
+                body.angularDamping = 0.05f;  // 1.0 → 0.05 (URDF 오변환 수정)
+                body.linearDamping  = 0.05f;
+            }
+
+            // 조향 2개: URDF damping=50이 linearDamping=50으로 잘못 적용됨
+            // → 1 m/s 이동 시 수백 N 저항 → physicsSpeed 상한 ~1 m/s
+            bool isSteering = body == frontLeftSteering || body == frontRightSteering;
+            if (isSteering)
+            {
+                body.linearDamping  = 0.1f;  // 50 → 0.1 (URDF 오변환 수정)
+                body.angularDamping = 0.1f;
+            }
+        }
+
+        // 차체(root): 낮은 기본값(0.05)을 AMR 특성에 맞게 상향
+        // → roll/pitch 공진 감쇠, 외란 흡수
+        if (rootBody != null)
+        {
+            rootBody.linearDamping  = 0.3f;  // 0.05 → 0.3
+            rootBody.angularDamping = 1.5f;  // 0.05 → 1.5
+        }
+    }
+
+    void CacheRootArticulationBody(ArticulationBody[] bodies)
     {
         // URDF 임포트 구조에서 isRoot == true인 ArticulationBody가 물리 계층의 루트
         // (base_footprint 또는 base_link). velocity는 루트 바디에서 읽어야 정확하다.
-        ArticulationBody[] bodies = GetComponentsInChildren<ArticulationBody>(true);
         foreach (ArticulationBody body in bodies)
         {
             if (body.isRoot)
@@ -149,11 +188,11 @@ public class WheelTest : MonoBehaviour
         if (rootBody == null)
         {
             rootBody = GetComponentInParent<ArticulationBody>();
-            Debug.LogWarning("[WheelTest] isRoot ArticulationBody를 찾지 못해 부모 탐색으로 폴백합니다.");
+            Debug.LogWarning("[VehicleMotionController] isRoot ArticulationBody를 찾지 못해 부모 탐색으로 폴백합니다.");
         }
 
         if (rootBody == null)
-            Debug.LogError("[WheelTest] ArticulationBody 루트를 찾지 못했습니다. Physics Velocity Feedback 비활성화.");
+            Debug.LogError("[VehicleMotionController] ArticulationBody 루트를 찾지 못했습니다. Physics Velocity Feedback 비활성화.");
     }
 
     void FindReferences()
@@ -177,7 +216,7 @@ public class WheelTest : MonoBehaviour
                 return ab;
             }
         }
-        Debug.LogWarning($"[WheelTest] Not found: {name}");
+        Debug.LogWarning($"[VehicleMotionController] Not found: {name}");
         return null;
     }
 
@@ -309,6 +348,16 @@ public class WheelTest : MonoBehaviour
         // 11. commandedSpeed 적분 및 클램프
         currentSpeed_ms += currentAcceleration * dt;
         currentSpeed_ms = Mathf.Clamp(currentSpeed_ms, -maxSpeed * 0.5f, maxSpeed);
+
+        // commandedSpeed-physicsSpeed 발산 방지:
+        // 갭이 클수록 drive가 forceLimit 포화 상태가 되어 진동 발생.
+        // maxGap=0.7: forceLimit 40Nm 자체가 진동 억제의 주 역할
+        if (rootBody != null)
+        {
+            float physRef = Vector3.Dot(rootBody.velocity, rootBody.transform.forward);
+            currentSpeed_ms = Mathf.Clamp(currentSpeed_ms, physRef - 0.7f, physRef + 0.7f);
+        }
+
         commandedSpeed_ms = currentSpeed_ms;  // 다음 프레임을 위해 저장
 
         // 13. 바퀴 속도 적용 (commandedSpeed 기반 — 충분한 속도 오차로 구동력 확보)
@@ -317,8 +366,7 @@ public class WheelTest : MonoBehaviour
         // 12. physicsSpeed 읽기 → currentSpeed_ms 교체 (RL 에이전트 관찰값으로)
         if (rootBody != null)
         {
-            physicsSpeed_ms = Vector3.Dot(rootBody.velocity, rootBody.transform.forward);
-            currentSpeed_ms = physicsSpeed_ms;
+            currentSpeed_ms = Vector3.Dot(rootBody.velocity, rootBody.transform.forward);
         }
         else
         {
@@ -337,20 +385,18 @@ public class WheelTest : MonoBehaviour
     void CalculateWeightTransfer()
     {
         float totalWeight = vehicleMass * GRAVITY;
-        float staticFrontLoad = totalWeight * 0.5f;
-        float staticRearLoad = totalWeight * 0.5f;
 
         // 가속/감속에 의한 하중 이동
         // ΔW = (m × a × h) / wheelBase
         float weightTransfer = (vehicleMass * currentAcceleration * centerOfMassHeight) / wheelBase;
 
         // 가속 시: 뒷바퀴 하중 증가, 앞바퀴 하중 감소
-        frontAxleLoad = staticFrontLoad - weightTransfer;
-        rearAxleLoad = staticRearLoad + weightTransfer;
+        frontAxleLoad = totalWeight * 0.5f - weightTransfer;
+        rearAxleLoad  = totalWeight * 0.5f + weightTransfer;
 
         // 하중이 음수가 되지 않도록 제한
         frontAxleLoad = Mathf.Max(frontAxleLoad, totalWeight * 0.1f);
-        rearAxleLoad = Mathf.Max(rearAxleLoad, totalWeight * 0.1f);
+        rearAxleLoad  = Mathf.Max(rearAxleLoad,  totalWeight * 0.1f);
     }
 
     // ============================================
@@ -446,24 +492,13 @@ public class WheelTest : MonoBehaviour
     float CalculateMaxTractionForce()
     {
         // 4WD이므로 모든 바퀴의 하중 사용
-        float totalNormalForce = frontAxleLoad + rearAxleLoad;
-
-        // 최대 견인력 = 수직력 × 마찰계수
-        return totalNormalForce * CalculateFrictionCoefficient();
-    }
-
-    // ============================================
-    // 마찰 계수 계산 (실외 노면)
-    // ============================================
-
-    float CalculateFrictionCoefficient()
-    {
         // 배달 AMR 저속에서는 항상 최대 그립 유지
-        return peakFriction;
+        return (frontAxleLoad + rearAxleLoad) * peakFriction;
     }
 
     // ============================================
     // 바퀴 속도 적용 (4WD + 디퍼렌셜 시뮬레이션)
+    // 속도 비율은 UpdateSteering에서 미리 계산된 값 사용
     // ============================================
 
     void ApplyWheelVelocities()
@@ -471,41 +506,11 @@ public class WheelTest : MonoBehaviour
         // 기본 바퀴 회전속도 (deg/s)
         float baseWheelDegPerSec = (currentSpeed_ms / wheelRadius) * Mathf.Rad2Deg;
 
-        // 조향 중일 때 좌/우 바퀴 속도 차이 계산 (디퍼렌셜)
-        float leftSpeedRatio = 1f;
-        float rightSpeedRatio = 1f;
-
-        if (Mathf.Abs(currentSteeringAngle) > 0.5f && Mathf.Abs(currentSpeed_ms) > 0.1f)
-        {
-            // 회전 반경 계산
-            float steerRad = currentSteeringAngle * Mathf.Deg2Rad;
-            float turnRadius = wheelBase / Mathf.Tan(Mathf.Abs(steerRad));
-
-            // 내륜/외륜 반경
-            float innerRadius = turnRadius - (trackWidth / 2f);
-            float outerRadius = turnRadius + (trackWidth / 2f);
-
-            // 속도 비율 = 반경 비율
-            float innerRatio = innerRadius / turnRadius;
-            float outerRatio = outerRadius / turnRadius;
-
-            if (currentSteeringAngle > 0)  // 좌회전
-            {
-                leftSpeedRatio = innerRatio;   // 왼쪽이 내륜
-                rightSpeedRatio = outerRatio;  // 오른쪽이 외륜
-            }
-            else  // 우회전
-            {
-                leftSpeedRatio = outerRatio;   // 왼쪽이 외륜
-                rightSpeedRatio = innerRatio;  // 오른쪽이 내륜
-            }
-        }
-
         // 4WD: 전륜/후륜 모두 구동 (좌/우 속도 차이 적용)
-        SetWheelVelocity(frontLeftWheel, baseWheelDegPerSec * leftSpeedRatio);
+        SetWheelVelocity(frontLeftWheel,  baseWheelDegPerSec * leftSpeedRatio);
         SetWheelVelocity(frontRightWheel, baseWheelDegPerSec * rightSpeedRatio);
-        SetWheelVelocity(rearLeftWheel, baseWheelDegPerSec * leftSpeedRatio);
-        SetWheelVelocity(rearRightWheel, baseWheelDegPerSec * rightSpeedRatio);
+        SetWheelVelocity(rearLeftWheel,   baseWheelDegPerSec * leftSpeedRatio);
+        SetWheelVelocity(rearRightWheel,  baseWheelDegPerSec * rightSpeedRatio);
     }
 
     void SetWheelVelocity(ArticulationBody wheel, float velocity)
@@ -514,11 +519,13 @@ public class WheelTest : MonoBehaviour
 
         ArticulationDrive drive = wheel.xDrive;
         drive.stiffness = 0f;
-        // forceLimit: 100 N·m — commandedSpeed가 실제 물리 속도보다 항상 높으므로
-        // 충분한 구동력을 확보해야 maxSpeed(2 m/s)까지 도달 가능
-        drive.damping = 10f;
+        // damping: 소프트닝. 100 Nm 포화 구간을 축소하되 구동력 유지
+        // forceLimit: angularDamping=0.05 기준 최고속도 달성 + 진동 감소
+        //   2m/s 달성 검증: 저항(1Nm)+구름(0.4Nm)+가속(1.2Nm)=2.6Nm << 40Nm ✓
+        //   최대 가속도: (40/0.1×4)/65 = 24.6 m/s² >> 목표 0.5 m/s² ✓
+        drive.damping = 3f;
         drive.targetVelocity = velocity;
-        drive.forceLimit = 100f;
+        drive.forceLimit = 40f;
         wheel.xDrive = drive;
     }
 
@@ -551,6 +558,32 @@ public class WheelTest : MonoBehaviour
 
         SetSteeringAngle(frontLeftSteering, leftAngle);
         SetSteeringAngle(frontRightSteering, rightAngle);
+
+        // 디퍼렌셜 속도 비율 계산 (ApplyWheelVelocities에서 재사용)
+        // Ackermann 기하: 내륜/외륜 속도 비율 = 반경 비율
+        if (Mathf.Abs(currentSteeringAngle) > 0.5f && Mathf.Abs(currentSpeed_ms) > 0.1f)
+        {
+            float steerRad = currentSteeringAngle * Mathf.Deg2Rad;
+            float turnRadius = wheelBase / Mathf.Tan(Mathf.Abs(steerRad));
+            float innerRatio = (turnRadius - trackWidth * 0.5f) / turnRadius;
+            float outerRatio = (turnRadius + trackWidth * 0.5f) / turnRadius;
+
+            if (currentSteeringAngle > 0)  // 좌회전: 왼쪽이 내륜
+            {
+                leftSpeedRatio  = innerRatio;
+                rightSpeedRatio = outerRatio;
+            }
+            else  // 우회전: 오른쪽이 내륜
+            {
+                leftSpeedRatio  = outerRatio;
+                rightSpeedRatio = innerRatio;
+            }
+        }
+        else
+        {
+            leftSpeedRatio  = 1f;
+            rightSpeedRatio = 1f;
+        }
     }
 
     void CalculateAckermannAngles(float steerAngle, out float leftAngle, out float rightAngle)

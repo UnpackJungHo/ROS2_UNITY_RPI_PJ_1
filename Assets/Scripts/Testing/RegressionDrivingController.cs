@@ -26,7 +26,7 @@ public class RegressionDrivingController : MonoBehaviour
 
     [Header("References")]
     [Tooltip("차량 컨트롤러")]
-    public WheelTest wheelController;
+    public VehicleMotionController wheelController;
 
     [Tooltip("CameraPublisher (Front View 카메라)")]
     public CameraPublisher cameraPublisher;
@@ -169,11 +169,11 @@ public class RegressionDrivingController : MonoBehaviour
 
         if (wheelController == null)
         {
-            wheelController = GetComponent<WheelTest>();
+            wheelController = GetComponent<VehicleMotionController>();
             if (wheelController == null)
-                wheelController = GetComponentInParent<WheelTest>();
+                wheelController = GetComponentInParent<VehicleMotionController>();
             if (wheelController == null)
-                wheelController = FindObjectOfType<WheelTest>();
+                wheelController = FindObjectOfType<VehicleMotionController>();
         }
 
         if (dataCollector == null)
@@ -186,7 +186,7 @@ public class RegressionDrivingController : MonoBehaviour
         if (cameraPublisher == null)
             Debug.LogError("[RegressionDriving] CameraPublisher를 찾을 수 없습니다!");
         if (wheelController == null)
-            Debug.LogError("[RegressionDriving] WheelTest를 찾을 수 없습니다!");
+            Debug.LogError("[RegressionDriving] VehicleMotionController를 찾을 수 없습니다!");
     }
 
     void InitializeRenderTextures()

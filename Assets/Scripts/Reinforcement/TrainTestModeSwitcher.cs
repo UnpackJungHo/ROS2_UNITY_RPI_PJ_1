@@ -48,7 +48,7 @@ public class TrainTestModeSwitcher : MonoBehaviour
     public RegressionDrivingController regressionDrivingController;
     public DrivingStatusUIController drivingStatusUIController;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
-    public WheelTest wheelController;
+    public VehicleMotionController wheelController;
     public BehaviorParameters behaviorParameters;
 
     [Header("ROS 토픽 개별 제어")]
@@ -152,7 +152,7 @@ public class TrainTestModeSwitcher : MonoBehaviour
             trafficLightDecisionEngine = FindOne<TrafficLightDecisionEngine>(includeInactiveObjects);
 
         if (wheelController == null)
-            wheelController = FindOne<WheelTest>(includeInactiveObjects);
+            wheelController = FindOne<VehicleMotionController>(includeInactiveObjects);
 
         if (behaviorParameters == null)
         {

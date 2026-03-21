@@ -27,7 +27,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
     /// <summary>전방 장애물과의 TTC(Time-To-Collision) 기반 경고 레벨을 발행하는 퍼블리셔.</summary>
     public CollisionWarningEngine collisionWarningEngine;
     /// <summary>Ackermann 조향/스로틀/브레이크를 제어하는 차량 컨트롤러.</summary>
-    public WheelTest wheelController;
+    public VehicleMotionController vehicleMotionController;
     /// <summary>신호등 주행 결정을 제공하는 엔진. 종료 시점의 traffic 상태 로그에 사용.</summary>
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
     /// <summary>회귀 모델(신경망) 기반 자율주행 컨트롤러. 에피소드 종료 시 자율 모드를 끌 때 사용.</summary>
@@ -220,7 +220,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
         minObservedTtc = float.PositiveInfinity;
         stuckTimer = 0f;
         stuckDistanceAccum = 0f;
-        stuckLastPosition = wheelController != null ? wheelController.transform.position : transform.position;
+        stuckLastPosition = vehicleMotionController != null ? vehicleMotionController.transform.position : transform.position;
         stuckPathSAtWindowStart = progressRewardProvider != null ? progressRewardProvider.GetCurrentPathS() : 0f;
 
         if (progressRewardProvider != null)
@@ -250,7 +250,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
         if (!float.IsInfinity(ttc))
             minObservedTtc = Mathf.Min(minObservedTtc, ttc);
 
-        float speed = wheelController != null ? Mathf.Abs(wheelController.GetSpeedMS()) : 0f;
+        float speed = vehicleMotionController != null ? Mathf.Abs(vehicleMotionController.GetSpeedMS()) : 0f;
         bool isDangerStop = level >= dangerLevelThreshold && speed <= stoppedSpeedThreshold;
 
         if (isDangerStop)
@@ -280,7 +280,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
         if (stuckTimeWindow <= 0f)
             return;
 
-        Vector3 currentPos = wheelController != null ? wheelController.transform.position : transform.position;
+        Vector3 currentPos = vehicleMotionController != null ? vehicleMotionController.transform.position : transform.position;
         float currentPathS = progressRewardProvider != null ? progressRewardProvider.GetCurrentPathS() : -1f;
 
         // Grace period: 윈도우 기준점만 갱신하고 감지하지 않음
@@ -463,11 +463,11 @@ public class RLEpisodeEvaluator : MonoBehaviour
                 trashReason = "None";
         }
 
-        if (stopVehicleOnTerminal && wheelController != null)
+        if (stopVehicleOnTerminal && vehicleMotionController != null)
         {
-            wheelController.SetSteering(0f);
-            wheelController.SetThrottle(0f);
-            wheelController.SetBrake(1f);
+            vehicleMotionController.SetSteering(0f);
+            vehicleMotionController.SetThrottle(0f);
+            vehicleMotionController.SetBrake(1f);
         }
 
         OnEpisodeTerminated?.Invoke(this);

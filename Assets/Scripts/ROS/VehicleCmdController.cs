@@ -1,13 +1,13 @@
 using UnityEngine;
 
 /// <summary>
-/// Twist 명령을 WheelTest의 steering/throttle/brake 입력으로 매핑하는 컨트롤러.
+/// Twist 명령을 VehicleMotionController의 steering/throttle/brake 입력으로 매핑하는 컨트롤러.
 /// ROS 구독은 VehicleCmdSubscriber가 담당한다.
 /// </summary>
 public class VehicleCmdController : MonoBehaviour
 {
     [Header("Control Target")]
-    public WheelTest wheelController;
+    public VehicleMotionController wheelController;
     public bool autoFindWheelController = true;
     [Tooltip("true면 RegressionDrivingController.isAutonomousMode(P키)일 때만 외부 cmd 적용")]
     public bool useRegressionAutonomyGate = true;
@@ -54,7 +54,7 @@ public class VehicleCmdController : MonoBehaviour
     void Start()
     {
         if (autoFindWheelController && wheelController == null)
-            wheelController = GetComponent<WheelTest>() ?? GetComponentInParent<WheelTest>() ?? FindObjectOfType<WheelTest>();
+            wheelController = GetComponent<VehicleMotionController>() ?? GetComponentInParent<VehicleMotionController>() ?? FindObjectOfType<VehicleMotionController>();
 
         if (autoFindRegressionController && regressionDrivingController == null)
             regressionDrivingController = GetComponent<RegressionDrivingController>()
@@ -63,7 +63,7 @@ public class VehicleCmdController : MonoBehaviour
 
         if (wheelController == null)
         {
-            Debug.LogError("[VehicleCmdController] WheelTest를 찾지 못했습니다.");
+            Debug.LogError("[VehicleCmdController] VehicleMotionController를 찾지 못했습니다.");
             enabled = false;
         }
     }

@@ -28,7 +28,7 @@ public class DrivingStatusUIController : MonoBehaviour
     public CollisionWarningEngine collisionWarningEngine;
     public DrivingDataCollectorV2 dataCollector;
     public RegressionDrivingController regressionController;
-    public WheelTest wheelController;
+    public VehicleMotionController wheelController;
     public TrafficLightStateSubscriber trafficLightSubscriber;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
     public TrafficLight sceneTrafficLight;
@@ -152,7 +152,7 @@ public class DrivingStatusUIController : MonoBehaviour
             regressionController = FindObjectOfType<RegressionDrivingController>();
 
         if (wheelController == null)
-            wheelController = FindObjectOfType<WheelTest>();
+            wheelController = FindObjectOfType<VehicleMotionController>();
 
         if (trafficLightSubscriber == null)
             trafficLightSubscriber = FindObjectOfType<TrafficLightStateSubscriber>();

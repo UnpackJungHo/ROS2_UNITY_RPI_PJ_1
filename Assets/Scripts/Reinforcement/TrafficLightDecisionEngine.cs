@@ -17,7 +17,7 @@ public class TrafficLightDecisionEngine : MonoBehaviour
     [Header("References")]
     public TrafficLightStateSubscriber trafficLightSubscriber;
     public StopLineStateSubscriber stopLineSubscriber;
-    public WheelTest wheelController;
+    public VehicleMotionController vehicleMotionController;
     [Tooltip("차량 기준 Transform (미할당 시 현재 오브젝트)")]
     public Transform egoTransform;
 
@@ -92,7 +92,7 @@ public class TrafficLightDecisionEngine : MonoBehaviour
     void Start()
     {
         if (egoTransform == null)
-            egoTransform = wheelController != null ? wheelController.transform : transform;
+            egoTransform = vehicleMotionController != null ? vehicleMotionController.transform : transform;
     }
 
     void Update()
@@ -149,7 +149,7 @@ public class TrafficLightDecisionEngine : MonoBehaviour
             return;
         }
 
-        float speed = wheelController != null ? Mathf.Max(0f, wheelController.GetSpeedMS()) : 0f;
+        float speed = vehicleMotionController != null ? Mathf.Max(0f, vehicleMotionController.GetSpeedMS()) : 0f;
         float stoppingDistance = ComputeStoppingDistance(speed);
         bool canComfortablyStop = stoppingDistance + stopDistanceBuffer <= fusedDecisionDistance;
 

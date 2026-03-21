@@ -49,7 +49,7 @@ public class ProgressRewardProvider : MonoBehaviour
 
     [Header("Traffic Penalty")]
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
-    public WheelTest wheelController;
+    public VehicleMotionController vehicleMotionController;
     [Tooltip("정지 지시인데 이 속도 이상이면 위반 패널티 적용")]
     public float redViolationSpeedThreshold = 0.2f;
     public float redViolationPenaltyPerSec = 0.6f;
@@ -146,8 +146,8 @@ public class ProgressRewardProvider : MonoBehaviour
 
     void Start()
     {
-        if (wheelController == null)
-            wheelController = FindObjectOfType<WheelTest>();
+        if (vehicleMotionController == null)
+            vehicleMotionController = FindObjectOfType<VehicleMotionController>();
         if (episodeEvaluator == null)
             episodeEvaluator = FindObjectOfType<RLEpisodeEvaluator>();
 
@@ -161,11 +161,11 @@ public class ProgressRewardProvider : MonoBehaviour
 
         PreCacheAllZonesAndDirections();
 
-        if (wheelController != null)
+        if (vehicleMotionController != null)
         {
-            _cachedArtBody = wheelController.GetComponent<ArticulationBody>();
+            _cachedArtBody = vehicleMotionController.GetComponent<ArticulationBody>();
             if (_cachedArtBody == null)
-                _cachedRigidbody = wheelController.GetComponent<Rigidbody>();
+                _cachedRigidbody = vehicleMotionController.GetComponent<Rigidbody>();
         }
     }
 
@@ -449,13 +449,13 @@ public class ProgressRewardProvider : MonoBehaviour
 
     Vector3 GetVehicleVelocity()
     {
-        if (wheelController == null) return Vector3.zero;
+        if (vehicleMotionController == null) return Vector3.zero;
 
         // ArticulationBody → Rigidbody → wheel speed fallback (컴포넌트는 Start에서 캐시됨)
         if (_cachedArtBody != null) return _cachedArtBody.velocity;
         if (_cachedRigidbody != null) return _cachedRigidbody.velocity;
 
-        return GetTrackedTransform().forward * wheelController.GetSpeedMS();
+        return GetTrackedTransform().forward * vehicleMotionController.GetSpeedMS();
     }
 
     // ── 보상 합산 ──
@@ -528,10 +528,10 @@ public class ProgressRewardProvider : MonoBehaviour
 
     float ComputeTrafficPenalty(float dt)
     {
-        if (trafficLightDecisionEngine == null || wheelController == null) return 0f;
+        if (trafficLightDecisionEngine == null || vehicleMotionController == null) return 0f;
         if (!trafficLightDecisionEngine.ShouldStop()) return 0f;
 
-        float speed = Mathf.Abs(wheelController.GetSpeedMS());
+        float speed = Mathf.Abs(vehicleMotionController.GetSpeedMS());
         if (speed > redViolationSpeedThreshold)
             return redViolationPenaltyPerSec * dt;
 
