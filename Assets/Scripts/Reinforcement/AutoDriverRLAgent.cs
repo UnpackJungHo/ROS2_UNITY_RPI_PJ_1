@@ -42,6 +42,40 @@ public class AutoDriverRLAgent : Agent
     public VehicleCmdSubscriber vehicleCmdSubscriber;
     public DecisionRequester decisionRequester;
 
+    [Header("Sensor Observations (+10D)")]
+    [Tooltip("true면 초음파 8D + 레이더 2D 를 관측에 포함 (총 +10D). BehaviorParameters도 동일하게 변경 필요")]
+    public bool includeSensorObservations = false;
+    [Tooltip("초음파 거리 정규화 기준 (m) — rangeMax=4m 에 맞춤")]
+    public float ultrasonicNormalizeM = 4f;
+    [Tooltip("레이더 거리 정규화 기준 (m)")]
+    public float radarNormalizeM = 10f;
+    [Tooltip("초음파 FL — ultrasonic_fl_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorFL;
+    [Tooltip("초음파 FR — ultrasonic_fr_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorFR;
+    [Tooltip("초음파 FC — ultrasonic_fc_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorFC;
+    [Tooltip("초음파 RL — ultrasonic_rl_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorRL;
+    [Tooltip("초음파 RR — ultrasonic_rr_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorRR;
+    [Tooltip("초음파 RC — ultrasonic_rc_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorRC;
+    [Tooltip("초음파 SL — ultrasonic_sl_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorSL;
+    [Tooltip("초음파 SR — ultrasonic_sr_link의 SingleUltrasonicSensor")]
+    public SingleUltrasonicSensor sensorSR;
+    [Tooltip("레이더 전방 — SingleRadarSensor (Front)")]
+    public SingleRadarSensor radarFront;
+    [Tooltip("레이더 후방 — SingleRadarSensor (Rear)")]
+    public SingleRadarSensor radarRear;
+
+    [Header("Random Road Start")]
+    [Tooltip("true면 에피소드마다 ProgressRewardProvider 중심선 위 랜덤 위치로 스폰")]
+    public bool useRandomRoadStart = false;
+    [Tooltip("도로 횡방향 최대 오프셋 (m). 도로 폭 내를 벗어나지 않도록 설정")]
+    public float randomLateralOffsetM = 0.3f;
+
     [Header("Setup")]
     public bool autoFindReferences = true;
     [Tooltip("DecisionRequester가 없을 때 FixedUpdate마다 RequestDecision 호출")]
@@ -260,7 +294,11 @@ public class AutoDriverRLAgent : Agent
         // 4) Agent Transform 동기화
         SyncToFollowTarget();
 
-        // 5) 차량 위치/회전/속도를 시작 포즈로 리셋
+        // 5) 랜덤 도로 스폰 활성 시 시작 포즈를 매 에피소드 새로 샘플링
+        if (useRandomRoadStart)
+            ApplyRandomRoadStartPose();
+
+        // 6) 차량 위치/회전/속도를 시작 포즈로 리셋
         if (resetVehicleTransformOnEpisodeBegin)
         {
             // Residual RL 모드에서는 시작 회전을 강제 적용해야 모방학습이 올바르게 동작
@@ -281,10 +319,10 @@ public class AutoDriverRLAgent : Agent
             ResetVehicleState();
         }
 
-        // 6) 모방학습을 predictionOnly 모드로, RL이 제어 우선권을 갖도록 설정
+        // 7) 모방학습을 predictionOnly 모드로, RL이 제어 우선권을 갖도록 설정
         EnableResidualMode();
 
-        // 7) 모방학습 컨트롤러의 내부 상태를 리셋
+        // 8) 모방학습 컨트롤러의 내부 상태를 리셋
         //    forceInference=false: TeleportRoot 직후 카메라가 아직 이전 위치를 가리킬 수 있으므로
         //    즉시 추론하지 않고 다음 Update()에서 물리 정착 후 추론
         if (regressionDrivingController != null)
@@ -292,7 +330,7 @@ public class AutoDriverRLAgent : Agent
             regressionDrivingController.ResetForEpisodeRestart(forceInference: false);
         }
 
-        // 8) 에피소드 평가기 또는 보상 제공자의 상태를 리셋
+        // 9) 에피소드 평가기 또는 보상 제공자의 상태를 리셋
         //    에피소드 리셋의 소유권을 단일화하여 이중 리셋과 인덱스 드리프트를 방지
         if (episodeEvaluator != null)
         {
@@ -403,6 +441,33 @@ public class AutoDriverRLAgent : Agent
         // ─── Safety Override Level 관측 (Optional, includeSafetyOverrideLevel=true 시 +1D) ───
         if (includeSafetyOverrideLevel)
             sensor.AddObservation(ComputeSafetyOverrideLevel());                           // opt: safety override level (0~1)
+
+        // ─── 초음파 + 레이더 센서 관측 (Optional, includeSensorObservations=true 시 +10D) ───
+        if (includeSensorObservations)
+        {
+            float uMax = Mathf.Max(1f, ultrasonicNormalizeM);
+            // 초음파 8개: FL/FR/FC/RL/RR/RC/SL/SR 순서 고정 (미할당 시 1.0=장애물 없음)
+            sensor.AddObservation(NormalizeDist(sensorFL  != null ? sensorFL.Distance  : float.PositiveInfinity, uMax)); // 8: 초음파 FL
+            sensor.AddObservation(NormalizeDist(sensorFR  != null ? sensorFR.Distance  : float.PositiveInfinity, uMax)); // 9: 초음파 FR
+            sensor.AddObservation(NormalizeDist(sensorFC  != null ? sensorFC.Distance  : float.PositiveInfinity, uMax)); // 10: 초음파 FC
+            sensor.AddObservation(NormalizeDist(sensorRL  != null ? sensorRL.Distance  : float.PositiveInfinity, uMax)); // 11: 초음파 RL
+            sensor.AddObservation(NormalizeDist(sensorRR  != null ? sensorRR.Distance  : float.PositiveInfinity, uMax)); // 12: 초음파 RR
+            sensor.AddObservation(NormalizeDist(sensorRC  != null ? sensorRC.Distance  : float.PositiveInfinity, uMax)); // 13: 초음파 RC
+            sensor.AddObservation(NormalizeDist(sensorSL  != null ? sensorSL.Distance  : float.PositiveInfinity, uMax)); // 14: 초음파 SL
+            sensor.AddObservation(NormalizeDist(sensorSR  != null ? sensorSR.Distance  : float.PositiveInfinity, uMax)); // 15: 초음파 SR
+
+            float rMax = Mathf.Max(1f, radarNormalizeM);
+            // 레이더 2개: Front/Rear (미할당 시 1.0=감지 없음)
+            sensor.AddObservation(NormalizeDist(radarFront != null ? radarFront.Distance : float.PositiveInfinity, rMax)); // 16: 레이더 전방
+            sensor.AddObservation(NormalizeDist(radarRear  != null ? radarRear.Distance  : float.PositiveInfinity, rMax)); // 17: 레이더 후방
+        }
+    }
+
+    /// <summary>거리 값을 0~1로 정규화. 무한대(감지 없음)→1, 0m→0.</summary>
+    static float NormalizeDist(float distance, float maxRange)
+    {
+        if (float.IsInfinity(distance) || float.IsNaN(distance)) return 1f;
+        return Mathf.Clamp01(distance / maxRange);
     }
 
     /// <summary>
@@ -615,6 +680,40 @@ public class AutoDriverRLAgent : Agent
     // ──────────────────────────────────────────────
     //  차량 상태 리셋 & 포즈 관리
     // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// useRandomRoadStart=true 시 ProgressRewardProvider 중심선에서 랜덤 위치를 샘플링하여
+    /// startPosition/startRotation을 덮어쓴다. 헤딩은 0~360° 균일 랜덤, 횡방향은 ±randomLateralOffsetM.
+    /// ResetVehicleState() 전에 호출해야 한다.
+    /// </summary>
+    void ApplyRandomRoadStartPose()
+    {
+        if (progressRewardProvider == null) return;
+
+        if (!progressRewardProvider.TryGetRandomCenterlinePoint(out Vector3 pos, out Vector3 tangent))
+        {
+            Debug.LogWarning("[AutoDriverRLAgent] 랜덤 스폰: 중심선 데이터 없음 → 기본 스폰 사용");
+            return;
+        }
+
+        // 횡방향 랜덤 오프셋 (도로 내)
+        Vector3 right = Vector3.Cross(Vector3.up, tangent).normalized;
+        float lateralOffset = UnityEngine.Random.Range(-randomLateralOffsetM, randomLateralOffsetM);
+        pos += right * lateralOffset;
+
+        // Y 높이: 차량 현재 높이 유지 (지면 높이가 다를 수 있으므로)
+        Transform follow = followTargetTransform != null ? followTargetTransform : transform;
+        pos.y = follow.position.y;
+
+        // 0~360° 완전 랜덤 헤딩 (역주행, 측면 포함)
+        float randomYaw = UnityEngine.Random.Range(0f, 360f);
+        Quaternion rot = Quaternion.Euler(0f, randomYaw, 0f);
+
+        // 직접 캐시 덮어쓰기 → ResetVehicleState()가 이 값으로 텔레포트
+        startPosition = pos;
+        startRotation = rot;
+        hasStartPose = true;
+    }
 
     /// <summary>
     /// 에피소드 시작 위치/회전을 캐시한다.

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 /// <summary>
@@ -52,7 +53,16 @@ public class VehicleViewProvider : MonoBehaviour
         if (autoFindReferences)
             AutoFindReferences();
 
+        AssignVehicleIdFromParent();
         fallbackCameraTemplate = ResolveFrontCamera();
+    }
+
+    void AssignVehicleIdFromParent()
+    {
+        string parentName = transform.parent != null ? transform.parent.name : name;
+        var match = Regex.Match(parentName, @"(\d+)$");
+        if (match.Success)
+            vehicleId = "Vehicle" + match.Groups[1].Value;
     }
 
     void Reset()

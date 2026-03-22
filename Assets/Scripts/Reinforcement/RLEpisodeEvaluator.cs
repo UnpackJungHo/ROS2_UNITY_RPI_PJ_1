@@ -107,6 +107,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [SerializeField] private bool episodeSuccess = false;
     /// <summary>현재 에피소드가 "쓰레기 학습"으로 라벨링되었는지 여부. 학습 데이터 필터링에 사용.</summary>
     [SerializeField] private bool isTrashEpisode = false;
+    /// <summary>중간 체크포인트를 통과했는지 여부. FinishLineGate에서 설정, BeginEpisode에서 리셋.</summary>
+    [SerializeField] private bool checkpointPassed = false;
     /// <summary>에피소드가 어떤 유형으로 종료되었는지 (Finish, FailRiskStop 등).</summary>
     [SerializeField] private TerminalType terminalType = TerminalType.None;
     /// <summary>종료 사유를 사람이 읽을 수 있는 문자열로 기록 (로그/CSV용).</summary>
@@ -205,6 +207,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
         terminalReached = false;
         episodeSuccess = false;
         isTrashEpisode = false;
+        checkpointPassed = false;
         terminalType = TerminalType.None;
         terminalReason = "None";
         trashReason = "None";
@@ -488,4 +491,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public float GetTimeAtDangerLevel() => timeAtDangerLevel;
     public CollisionWarningEngine.WarningLevel GetMaxWarningLevel() => maxWarningLevel;
     public float GetMinObservedTtc() => minObservedTtc;
+
+    public bool HasPassedCheckpoint() => checkpointPassed;
+    public void SetCheckpointPassed(bool passed) => checkpointPassed = passed;
 }

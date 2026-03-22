@@ -3931,7 +3931,6 @@ GameObject:
   - component: {fileID: 3411824885766192326}
   - component: {fileID: 726012837616418817}
   - component: {fileID: 6377328733795415368}
-  - component: {fileID: 3376232722682779796}
   m_Layer: 11
   m_Name: FactoryAMR_RL
   m_TagString: robot
@@ -4008,7 +4007,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cameraPublisher: {fileID: 8526092224972961840}
-  wheelController: {fileID: 0}
+  wheelController: {fileID: 5307598328287140471}
   aiController: {fileID: 3411824885766192326}
   recordKey: 114
   saveKey: 116
@@ -4030,7 +4029,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   modelAsset: {fileID: 5022602860645237092, guid: c1da72427794be34d9cfba2f69809bcd, type: 3}
-  wheelController: {fileID: 0}
+  wheelController: {fileID: 5307598328287140471}
   cameraPublisher: {fileID: 8526092224972961840}
   dataCollector: {fileID: 2724679006326700055}
   collisionWarningEngine: {fileID: 4887158630418357921}
@@ -4075,7 +4074,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cmdTopicName: /vehicle/cmd
-  controller: {fileID: 0}
+  controller: {fileID: 6377328733795415368}
   _useRegressionAutonomyGate: 0
   resolvedTopicName: 
 --- !u!114 &6377328733795415368
@@ -4090,7 +4089,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0e0dbf1aeff8c3edb00662acc4fef05, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  wheelController: {fileID: 0}
+  wheelController: {fileID: 5307598328287140471}
   autoFindWheelController: 1
   useRegressionAutonomyGate: 1
   regressionDrivingController: {fileID: 3411824885766192326}
@@ -4109,19 +4108,6 @@ MonoBehaviour:
   lastAppliedSteering: 0
   lastAppliedThrottle: 0
   lastAppliedBrake: 0
---- !u!114 &3376232722682779796
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3394345786966611038}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 307e65c12bf994be6acc87a061299689, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  namespacePrefix: /amr0
 --- !u!1 &3406686067840225945
 GameObject:
   m_ObjectHideFlags: 0
@@ -4598,6 +4584,8 @@ MonoBehaviour:
   sensorRL: {fileID: 85763836262928039}
   sensorRR: {fileID: 7174553075810107365}
   sensorRC: {fileID: 8539595566552091413}
+  sensorSL: {fileID: 0}
+  sensorSR: {fileID: 0}
   showDebugInfo: 0
 --- !u!1 &3649732653774370691
 GameObject:
@@ -4849,7 +4837,7 @@ MonoBehaviour:
   lowSpeedWarningDistance: 0.8
   velocitySource: {fileID: 812707999201916778}
   useVelocityForTTC: 1
-  wheelController: {fileID: 0}
+  wheelController: {fileID: 5307598328287140471}
   enablePathAwareRiskSplit: 1
   sideAdvisoryDistance: 0.45
   sideTurnBrakeDistance: 0.25
@@ -6405,6 +6393,7 @@ GameObject:
   - component: {fileID: 5969163342980933528}
   - component: {fileID: 1662412574697323824}
   - component: {fileID: 1008550436067625208}
+  - component: {fileID: 4837179643984664371}
   m_Layer: 0
   m_Name: RootAMR_Train
   m_TagString: Untagged
@@ -6451,7 +6440,7 @@ MonoBehaviour:
   regressionDrivingController: {fileID: 3411824885766192326}
   drivingStatusUIController: {fileID: 0}
   trafficLightDecisionEngine: {fileID: 1052456800885250539}
-  wheelController: {fileID: 0}
+  wheelController: {fileID: 5307598328287140471}
   behaviorParameters: {fileID: 5946125840319052595}
   rosTopics:
   - component: {fileID: 8526092224972961840}
@@ -6542,6 +6531,19 @@ MonoBehaviour:
   scannedJointControls: 0
   disabledJointControls: 0
   disabledControllers: 0
+--- !u!114 &4837179643984664371
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5290848885025529959}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 307e65c12bf994be6acc87a061299689, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  namespacePrefix: /amr0
 --- !u!1 &5304906363571736173
 GameObject:
   m_ObjectHideFlags: 0
@@ -7553,6 +7555,7 @@ MonoBehaviour:
   terminalReached: 0
   episodeSuccess: 0
   isTrashEpisode: 0
+  checkpointPassed: 0
   terminalType: 0
   terminalReason: None
   trashReason: None
@@ -9692,7 +9695,7 @@ MonoBehaviour:
   maxBrakeForce: 300
   engineBrakeForce: 30
   autoFindReferences: 1
-  externalControlEnabled: 0
+  externalControlEnabled: 1
   currentSpeed_ms: 0
   currentSpeed_kmh: 0
   commandedSpeed_ms: 0
@@ -10686,7 +10689,7 @@ MonoBehaviour:
   verticalAngleMax: 0.2617994
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 55
   lidarTransform: {fileID: 8907164073191541938}
   scanRate: 10
   enableScanStagger: 1

@@ -27,6 +27,10 @@ public class UltrasonicSensorPublisher : MonoBehaviour
     public SingleUltrasonicSensor sensorRR;
     [Tooltip("후방 중앙 초음파 센서")]
     public SingleUltrasonicSensor sensorRC;
+    [Tooltip("측면 좌측 초음파 센서")]
+    public SingleUltrasonicSensor sensorSL;
+    [Tooltip("측면 우측 초음파 센서")]
+    public SingleUltrasonicSensor sensorSR;
 
     [Header("Debug (디버그)")]
     public bool showDebugInfo = false; // 거리 정보 로그 출력 여부
@@ -38,12 +42,15 @@ public class UltrasonicSensorPublisher : MonoBehaviour
     public float RearLeftDistance => sensorRL != null ? sensorRL.Distance : float.PositiveInfinity;
     public float RearRightDistance => sensorRR != null ? sensorRR.Distance : float.PositiveInfinity;
     public float RearCenterDistance => sensorRC != null ? sensorRC.Distance : float.PositiveInfinity;
+    public float SideLeftDistance => sensorSL != null ? sensorSL.Distance : float.PositiveInfinity;
+    public float SideRightDistance => sensorSR != null ? sensorSR.Distance : float.PositiveInfinity;
 
     // 방향별 최소 거리 계산
     public float MinFrontDistance => Mathf.Min(FrontLeftDistance, FrontRightDistance, FrontCenterDistance);
     public float MinRearDistance => Mathf.Min(RearLeftDistance, RearRightDistance, RearCenterDistance);
+    public float MinSideDistance => Mathf.Min(SideLeftDistance, SideRightDistance);
     // 전체 센서 중 가장 가까운 거리
-    public float MinDistance => Mathf.Min(MinFrontDistance, MinRearDistance);
+    public float MinDistance => Mathf.Min(MinFrontDistance, Mathf.Min(MinRearDistance, MinSideDistance));
 
     // 가장 가까운 장애물이 감지된 센서의 위치와 거리
     public SingleUltrasonicSensor.SensorPosition ClosestSensorPosition { get; private set; }
@@ -71,7 +78,7 @@ public class UltrasonicSensorPublisher : MonoBehaviour
         publishInterval = 1f / publishRate;
         lastPublishTime = Time.time;
 
-        Debug.Log($"[UltrasonicManager] Initialized - {CountActiveSensors()}/6 sensors active");
+        Debug.Log($"[UltrasonicManager] Initialized - {CountActiveSensors()}/8 sensors active");
     }
 
     /// <summary>
@@ -110,8 +117,18 @@ public class UltrasonicSensorPublisher : MonoBehaviour
             var obj = GameObject.Find("ultrasonic_rc_link");
             if (obj != null) sensorRC = obj.GetComponent<SingleUltrasonicSensor>();
         }
+        if (sensorSL == null)
+        {
+            var obj = GameObject.Find("ultrasonic_sl_link");
+            if (obj != null) sensorSL = obj.GetComponent<SingleUltrasonicSensor>();
+        }
+        if (sensorSR == null)
+        {
+            var obj = GameObject.Find("ultrasonic_sr_link");
+            if (obj != null) sensorSR = obj.GetComponent<SingleUltrasonicSensor>();
+        }
 
-        allSensors = new SingleUltrasonicSensor[] { sensorFL, sensorFR, sensorFC, sensorRL, sensorRR, sensorRC };
+        allSensors = new SingleUltrasonicSensor[] { sensorFL, sensorFR, sensorFC, sensorRL, sensorRR, sensorRC, sensorSL, sensorSR };
 
         if (sensorFL == null) Debug.LogWarning("[UltrasonicManager] sensorFL이 할당되지 않았습니다. ('ultrasonic_fl_link' 오브젝트를 찾을 수 없음)");
         if (sensorFR == null) Debug.LogWarning("[UltrasonicManager] sensorFR이 할당되지 않았습니다. ('ultrasonic_fr_link' 오브젝트를 찾을 수 없음)");
@@ -119,6 +136,8 @@ public class UltrasonicSensorPublisher : MonoBehaviour
         if (sensorRL == null) Debug.LogWarning("[UltrasonicManager] sensorRL이 할당되지 않았습니다. ('ultrasonic_rl_link' 오브젝트를 찾을 수 없음)");
         if (sensorRR == null) Debug.LogWarning("[UltrasonicManager] sensorRR이 할당되지 않았습니다. ('ultrasonic_rr_link' 오브젝트를 찾을 수 없음)");
         if (sensorRC == null) Debug.LogWarning("[UltrasonicManager] sensorRC가 할당되지 않았습니다. ('ultrasonic_rc_link' 오브젝트를 찾을 수 없음)");
+        if (sensorSL == null) Debug.LogWarning("[UltrasonicManager] sensorSL이 할당되지 않았습니다. ('ultrasonic_sl_link' 오브젝트를 찾을 수 없음)");
+        if (sensorSR == null) Debug.LogWarning("[UltrasonicManager] sensorSR이 할당되지 않았습니다. ('ultrasonic_sr_link' 오브젝트를 찾을 수 없음)");
     }
 
     /// <summary>
@@ -213,6 +232,20 @@ public class UltrasonicSensorPublisher : MonoBehaviour
             ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.RearCenter;
             ClosestConfidence = sensorRC.Confidence;
         }
+        if (sensorSL != null && (sensorSL.Distance < ClosestDistance ||
+            (Mathf.Abs(sensorSL.Distance - ClosestDistance) < 0.02f && sensorSL.Confidence > ClosestConfidence)))
+        {
+            ClosestDistance = sensorSL.Distance;
+            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.SideLeft;
+            ClosestConfidence = sensorSL.Confidence;
+        }
+        if (sensorSR != null && (sensorSR.Distance < ClosestDistance ||
+            (Mathf.Abs(sensorSR.Distance - ClosestDistance) < 0.02f && sensorSR.Confidence > ClosestConfidence)))
+        {
+            ClosestDistance = sensorSR.Distance;
+            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.SideRight;
+            ClosestConfidence = sensorSR.Confidence;
+        }
     }
 
     /// <summary>
@@ -230,8 +263,8 @@ public class UltrasonicSensorPublisher : MonoBehaviour
                     new MultiArrayDimensionMsg
                     {
                         label = "ultrasonic_data",
-                        size = 12,
-                        stride = 12
+                        size = 15,
+                        stride = 15
                     }
                 },
                 data_offset = 0
@@ -245,8 +278,11 @@ public class UltrasonicSensorPublisher : MonoBehaviour
                 float.IsInfinity(RearLeftDistance) ? -1f : RearLeftDistance,
                 float.IsInfinity(RearRightDistance) ? -1f : RearRightDistance,
                 float.IsInfinity(RearCenterDistance) ? -1f : RearCenterDistance,
+                float.IsInfinity(SideLeftDistance) ? -1f : SideLeftDistance,
+                float.IsInfinity(SideRightDistance) ? -1f : SideRightDistance,
                 float.IsInfinity(MinFrontDistance) ? -1f : MinFrontDistance,
                 float.IsInfinity(MinRearDistance) ? -1f : MinRearDistance,
+                float.IsInfinity(MinSideDistance) ? -1f : MinSideDistance,
                 float.IsInfinity(ClosestDistance) ? -1f : ClosestDistance,
                 (float)ClosestSensorPosition,
                 ClosestConfidence,
@@ -265,8 +301,10 @@ public class UltrasonicSensorPublisher : MonoBehaviour
         string rl = float.IsInfinity(RearLeftDistance) ? "∞" : $"{RearLeftDistance:F2}";
         string rr = float.IsInfinity(RearRightDistance) ? "∞" : $"{RearRightDistance:F2}";
         string rc = float.IsInfinity(RearCenterDistance) ? "∞" : $"{RearCenterDistance:F2}";
+        string sl = float.IsInfinity(SideLeftDistance) ? "∞" : $"{SideLeftDistance:F2}";
+        string sr = float.IsInfinity(SideRightDistance) ? "∞" : $"{SideRightDistance:F2}";
 
-        Debug.Log($"[Ultrasonic] FL:{fl} FR:{fr} FC:{fc} RL:{rl} RR:{rr} RC:{rc} | Closest: {ClosestSensorPosition} (conf:{ClosestConfidence:F2})");
+        Debug.Log($"[Ultrasonic] FL:{fl} FR:{fr} FC:{fc} RL:{rl} RR:{rr} RC:{rc} SL:{sl} SR:{sr} | Closest: {ClosestSensorPosition} (conf:{ClosestConfidence:F2})");
     }
 
     // 전방 안전 여부 확인 (임계값 이상이면 안전)
@@ -284,14 +322,20 @@ public class UltrasonicSensorPublisher : MonoBehaviour
     // 좌측(전/후) 안전 여부 확인
     public bool IsLeftClear(float threshold = 0.5f)
     {
-        float leftMin = Mathf.Min(FrontLeftDistance, RearLeftDistance);
+        float leftMin = Mathf.Min(FrontLeftDistance, Mathf.Min(RearLeftDistance, SideLeftDistance));
         return leftMin > threshold || float.IsInfinity(leftMin);
     }
 
-    // 우측(전/후) 안전 여부 확인
+    // 우측(전/후/측면) 안전 여부 확인
     public bool IsRightClear(float threshold = 0.5f)
     {
-        float rightMin = Mathf.Min(FrontRightDistance, RearRightDistance);
+        float rightMin = Mathf.Min(FrontRightDistance, Mathf.Min(RearRightDistance, SideRightDistance));
         return rightMin > threshold || float.IsInfinity(rightMin);
+    }
+
+    // 측면 안전 여부 확인
+    public bool IsSideClear(float threshold = 0.5f)
+    {
+        return MinSideDistance > threshold || float.IsInfinity(MinSideDistance);
     }
 }

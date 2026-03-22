@@ -16,11 +16,13 @@ public class SingleUltrasonicSensor : MonoBehaviour
         RearLeft = 2,   // 후방 좌측
         RearRight = 3,  // 후방 우측
         FrontCenter = 4, // 전방 중앙
-        RearCenter = 5  // 후방 중앙
+        RearCenter = 5, // 후방 중앙
+        SideLeft = 6,   // 측면 좌측
+        SideRight = 7   // 측면 우측
     }
 
     [Header("Sensor Identity")]
-    [Tooltip("센서 위치 (FL, FR, FC, RL, RR, RC) - 이 설정에 따라 센서 이름과 역할이 결정됨")]
+    [Tooltip("센서 위치 (FL, FR, FC, RL, RR, RC, SL, SR) - 이 설정에 따라 센서 이름과 역할이 결정됨")]
     public SensorPosition sensorPosition = SensorPosition.FrontLeft;
 
     [Header("Ultrasonic Specifications (초음파 센서 사양)")]
@@ -94,6 +96,8 @@ public class SingleUltrasonicSensor : MonoBehaviour
         SensorPosition.RearLeft => "RL",
         SensorPosition.RearRight => "RR",
         SensorPosition.RearCenter => "RC",
+        SensorPosition.SideLeft => "SL",
+        SensorPosition.SideRight => "SR",
         _ => "Unknown"
     };
 
@@ -106,11 +110,16 @@ public class SingleUltrasonicSensor : MonoBehaviour
                                  sensorPosition == SensorPosition.RearRight ||
                                  sensorPosition == SensorPosition.RearCenter;
 
+    public bool IsSideSensor => sensorPosition == SensorPosition.SideLeft ||
+                                 sensorPosition == SensorPosition.SideRight;
+
     public bool IsLeftSensor => sensorPosition == SensorPosition.FrontLeft ||
-                                 sensorPosition == SensorPosition.RearLeft;
+                                 sensorPosition == SensorPosition.RearLeft ||
+                                 sensorPosition == SensorPosition.SideLeft;
 
     public bool IsRightSensor => sensorPosition == SensorPosition.FrontRight ||
-                                  sensorPosition == SensorPosition.RearRight;
+                                  sensorPosition == SensorPosition.RearRight ||
+                                  sensorPosition == SensorPosition.SideRight;
 
     // 내부 동작 제어 변수
     private float scanInterval = 0.05f; // 스캔 주기(초)

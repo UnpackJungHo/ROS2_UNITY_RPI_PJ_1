@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 /// <summary>
@@ -13,6 +14,13 @@ public class RosTopicNamespace : MonoBehaviour
     [Header("Namespace")]
     [Tooltip("토픽 앞에 붙을 prefix (예: /amr0). 비어있으면 기본 토픽 이름 사용")]
     public string namespacePrefix = "";
+
+    void Awake()
+    {
+        var match = Regex.Match(gameObject.name, @"(\d+)$");
+        if (match.Success)
+            namespacePrefix = "/amr" + match.Groups[1].Value;
+    }
 
     /// <summary>
     /// 토픽 이름에 namespace prefix를 적용합니다.

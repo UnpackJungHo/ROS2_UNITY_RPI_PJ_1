@@ -54,6 +54,12 @@ public class ProgressRewardProvider : MonoBehaviour
     public float redViolationSpeedThreshold = 0.2f;
     public float redViolationPenaltyPerSec = 0.6f;
 
+    [Header("Heading Recovery")]
+    [Tooltip("이 각도(도) 초과 시 역주행/벽 바라봄으로 간주, recovery penalty 추가 적용")]
+    public float headingRecoveryThresholdDeg = 90f;
+    [Tooltip("역주행/벽 바라봄 상태에서 추가로 부과하는 패널티 가중치 (초당)")]
+    public float headingRecoveryPenaltyWeight = 0.5f;
+
     [Header("Episode Guard")]
     [Tooltip("RLEpisodeEvaluator가 활성 상태일 때만 보상을 누적")]
     public bool accumulateOnlyWhenEpisodeActive = true;
@@ -82,6 +88,8 @@ public class ProgressRewardProvider : MonoBehaviour
     [SerializeField] private string targetZoneName = "None";
     [SerializeField] private float lastSafetyPenalty = 0f;
     [SerializeField] private float lastTrafficPenalty = 0f;
+    [SerializeField] private float lastHeadingRecoveryPenalty = 0f;
+    [SerializeField] private float cumulativeHeadingRecoveryPenalty = 0f;
     [SerializeField] private float lastStepReward = 0f;
     [SerializeField] private float lastForwardProgress = 0f;
 
@@ -480,6 +488,18 @@ public class ProgressRewardProvider : MonoBehaviour
             Mathf.Abs(cachedHeadingErrorDeg) / Mathf.Max(1f, headingErrorNormalizeDeg));
         float headingReward = -headingRewardWeight * headingErrorNorm * dt;
 
+        // Heading recovery penalty: 역주행/벽 바라봄 상태(>threshold)에서 추가 패널티.
+        // 기존 headingReward는 45° 기준 클램프로 90~180°에서 gradient가 사라짐.
+        // 이 항이 90° 초과 시 연속적인 gradient를 제공하여 역방향 탈출을 유도한다.
+        float headingRecoveryPenalty = 0f;
+        float absHeadingErr = Mathf.Abs(cachedHeadingErrorDeg);
+        if (absHeadingErr > headingRecoveryThresholdDeg)
+        {
+            float recoveryRatio = (absHeadingErr - headingRecoveryThresholdDeg)
+                                  / (180f - headingRecoveryThresholdDeg);
+            headingRecoveryPenalty = headingRecoveryPenaltyWeight * recoveryRatio * dt;
+        }
+
         // Lateral shaping: targetZone(+zone) 중심 기준 횡오차 패널티.
         // currentLateralError는 UpdateLateralAndHeading에서 targetZone 기준으로 이미 계산됨.
         // Zone_m에 있으면 Zone_R1 중심까지의 거리가 lateral error로 들어옴.
@@ -494,6 +514,7 @@ public class ProgressRewardProvider : MonoBehaviour
         lastProgressReward = progressReward;
         lastZoneReward = zoneReward;
         lastHeadingReward = headingReward;
+        lastHeadingRecoveryPenalty = headingRecoveryPenalty;
         lastLateralReward = lateralReward;
         lastSafetyPenalty = safetyPenalty;
         lastTrafficPenalty = trafficPenalty;
@@ -501,12 +522,13 @@ public class ProgressRewardProvider : MonoBehaviour
         cumulativeProgressReward += progressReward;
         cumulativeZoneReward += zoneReward;
         cumulativeHeadingReward += headingReward;
+        cumulativeHeadingRecoveryPenalty += headingRecoveryPenalty;
         cumulativeLateralReward += lateralReward;
         cumulativeSafetyPenalty += safetyPenalty;
         cumulativeTrafficPenalty += trafficPenalty;
 
-        lastStepReward = progressReward + zoneReward + headingReward + lateralReward
-                         - safetyPenalty - trafficPenalty;
+        lastStepReward = progressReward + zoneReward + headingReward - headingRecoveryPenalty
+                         + lateralReward - safetyPenalty - trafficPenalty;
         unconsumedStepReward += lastStepReward;
         cumulativeReward += lastStepReward;
     }
@@ -687,6 +709,7 @@ public class ProgressRewardProvider : MonoBehaviour
         lastProgressReward = 0f;
         lastZoneReward = 0f;
         lastHeadingReward = 0f;
+        lastHeadingRecoveryPenalty = 0f;
         lastLateralReward = 0f;
         lastSafetyPenalty = 0f;
         lastTrafficPenalty = 0f;
@@ -696,12 +719,42 @@ public class ProgressRewardProvider : MonoBehaviour
         cumulativeProgressReward = 0f;
         cumulativeZoneReward = 0f;
         cumulativeHeadingReward = 0f;
+        cumulativeHeadingRecoveryPenalty = 0f;
         cumulativeLateralReward = 0f;
         cumulativeSafetyPenalty = 0f;
         cumulativeTrafficPenalty = 0f;
         cumulativeReward = 0f;
 
         // segCache는 초기화하지 않음 — 메쉬 정점은 런타임에 불변
+    }
+
+    /// <summary>
+    /// +Zone 중심선에서 랜덤 포인트를 샘플링하여 위치와 접선(tangent)을 반환한다.
+    /// 랜덤 스폰 시 Agent의 시작 위치를 도로 위로 제한하기 위해 사용.
+    /// </summary>
+    public bool TryGetRandomCenterlinePoint(out Vector3 position, out Vector3 tangent)
+    {
+        if (allPositiveCenterlines.Count == 0)
+        {
+            position = Vector3.zero;
+            tangent = Vector3.forward;
+            return false;
+        }
+
+        int groupIdx = UnityEngine.Random.Range(0, allPositiveCenterlines.Count);
+        var group = allPositiveCenterlines[groupIdx];
+
+        if (group.points == null || group.points.Count == 0)
+        {
+            position = Vector3.zero;
+            tangent = Vector3.forward;
+            return false;
+        }
+
+        int ptIdx = UnityEngine.Random.Range(0, group.points.Count);
+        position = group.points[ptIdx].position;
+        tangent = group.points[ptIdx].tangent;
+        return true;
     }
 
     // ═══════════════════════════════════════════
@@ -732,9 +785,9 @@ public class ProgressRewardProvider : MonoBehaviour
                 {
                     Vector3 a = line[i].position + Vector3.up * lineY;
                     Gizmos.DrawSphere(a, 0.08f);
-                    if (i < clCount - 1)
                     {
-                        Vector3 b = line[i + 1].position + Vector3.up * lineY;
+                        int nextIdx = (i + 1) % clCount;
+                        Vector3 b = line[nextIdx].position + Vector3.up * lineY;
                         Gizmos.DrawLine(a, b);
                     }
                 }

@@ -46,7 +46,7 @@ public class VehicleMotionController : MonoBehaviour
 
     [Header("Speed & Stability Limits (배달 AMR: 0.5~2.0 m/s)")]
     [Tooltip("최고 속도 제한 (m/s)")]
-    public float maxSpeed = 2.0f;
+    public float maxSpeed = 2.8f;
     [Tooltip("최대 가속도 제한 (m/s²) - 부드러운 주행: 0.3~0.5")]
     public float maxAcceleration = 0.5f;
     [Tooltip("최대 감속도 제한 (m/s²)")]

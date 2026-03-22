@@ -26,7 +26,7 @@ public class GateTriggerRelay : MonoBehaviour
         if (_gate == null) return;
         if (other.gameObject.layer != _rlVehicleLayer)return;
         if (other.gameObject.name != "base_link") return;
-        Debug.Log(other.gameObject.name);
+        //Debug.Log(other.gameObject.name);
         _gate.OnVehicleCrossed(_isSuccess, other);
     }
 }
