@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<robot name="factory_amr">
+<robot name="AutoCar">
 
   <!-- ==================== -->
   <!-- MATERIAL DEFINITIONS -->
@@ -503,7 +503,7 @@
     <parent link="base_link"/>
     <child link="ultrasonic_fl_link"/>
     <!-- 전방 좌측 코너 (45도 방향) -->
-    <origin xyz="0.38 0.23 0.1" rpy="0 0 0.7854"/>
+    <origin xyz="0.36 0.21 0.1" rpy="0 0 0.7854"/>
   </joint>
 
   <!-- ======================================== -->
@@ -535,7 +535,7 @@
     <parent link="base_link"/>
     <child link="ultrasonic_fr_link"/>
     <!-- 전방 우측 코너 (-45도 방향) -->
-    <origin xyz="0.38 -0.23 0.1" rpy="0 0 -0.7854"/>
+    <origin xyz="0.36 -0.21 0.1" rpy="0 0 -0.7854"/>
   </joint>
 
   <!-- ======================================== -->
@@ -567,7 +567,7 @@
     <parent link="base_link"/>
     <child link="ultrasonic_fc_link"/>
     <!-- 전방 중앙 -->
-    <origin xyz="0.41 0 0.1" rpy="0 0 0"/>
+    <origin xyz="0.39 0 0.1" rpy="0 0 0"/>
   </joint>
 
   <!-- ======================================== -->
@@ -599,7 +599,7 @@
     <parent link="base_link"/>
     <child link="ultrasonic_rl_link"/>
     <!-- 후방 좌측 코너 (135도 방향) -->
-    <origin xyz="-0.38 0.23 0.1" rpy="0 0 2.3562"/>
+    <origin xyz="-0.36 0.21 0.1" rpy="0 0 2.3562"/>
   </joint>
 
   <!-- ======================================== -->
@@ -631,7 +631,7 @@
     <parent link="base_link"/>
     <child link="ultrasonic_rr_link"/>
     <!-- 후방 우측 코너 (-135도 방향) -->
-    <origin xyz="-0.38 -0.23 0.1" rpy="0 0 -2.3562"/>
+    <origin xyz="-0.36 -0.21 0.1" rpy="0 0 -2.3562"/>
   </joint>
 
   <!-- ======================================== -->
@@ -663,7 +663,71 @@
     <parent link="base_link"/>
     <child link="ultrasonic_rc_link"/>
     <!-- 후방 중앙 -->
-    <origin xyz="-0.41 0 0.1" rpy="0 0 3.1416"/>
+    <origin xyz="-0.39 0 0.1" rpy="0 0 3.1416"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- ULTRASONIC SIDE LEFT (좌측 중앙 초음파)   -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_sl_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_sl_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_sl_link"/>
+    <!-- 좌측 중앙 (90도 방향) -->
+    <origin xyz="0 0.23 0.1" rpy="0 0 1.5708"/>
+  </joint>
+
+  <!-- ======================================== -->
+  <!-- ULTRASONIC SIDE RIGHT (우측 중앙 초음파)  -->
+  <!-- ======================================== -->
+  <link name="ultrasonic_sr_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.015" length="0.02"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 1.5708 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0"
+               iyy="0.000001" iyz="0"
+               izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <joint name="ultrasonic_sr_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_sr_link"/>
+    <!-- 우측 중앙 (-90도 방향) -->
+    <origin xyz="0 -0.23 0.1" rpy="0 0 -1.5708"/>
   </joint>
 
   <!-- ==================== -->
