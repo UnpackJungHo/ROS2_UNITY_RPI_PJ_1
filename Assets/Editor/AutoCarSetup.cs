@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEditor;
 using Unity.MLAgents.Policies;
 using Unity.Sentis;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// AutoCar_Root_Train의 모든 컴포넌트 참조를 RootAMR_Train 기준으로 재연결한다.
@@ -18,7 +19,7 @@ public class AutoCarSetup
         int ok = 0, warn = 0;
 
         // ─── 루트 오브젝트 탐색 ───────────────────────────────────────
-        var autoCarRoot = GameObject.Find("AutoCar_Root_Train");
+        var autoCarRoot = FindAutoCarRoot();
         if (autoCarRoot == null) { Debug.LogError("[AutoCarSetup] AutoCar_Root_Train not found"); return; }
 
         var autoCarT           = autoCarRoot.transform.Find("AutoCar");
@@ -53,6 +54,8 @@ public class AutoCarSetup
         var ultraRL = baseLinkChildT.Find("ultrasonic_rl_link")?.gameObject;
         var ultraRR = baseLinkChildT.Find("ultrasonic_rr_link")?.gameObject;
         var ultraRC = baseLinkChildT.Find("ultrasonic_rc_link")?.gameObject;
+        var ultraSL = baseLinkChildT.Find("ultrasonic_sl_link")?.gameObject;
+        var ultraSR = baseLinkChildT.Find("ultrasonic_sr_link")?.gameObject;
         var radarFrontGo = baseLinkChildT.Find("radar_front_link")?.gameObject;
         var radarRearGo  = baseLinkChildT.Find("radar_rear_link")?.gameObject;
 
@@ -81,6 +84,8 @@ public class AutoCarSetup
         var sRL = ultraRL?.GetComponent<SingleUltrasonicSensor>();
         var sRR = ultraRR?.GetComponent<SingleUltrasonicSensor>();
         var sRC = ultraRC?.GetComponent<SingleUltrasonicSensor>();
+        var sSL = ultraSL?.GetComponent<SingleUltrasonicSensor>();
+        var sSR = ultraSR?.GetComponent<SingleUltrasonicSensor>();
         var radarFrontSensor = radarFrontGo?.GetComponent<SingleRadarSensor>();
         var radarRearSensor  = radarRearGo?.GetComponent<SingleRadarSensor>();
 
@@ -159,10 +164,9 @@ public class AutoCarSetup
             cwe.sensorRL     = sRL;
             cwe.sensorRR     = sRR;
             cwe.sensorRC     = sRC;
-            cwe.radarFront   = radarFrontSensor;
-            cwe.radarRear    = radarRearSensor;
+            cwe.sensorSL     = sSL;
+            cwe.sensorSR     = sSR;
             cwe.velocitySource = baseLinkAB;
-            cwe.wheelController = baseLinkVMC;
             EditorUtility.SetDirty(cwe);
             string radarWarn = (radarFrontSensor == null || radarRearSensor == null)
                 ? " ⚠️ SingleRadarSensor 없음 (AutoCar radar 링크 버그)" : "";
@@ -189,6 +193,16 @@ public class AutoCarSetup
             rlAgent.collisionWarningEngine     = cwe;
             rlAgent.trafficLightDecisionEngine = tlEngine;
             rlAgent.vehicleCmdSubscriber       = cmdSubscriber;
+            rlAgent.sensorFL                   = sFL;
+            rlAgent.sensorFR                   = sFR;
+            rlAgent.sensorFC                   = sFC;
+            rlAgent.sensorRL                   = sRL;
+            rlAgent.sensorRR                   = sRR;
+            rlAgent.sensorRC                   = sRC;
+            rlAgent.sensorSL                   = sSL;
+            rlAgent.sensorSR                   = sSR;
+            rlAgent.radarFront                 = radarFrontSensor;
+            rlAgent.radarRear                  = radarRearSensor;
             rlAgent.followTargetTransform      = baseLinkGo.transform;
             rlAgent.episodeStartTransform      = rlStartPoseT;
             EditorUtility.SetDirty(rlAgent);
@@ -262,6 +276,8 @@ public class AutoCarSetup
             ultraPublisher.sensorRL = sRL;
             ultraPublisher.sensorRR = sRR;
             ultraPublisher.sensorRC = sRC;
+            ultraPublisher.sensorSL = sSL;
+            ultraPublisher.sensorSR = sSR;
             EditorUtility.SetDirty(ultraPublisher);
             log.AppendLine("  ✅ UltrasonicSensorPublisher"); ok++;
         }
@@ -349,6 +365,25 @@ public class AutoCarSetup
         go.layer = layer;
         foreach (Transform child in go.transform)
             SetLayerRecursively(child.gameObject, layer);
+    }
+
+    static GameObject FindAutoCarRoot()
+    {
+        var exact = GameObject.Find("AutoCar_Root_Train");
+        if (exact != null)
+            return exact;
+
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (!activeScene.IsValid())
+            return null;
+
+        foreach (var root in activeScene.GetRootGameObjects())
+        {
+            if (root != null && root.name.StartsWith("AutoCar_Root_Train"))
+                return root;
+        }
+
+        return null;
     }
 }
 #endif

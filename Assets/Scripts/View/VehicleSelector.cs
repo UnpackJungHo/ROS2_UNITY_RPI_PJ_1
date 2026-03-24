@@ -246,7 +246,7 @@ public class VehicleSelector : MonoBehaviour
     public void RefreshVehicleProviders()
     {
         discoveredProviders.Clear();
-        VehicleViewProvider[] providers = FindObjectsOfType<VehicleViewProvider>(true);
+        VehicleViewProvider[] providers = FindObjectsOfType<VehicleViewProvider>(false);
         discoveredProviders.AddRange(providers);
         discoveredProviders.Sort((a, b) => string.CompareOrdinal(a.VehicleId, b.VehicleId));
         discoveredVehicleCount = discoveredProviders.Count;

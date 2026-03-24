@@ -139,6 +139,8 @@ public class SingleUltrasonicSensorRosBridge : MonoBehaviour
             SingleUltrasonicSensor.SensorPosition.RearLeft => "/ultrasonic/rl",
             SingleUltrasonicSensor.SensorPosition.RearRight => "/ultrasonic/rr",
             SingleUltrasonicSensor.SensorPosition.RearCenter => "/ultrasonic/rc",
+            SingleUltrasonicSensor.SensorPosition.SideLeft => "/ultrasonic/sl",
+            SingleUltrasonicSensor.SensorPosition.SideRight => "/ultrasonic/sr",
             _ => "/ultrasonic/unknown"
         };
     }

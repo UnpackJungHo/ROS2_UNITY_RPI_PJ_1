@@ -70,31 +70,41 @@ public class CollisionWarningRosBridge : MonoBehaviour
                     new MultiArrayDimensionMsg
                     {
                         label = "collision_data",
-                        size = 17,
-                        stride = 17
+                        size = 21,
+                        stride = 21
                     }
                 },
                 data_offset = 0
             },
             data = new float[]
             {
+                // [0-2] 글로벌
                 float.IsInfinity(engine.currentMinDistance) ? -1f : engine.currentMinDistance,
-                float.IsInfinity(engine.currentTTC) ? -1f : engine.currentTTC,
                 (float)engine.currentWarningLevel,
                 engine.GetEgoSpeed(),
-                engine.GetClosingSpeed(),
+                // [3-8] 초음파 개별
                 float.IsInfinity(sensorData.ultrasonicFL) ? -1f : sensorData.ultrasonicFL,
                 float.IsInfinity(sensorData.ultrasonicFR) ? -1f : sensorData.ultrasonicFR,
                 float.IsInfinity(sensorData.ultrasonicFC) ? -1f : sensorData.ultrasonicFC,
                 float.IsInfinity(sensorData.ultrasonicRL) ? -1f : sensorData.ultrasonicRL,
                 float.IsInfinity(sensorData.ultrasonicRR) ? -1f : sensorData.ultrasonicRR,
                 float.IsInfinity(sensorData.ultrasonicRC) ? -1f : sensorData.ultrasonicRC,
-                float.IsInfinity(sensorData.radarFront) ? -1f : sensorData.radarFront,
-                float.IsInfinity(sensorData.radarRear) ? -1f : sensorData.radarRear,
-                engine.detectionSource == "Ultrasonic" ? 1f : (engine.detectionSource == "Radar" ? 2f : 0f),
+                // [9-10] 레이더 (미사용 — 슬롯 유지, 값 -1 고정)
+                -1f, // radarFront 비활성
+                -1f, // radarRear 비활성
+                // [11-14] 기존 감지 소스 정보
+                engine.detectionSource == "Ultrasonic" ? 1f : 0f,
                 (float)sensorData.ultrasonicClosest,
-                (float)sensorData.radarClosest,
-                sensorData.ultrasonicClosestConfidence
+                0f, // radarClosest 비활성
+                sensorData.ultrasonicClosestConfidence,
+                // [15-18] 방향별 위험도 레벨
+                (float)engine.frontWarning.level,
+                (float)engine.rearWarning.level,
+                (float)engine.leftWarning.level,
+                (float)engine.rightWarning.level,
+                // [19-20] 방향별 주요 거리 (front, rear)
+                float.IsInfinity(engine.frontWarning.dominantDistance) ? -1f : engine.frontWarning.dominantDistance,
+                float.IsInfinity(engine.rearWarning.dominantDistance) ? -1f : engine.rearWarning.dominantDistance
             }
         };
 

@@ -1,8 +1,24 @@
+using System.Text;
 using UnityEngine;
 
 /// <summary>
-/// 초음파 센서와 레이더 센서의 데이터를 융합하여 충돌 위험을 감지하고 경고 레벨을 계산하는 엔진.
+/// 초음파 센서 데이터를 기반으로 충돌 위험을 감지하고 경고 레벨을 계산하는 엔진.
 /// ROS 발행은 CollisionWarningRosBridge가 담당한다.
+///
+/// [레이더 미사용 근거]
+/// 본 프로젝트의 AMR은 최대 속도 2.0 m/s로 운행된다.
+/// 초음파 센서의 최대 감지 거리 4m는 최고 속도 기준 약 2초의 사전 경고 시간을 확보하며,
+/// Emergency(0.2m) 도달까지 약 1.9초의 반응 여유가 있다.
+/// 따라서 레이더(50m 범위)의 원거리 감지는 현 운용 조건에서 불필요하여 방향별 위험도 판정에서 제외한다.
+/// 향후 속도 상향 또는 실차 전환 시 레이더 융합을 재검토할 것.
+///
+/// [실차 전환 시 개선 필요 사항]
+/// P0: Confidence-gated 판정 — 센서 Confidence가 reliableConfidenceThreshold 미만인 감지를
+///     위험도 판정에서 제외하거나 가중치 감소. 시뮬레이션에서는 센서 신뢰도가 안정적이므로 미적용.
+/// P1: Temporal filtering / Hysteresis — 경고 레벨 상향 시 N-of-M 확인, 하향 시 hold-off 타이머 적용.
+///     시뮬레이션에서는 multipath/phantom 노이즈가 미미하므로 미적용.
+/// P4: Sensor health monitoring — 센서 응답 타임아웃, 고정값 고착 감시.
+///     고장 시 해당 방향을 Safe가 아닌 Unknown/Danger로 처리. 시뮬레이션에서는 센서 고장이 없으므로 미적용.
 /// </summary>
 [AddComponentMenu("Sensor/Collision Warning Engine")]
 public class CollisionWarningEngine : MonoBehaviour
@@ -23,66 +39,53 @@ public class CollisionWarningEngine : MonoBehaviour
     public SingleUltrasonicSensor sensorRR;
     [Tooltip("후방 중앙 초음파")]
     public SingleUltrasonicSensor sensorRC;
-    [Tooltip("전방 레이더")]
-    public SingleRadarSensor radarFront;
-    [Tooltip("후방 레이더")]
-    public SingleRadarSensor radarRear;
+    [Tooltip("측면 좌측 초음파")]
+    public SingleUltrasonicSensor sensorSL;
+    [Tooltip("측면 우측 초음파")]
+    public SingleUltrasonicSensor sensorSR;
+    // [레이더 미사용] 저속 AMR(최대 2.0 m/s)에서 초음파 4m 범위로 충분한 반응 시간 확보.
+    // 향후 속도 상향 시 주석 해제 후 CalculateDirectionalWarnings()에 융합 로직 추가 필요.
+    // [Tooltip("전방 레이더")]
+    // public SingleRadarSensor radarFront;
+    // [Tooltip("후방 레이더")]
+    // public SingleRadarSensor radarRear;
 
-    // 편의 배열 (Start에서 초기화)
     private SingleUltrasonicSensor[] allUltrasonicSensors;
-    private SingleRadarSensor[] allRadarSensors;
+    // private SingleRadarSensor[] allRadarSensors;
 
-    [Header("TTC 기반 임계값 (Time To Collision - 충돌까지 남은 시간)")]
-    [Tooltip("인지 단계 TTC (초) - 이 시간 이하면 Awareness")]
-    public float ttcAwareness = 5.0f;
-    [Tooltip("주의 단계 TTC (초) - 이 시간 이하면 Caution")]
-    public float ttcCaution = 3.0f;
-    [Tooltip("감속 단계 TTC (초) - 이 시간 이하면 SlowDown")]
-    public float ttcSlowDown = 2.0f;
-    [Tooltip("경고 단계 TTC (초) - 이 시간 이하면 Warning")]
-    public float ttcWarning = 1.5f;
-    [Tooltip("제동 단계 TTC (초) - 이 시간 이하면 Brake")]
-    public float ttcBrake = 1.0f;
+    [Header("거리 기반 임계값 (Distance — 정지 시 기본값, 이동 시 속도에 비례하여 확장)")]
+    [Tooltip("Awareness 거리 (m) — 이 거리 이하면 인지")]
+    public float distAwareness  = 1.50f;
+    [Tooltip("Caution 거리 (m) — 이 거리 이하면 주의")]
+    public float distCaution    = 1.00f;
+    [Tooltip("SlowDown 거리 (m) — 이 거리 이하면 감속")]
+    public float distSlowDown   = 0.80f;
+    [Tooltip("Warning 거리 (m) — 이 거리 이하면 경고")]
+    public float distWarning    = 0.55f;
+    [Tooltip("Brake 거리 (m) — 이 거리 이하면 제동")]
+    public float distBrake      = 0.35f;
+    [Tooltip("Emergency 거리 (m) — 이 거리 이하면 비상정지")]
+    public float distEmergency  = 0.20f;
 
-    [Header("초음파 긴급정지 임계값 (속도와 무관한 최종 안전장치)")]
-    [Tooltip("긴급정지 거리 (m) - 초음파 감지 시 무조건 EmergencyStop")]
-    public float emergencyStopDistance = 0.3f;
-    [Tooltip("긴급정지로 인정할 최소 초음파 confidence")]
-    [Range(0f, 1f)]
-    public float minEmergencyStopConfidence = 0.55f;
-    [Tooltip("이 거리 이하면 confidence와 무관하게 EmergencyStop (초근접 거리 우선)")]
-    public float hardEmergencyStopDistance = 0.12f;
-    [Tooltip("레이더 최소 안전거리 (m) - 정지 상태에서도 이 거리 이하면 경고")]
-    public float radarMinSafeDistance = 0.5f;
-    [Tooltip("경로분리 모드에서 후방 초음파만 근접한 경우(Ego 비후진) EmergencyStop 승격을 막음")]
-    public bool suppressRearEmergencyWhenNotReversing = true;
+    [Header("속도 기반 임계값 확장 (Speed-based Threshold Expansion)")]
+    [Tooltip("속도에 비례하여 임계값을 확장하는 시간 마진(초). " +
+             "effectiveThreshold = static + speed * factor. " +
+             "0이면 정적 임계값만 사용. 기본값 0.5초 = 반응 시간 기준.")]
+    public float speedMarginFactor = 0.5f;
 
-    [Header("저속 주행 시 거리 기반 판단 (속도가 낮을 때 TTC 보완)")]
-    [Tooltip("저속 판단 기준 (m/s) - 이 속도 이하면 거리 기반 판단 병행")]
-    public float lowSpeedThreshold = 0.5f;
-    [Tooltip("저속 시 주의 거리 (m)")]
-    public float lowSpeedCautionDistance = 1.5f;
-    [Tooltip("저속 시 경고 거리 (m)")]
-    public float lowSpeedWarningDistance = 0.8f;
+    [Header("Vehicle Reference (차량 참조)")]
+    [Tooltip("차량 모션 컨트롤러 — 속도/조향 입력으로 MotionDirection 자동 결정")]
+    public VehicleMotionController vehicleMotion;
 
-    [Header("Speed Reference (속도 참조)")]
+    [Header("Motion Direction Thresholds (운동 방향 판정 임계값)")]
+    [Tooltip("이 속도(m/s) 이하면 Stopped으로 판정")]
+    public float motionSpeedThreshold = 0.08f;
+    [Tooltip("이 조향 입력(절댓값) 이하면 직진으로 판정")]
+    public float motionSteeringThreshold = 0.05f;
+
+    [Header("Speed Reference (속도 참조 — 모션 감지용)")]
     [Tooltip("차량 속도를 가져올 물리 컴포넌트 (base_link)")]
     public ArticulationBody velocitySource;
-    public bool useVelocityForTTC = true; // TTC(충돌 예측 시간) 계산에 속도 반영 여부
-    [Tooltip("조향 입력 참조(측면 근접의 제동 반영 여부 판단용)")]
-    public VehicleMotionController wheelController;
-
-    [Header("Path-Aware Risk Split (경로축/측면 분리)")]
-    [Tooltip("true면 정면 진행축 위험(currentMinDistance)을 우선 사용하고 측면은 보조로 처리")]
-    public bool enablePathAwareRiskSplit = true;
-    [Tooltip("측면 근접 경고 거리 (m)")]
-    public float sideAdvisoryDistance = 0.45f;
-    [Tooltip("회피 조향 중 측면 제동 거리 (m)")]
-    public float sideTurnBrakeDistance = 0.25f;
-    [Tooltip("측면 센서가 가장 가까울 때(비회피조향)에도 EmergencyStop을 허용할 초근접 거리 (m)")]
-    public float sideEmergencyHardDistance = 0.12f;
-    [Tooltip("회피 조향으로 인정할 최소 조향각(도)")]
-    public float sideTurnSteeringAngleThreshold = 7f;
 
     [Header("Debug (디버그)")]
     public bool showDebugInfo = false;
@@ -93,28 +96,50 @@ public class CollisionWarningEngine : MonoBehaviour
     [Tooltip("true면 초음파/레이더 채널 거리 상세를 함께 출력")]
     public bool debugIncludeSensorChannels = true;
 
-    // 현재 상태 변수들 (Inspector 확인용 HideInInspector 해제 가능)
-    [HideInInspector] public float currentMinDistance = float.PositiveInfinity; // 가장 가까운 장애물 거리
-    [HideInInspector] public float currentPathMinDistance = float.PositiveInfinity; // 진행축 최소 거리
-    [HideInInspector] public float currentSideMinDistance = float.PositiveInfinity; // 측면 최소 거리
-    [HideInInspector] public float currentTTC = float.PositiveInfinity; // 충돌까지 남은 시간 (초)
-    [HideInInspector] public WarningLevel currentWarningLevel = WarningLevel.Safe; // 현재 위험 수준
-    [HideInInspector] public string detectionSource = "None"; // 감지된 센서 종류 (Ultrasonic / Radar)
-    [HideInInspector] public string detectionSensor = "None"; // 감지된 센서 위치 (FL, Front 등)
+    [HideInInspector] public float currentMinDistance = float.PositiveInfinity;
+    [HideInInspector] public WarningLevel currentWarningLevel = WarningLevel.Safe;
+    [HideInInspector] public string detectionSource = "None";
+    [HideInInspector] public string detectionSensor = "None";
 
-    // 위험 단계 열거형 (7단계 - TTC 기반 동적 판단)
+    // 방향별 위험도
+    [HideInInspector] public DirectionalWarning frontWarning;
+    [HideInInspector] public DirectionalWarning rearWarning;
+    [HideInInspector] public DirectionalWarning leftWarning;
+    [HideInInspector] public DirectionalWarning rightWarning;
+
     public enum WarningLevel
     {
-        Safe = 0,           // 안전 - 정상 주행 (장애물 없음)
-        Awareness = 1,      // 인지 - 장애물 존재 확인 (TTC > 5초)
-        Caution = 2,        // 주의 - 속도 유지하되 주시 (TTC 3~5초)
-        SlowDown = 3,       // 감속 - 점진적 속도 감소 (TTC 2~3초)
-        Warning = 4,        // 경고 - 적극적 감속 (TTC 1~2초)
-        Brake = 5,          // 제동 - 강한 감속 (TTC < 1초)
-        EmergencyStop = 6   // 긴급정지 - 즉시 정지 (초음파 < emergencyDistance)
+        Safe = 0,
+        Awareness = 1,
+        Caution = 2,
+        SlowDown = 3,
+        Warning = 4,
+        Brake = 5,
+        EmergencyStop = 6
     }
 
-    // 센서 데이터 모음 구조체
+    /// <summary>
+    /// 차량의 현재 운동 방향. throttle + steering 조합으로 결정된다.
+    /// GetMotionRelevantWarning()에서 이 방향에 해당하는 센서만 참조하여 위험도를 반환한다.
+    /// </summary>
+    public enum MotionDirection
+    {
+        Stopped,
+        MoveForward,
+        MoveForwardLeft,
+        MoveForwardRight,
+        MoveBackward,
+        MoveBackwardLeft,
+        MoveBackwardRight
+    }
+
+    public struct DirectionalWarning
+    {
+        public WarningLevel level;
+        public string dominantSensor;
+        public float dominantDistance;
+    }
+
     public struct SensorData
     {
         public float ultrasonicFL;
@@ -123,13 +148,15 @@ public class CollisionWarningEngine : MonoBehaviour
         public float ultrasonicRL;
         public float ultrasonicRR;
         public float ultrasonicRC;
+        public float ultrasonicSL;
+        public float ultrasonicSR;
         public float ultrasonicMinFront;
         public float ultrasonicMinRear;
         public float ultrasonicClosestConfidence;
-        public float radarFront;
-        public float radarRear;
+        // public float radarFront;
+        // public float radarRear;
         public SingleUltrasonicSensor.SensorPosition ultrasonicClosest;
-        public SingleRadarSensor.SensorPosition radarClosest;
+        // public SingleRadarSensor.SensorPosition radarClosest;
     }
 
     public SensorData CurrentSensorData { get; private set; }
@@ -137,72 +164,59 @@ public class CollisionWarningEngine : MonoBehaviour
     private float updateInterval;
     private float lastUpdateTime;
     private float currentSpeed = 0f;
-
-    // 상대속도(Closing Speed) 계산을 위한 변수들
-    private float previousMinDistance = float.PositiveInfinity;  // 이전 프레임의 최소 거리
-    private float previousMeasureTime = 0f;                      // 이전 측정 시간
-    private float closingSpeed = 0f;                             // 상대속도 (양수: 가까워짐, 음수: 멀어짐)
-    private float smoothedClosingSpeed = 0f;                     // 노이즈 필터링된 상대속도
     private float lastDebugLogTime = -999f;
     private WarningLevel lastLoggedWarningLevel = WarningLevel.Safe;
     private string lastLoggedDetectionSource = "None";
     private string lastLoggedDetectionSensor = "None";
-    private string debugDecisionTrace = "NotCalculated";
-    private WarningLevel lastTtcLevel = WarningLevel.Safe;
-    private WarningLevel lastLowSpeedLevel = WarningLevel.Safe;
-    [Header("Closing Speed Settings (상대속도 계산 설정)")]
-    [Tooltip("상대속도 스무딩 계수 (0~1, 낮을수록 더 부드러움)")]
-    [Range(0.1f, 1.0f)]
-    public float closingSpeedSmoothFactor = 0.3f;
-    [Tooltip("최소 유효 상대속도 (m/s) - 이 이하는 노이즈로 간주")]
-    public float minValidClosingSpeed = 0.05f;
+    private MotionDirection lastLoggedMotionDirection = MotionDirection.Stopped;
+
+    [HideInInspector] public MotionDirection currentMotionDirection = MotionDirection.Stopped;
 
     void Start()
     {
-        if (wheelController == null)
-            wheelController = FindObjectOfType<VehicleMotionController>();
         ValidateSensorReferences();
         SyncScanIntervals();
 
+        if (vehicleMotion == null)
+            vehicleMotion = GetComponentInParent<VehicleMotionController>();
+        if (vehicleMotion == null)
+            Debug.LogWarning("[CollisionWarning] VehicleMotionController가 할당되지 않았습니다. MotionDirection이 항상 Stopped입니다.");
+
         updateInterval = 1f / updateRate;
         lastUpdateTime = Time.time;
-
-        Debug.Log($"[CollisionWarningEngine] Initialized with Closing Speed based TTC system (Real ADAS style)");
-        Debug.Log($"[CollisionWarningEngine] TTC thresholds - Brake: {ttcBrake}s, Warning: {ttcWarning}s, SlowDown: {ttcSlowDown}s, Caution: {ttcCaution}s, Awareness: {ttcAwareness}s");
-        Debug.Log($"[CollisionWarningEngine] Emergency stop distance (Ultrasonic): {emergencyStopDistance}m | Closing speed smoothing: {closingSpeedSmoothFactor}");
     }
 
-    /// <summary>
-    /// 개별 센서 참조를 검증하고, 미할당 시 GameObject.Find로 자동 탐색
-    /// </summary>
     void ValidateSensorReferences()
     {
-        // 초음파 센서 자동 탐색
         TryFindUltrasonicSensor(ref sensorFL, "ultrasonic_fl_link", "FL");
         TryFindUltrasonicSensor(ref sensorFR, "ultrasonic_fr_link", "FR");
         TryFindUltrasonicSensor(ref sensorFC, "ultrasonic_fc_link", "FC");
         TryFindUltrasonicSensor(ref sensorRL, "ultrasonic_rl_link", "RL");
         TryFindUltrasonicSensor(ref sensorRR, "ultrasonic_rr_link", "RR");
         TryFindUltrasonicSensor(ref sensorRC, "ultrasonic_rc_link", "RC");
+        TryFindUltrasonicSensor(ref sensorSL, "ultrasonic_sl_link", "SL");
+        TryFindUltrasonicSensor(ref sensorSR, "ultrasonic_sr_link", "SR");
 
-        // 레이더 센서 자동 탐색
-        TryFindRadarSensor(ref radarFront, "radar_front_link", "Front");
-        TryFindRadarSensor(ref radarRear, "radar_rear_link", "Rear");
+        // TryFindRadarSensor(ref radarFront, "radar_front_link", "Front");
+        // TryFindRadarSensor(ref radarRear, "radar_rear_link", "Rear");
 
-        // 편의 배열 초기화
-        allUltrasonicSensors = new[] { sensorFL, sensorFR, sensorFC, sensorRL, sensorRR, sensorRC };
-        allRadarSensors = new[] { radarFront, radarRear };
+        allUltrasonicSensors = new[]
+        {
+            sensorFL, sensorFR, sensorFC, sensorRL, sensorRR, sensorRC, sensorSL, sensorSR
+        };
+        // allRadarSensors = new[] { radarFront, radarRear };
 
-        if (useVelocityForTTC && velocitySource == null)
-            Debug.LogWarning("[CollisionWarning] velocitySource가 할당되지 않았습니다. TTC 계산이 비활성화됩니다.");
-        if (enablePathAwareRiskSplit && wheelController == null)
-            Debug.LogWarning("[CollisionWarning] wheelController가 없어 측면-조향 연동 제어가 제한됩니다.");
+        if (velocitySource == null)
+            Debug.LogWarning("[CollisionWarning] velocitySource가 할당되지 않았습니다. 모션 감지가 비활성화됩니다.");
+
     }
 
     void TryFindUltrasonicSensor(ref SingleUltrasonicSensor sensor, string gameObjectName, string label)
     {
-        if (sensor != null) return;
-        GameObject go = GameObject.Find(gameObjectName);
+        if (sensor != null)
+            return;
+
+        GameObject go = FindSensorGameObject(gameObjectName);
         if (go != null)
         {
             sensor = go.GetComponent<SingleUltrasonicSensor>();
@@ -217,692 +231,571 @@ public class CollisionWarningEngine : MonoBehaviour
         }
     }
 
-    void TryFindRadarSensor(ref SingleRadarSensor sensor, string gameObjectName, string label)
+    // void TryFindRadarSensor(ref SingleRadarSensor sensor, string gameObjectName, string label)
+    // {
+    //     if (sensor != null)
+    //         return;
+    //
+    //     GameObject go = FindSensorGameObject(gameObjectName);
+    //     if (go != null)
+    //     {
+    //         sensor = go.GetComponent<SingleRadarSensor>();
+    //         if (sensor != null)
+    //             Debug.Log($"[CollisionWarning] 레이더 센서 {label} 자동 탐색 완료: {gameObjectName}");
+    //         else
+    //             Debug.LogWarning($"[CollisionWarning] {gameObjectName} 오브젝트에 SingleRadarSensor 컴포넌트가 없습니다.");
+    //     }
+    //     else
+    //     {
+    //         Debug.LogWarning($"[CollisionWarning] 레이더 센서 {label} ({gameObjectName})를 찾을 수 없습니다.");
+    //     }
+    // }
+
+    GameObject FindSensorGameObject(string gameObjectName)
     {
-        if (sensor != null) return;
-        GameObject go = GameObject.Find(gameObjectName);
-        if (go != null)
+        Transform scopedRoot = transform.root;
+        if (scopedRoot != null)
         {
-            sensor = go.GetComponent<SingleRadarSensor>();
-            if (sensor != null)
-                Debug.Log($"[CollisionWarning] 레이더 센서 {label} 자동 탐색 완료: {gameObjectName}");
-            else
-                Debug.LogWarning($"[CollisionWarning] {gameObjectName} 오브젝트에 SingleRadarSensor 컴포넌트가 없습니다.");
+            Transform scopedMatch = FindDescendantByName(scopedRoot, gameObjectName);
+            if (scopedMatch != null)
+                return scopedMatch.gameObject;
         }
-        else
-        {
-            Debug.LogWarning($"[CollisionWarning] 레이더 센서 {label} ({gameObjectName})를 찾을 수 없습니다.");
-        }
+
+        return GameObject.Find(gameObjectName);
     }
 
-    /// <summary>
-    /// 개별 센서의 스캔 주기를 updateRate에 맞춤
-    /// </summary>
+    static Transform FindDescendantByName(Transform root, string targetName)
+    {
+        if (root == null || string.IsNullOrEmpty(targetName))
+            return null;
+
+        if (root.name == targetName)
+            return root;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform match = FindDescendantByName(root.GetChild(i), targetName);
+            if (match != null)
+                return match;
+        }
+
+        return null;
+    }
+
     void SyncScanIntervals()
     {
         float interval = 1f / updateRate;
-        foreach (var s in allUltrasonicSensors)
-            if (s != null) s.SetScanInterval(interval);
-        foreach (var s in allRadarSensors)
-            if (s != null) s.SetScanInterval(interval);
+        foreach (var sensor in allUltrasonicSensors)
+            if (sensor != null)
+                sensor.SetScanInterval(interval);
+
+        // foreach (var sensor in allRadarSensors)
+        //     if (sensor != null)
+        //         sensor.SetScanInterval(interval);
     }
 
     void Update()
     {
         UpdateCurrentSpeed();
+        UpdateMotionDirection();
 
-        if (Time.time - lastUpdateTime >= updateInterval)
-        {
-            CollectSensorData();
-            UpdateCurrentMinDistance();
-            CalculateClosingSpeed();
-            CalculateWarningLevel();
-            CalculateTTC();
-            lastUpdateTime = Time.time;
+        if (Time.time - lastUpdateTime < updateInterval)
+            return;
 
-            if (showDebugInfo)
-                PrintDebugInfo();
-        }
+        CollectSensorData();
+        CalculateDirectionalWarnings();
+        lastUpdateTime = Time.time;
+        if (showDebugInfo)
+            PrintDebugInfo();
     }
 
-    /// <summary>
-    /// 차량의 현재 이동 속도를 갱신
-    /// </summary>
     void UpdateCurrentSpeed()
     {
-        if (!useVelocityForTTC || velocitySource == null)
+        currentSpeed = velocitySource != null ? vehicleMotion.GetSpeedMS() : 0f;
+    }
+
+    void UpdateMotionDirection()
+    {
+        if (vehicleMotion == null)
         {
-            currentSpeed = 0f;
+            currentMotionDirection = MotionDirection.Stopped;
             return;
         }
 
-        // 차량의 실제 이동 속도(스칼라 값, m/s 단위 -> 최종 속도는 VehicleMotionController 에서 설정한 값에 따라 달라짐)
-        currentSpeed = velocitySource.velocity.magnitude;
+        float speed = vehicleMotion.GetSpeedMS();
+        float steering = vehicleMotion.GetSteeringInput();
+
+        // 속도가 임계값 이하면 정지
+        if (Mathf.Abs(speed) <= motionSpeedThreshold)
+        {
+            currentMotionDirection = MotionDirection.Stopped;
+            return;
+        }
+
+        bool forward = speed > 0f;
+        bool turningRight = steering > motionSteeringThreshold;
+        bool turningLeft = steering < -motionSteeringThreshold;
+
+        if (forward)
+        {
+            if (turningLeft)       currentMotionDirection = MotionDirection.MoveForwardLeft;
+            else if (turningRight) currentMotionDirection = MotionDirection.MoveForwardRight;
+            else                   currentMotionDirection = MotionDirection.MoveForward;
+        }
+        else
+        {
+            if (turningLeft)       currentMotionDirection = MotionDirection.MoveBackwardLeft;
+            else if (turningRight) currentMotionDirection = MotionDirection.MoveBackwardRight;
+            else                   currentMotionDirection = MotionDirection.MoveBackward;
+        }
     }
 
-    /// <summary>
-    /// 개별 센서로부터 최신 데이터를 수집하여 SensorData 구조체에 저장
-    /// </summary>
     void CollectSensorData()
     {
-        SensorData data = new SensorData();
+        SensorData data = new SensorData
+        {
+            ultrasonicFL = sensorFL != null ? sensorFL.Distance : float.PositiveInfinity,
+            ultrasonicFR = sensorFR != null ? sensorFR.Distance : float.PositiveInfinity,
+            ultrasonicFC = sensorFC != null ? sensorFC.Distance : float.PositiveInfinity,
+            ultrasonicRL = sensorRL != null ? sensorRL.Distance : float.PositiveInfinity,
+            ultrasonicRR = sensorRR != null ? sensorRR.Distance : float.PositiveInfinity,
+            ultrasonicRC = sensorRC != null ? sensorRC.Distance : float.PositiveInfinity,
+            ultrasonicSL = sensorSL != null ? sensorSL.Distance : float.PositiveInfinity,
+            ultrasonicSR = sensorSR != null ? sensorSR.Distance : float.PositiveInfinity
+        };
 
-        // 개별 초음파 센서에서 직접 읽기
-        data.ultrasonicFL = sensorFL != null ? sensorFL.Distance : float.PositiveInfinity;
-        data.ultrasonicFR = sensorFR != null ? sensorFR.Distance : float.PositiveInfinity;
-        data.ultrasonicFC = sensorFC != null ? sensorFC.Distance : float.PositiveInfinity;
-        data.ultrasonicRL = sensorRL != null ? sensorRL.Distance : float.PositiveInfinity;
-        data.ultrasonicRR = sensorRR != null ? sensorRR.Distance : float.PositiveInfinity;
-        data.ultrasonicRC = sensorRC != null ? sensorRC.Distance : float.PositiveInfinity;
-
-        // 전방/후방 최소 거리 내부 계산
         data.ultrasonicMinFront = Mathf.Min(data.ultrasonicFL, Mathf.Min(data.ultrasonicFR, data.ultrasonicFC));
         data.ultrasonicMinRear = Mathf.Min(data.ultrasonicRL, Mathf.Min(data.ultrasonicRR, data.ultrasonicRC));
 
-        // closest 초음파 추적 (거리 우선, 0.02m 내 confidence 타이브레이크)
         UpdateClosestUltrasonic(ref data);
 
-        // 개별 레이더 센서에서 직접 읽기
-        data.radarFront = radarFront != null ? radarFront.Distance : float.PositiveInfinity;
-        data.radarRear = radarRear != null ? radarRear.Distance : float.PositiveInfinity;
-        data.radarClosest = data.radarFront <= data.radarRear
-            ? SingleRadarSensor.SensorPosition.Front
-            : SingleRadarSensor.SensorPosition.Rear;
+        // data.radarFront = radarFront != null ? radarFront.Distance : float.PositiveInfinity;
+        // data.radarRear = radarRear != null ? radarRear.Distance : float.PositiveInfinity;
+        // data.radarClosest = data.radarFront <= data.radarRear
+        //     ? SingleRadarSensor.SensorPosition.Front
+        //     : SingleRadarSensor.SensorPosition.Rear;
 
         CurrentSensorData = data;
     }
 
-    /// <summary>
-    /// 6개 초음파 센서 중 가장 가까운 센서를 추적.
-    /// 거리 우선, 0.02m 이내면 confidence가 높은 쪽 선택.
-    /// </summary>
     void UpdateClosestUltrasonic(ref SensorData data)
     {
-        float closestDist = float.PositiveInfinity;
-        float closestConf = 0f;
-        SingleUltrasonicSensor.SensorPosition closestPos = default;
+        float closestDistance = float.PositiveInfinity;
+        float closestConfidence = 0f;
+        SingleUltrasonicSensor.SensorPosition closestPosition = default;
 
         for (int i = 0; i < allUltrasonicSensors.Length; i++)
         {
-            var s = allUltrasonicSensors[i];
-            if (s == null) continue;
+            SingleUltrasonicSensor sensor = allUltrasonicSensors[i];
+            if (sensor == null)
+                continue;
 
-            float dist = s.Distance;
-            if (float.IsInfinity(dist)) continue;
+            float distance = sensor.Distance;
+            if (float.IsInfinity(distance))
+                continue;
 
-            float conf = s.Confidence;
-            bool isCloser = dist < closestDist;
-            bool isTiedButMoreConfident = Mathf.Abs(dist - closestDist) < 0.02f && conf > closestConf;
+            float confidence = sensor.Confidence;
+            bool isCloser = distance < closestDistance;
+            bool isTieButMoreConfident = Mathf.Abs(distance - closestDistance) < 0.02f && confidence > closestConfidence;
+            if (!isCloser && !isTieButMoreConfident)
+                continue;
 
-            if (isCloser || isTiedButMoreConfident)
-            {
-                closestDist = dist;
-                closestConf = conf;
-                closestPos = s.sensorPosition;
-            }
+            closestDistance = distance;
+            closestConfidence = confidence;
+            closestPosition = sensor.sensorPosition;
         }
 
-        data.ultrasonicClosest = closestPos;
-        data.ultrasonicClosestConfidence = closestConf;
+        data.ultrasonicClosest = closestPosition;
+        data.ultrasonicClosestConfidence = closestConfidence;
     }
 
-    void UpdateCurrentMinDistance()
+    void CalculateDirectionalWarnings()
     {
-        float ultrasonicMin = GetMinUltrasonicDistance();
-        float radarMin = GetMinRadarDistance();
-        float globalMin = Mathf.Min(ultrasonicMin, radarMin);
+        SensorData d = CurrentSensorData;
 
-        currentPathMinDistance = GetPathMinDistance();
-        currentSideMinDistance = GetSideMinDistance();
+        // Front: FC만
+        frontWarning = EvaluateDirectionSingle(d.ultrasonicFC, "FC");
 
-        // Path-aware 모드에서는 진행축 위험을 기준으로 TTC를 계산
-        if (enablePathAwareRiskSplit)
-        {
-            currentMinDistance = float.IsInfinity(currentPathMinDistance) ? globalMin : currentPathMinDistance;
-        }
+        // Rear: RC만
+        rearWarning = EvaluateDirectionSingle(d.ultrasonicRC, "RC");
+
+        // Left: FL, SL, RL (초음파만)
+        leftWarning = EvaluateDirection(
+            (d.ultrasonicFL, "FL"),
+            (d.ultrasonicSL, "SL"),
+            (d.ultrasonicRL, "RL"));
+
+        // Right: FR, SR, RR (초음파만)
+        rightWarning = EvaluateDirection(
+            (d.ultrasonicFR, "FR"),
+            (d.ultrasonicSR, "SR"),
+            (d.ultrasonicRR, "RR"));
+
+        // 글로벌 값 (하위 호환)
+        currentMinDistance = Mathf.Min(
+            frontWarning.dominantDistance,
+            Mathf.Min(rearWarning.dominantDistance,
+            Mathf.Min(leftWarning.dominantDistance, rightWarning.dominantDistance)));
+
+        currentWarningLevel = Max4(
+            frontWarning.level, rearWarning.level,
+            leftWarning.level, rightWarning.level);
+
+        if (currentWarningLevel > WarningLevel.Safe)
+            ResolveWarningSource(out detectionSource, out detectionSensor);
         else
         {
-            currentMinDistance = globalMin;
+            detectionSource = "None";
+            detectionSensor = "None";
         }
     }
 
-    /// <summary>
-    /// 상대속도(Closing Speed)를 계산
-    /// 연속적인 거리 측정값의 변화율로 계산하며, 노이즈 필터링을 적용
-    /// 양수: 장애물이 가까워지는 중, 음수: 장애물이 멀어지는 중
-    /// </summary>
-    void CalculateClosingSpeed()
+    DirectionalWarning EvaluateDirectionSingle(float dist, string name)
     {
-        float currentTime = Time.time;
-        float deltaTime = currentTime - previousMeasureTime;
-
-        // 첫 프레임이거나 시간 간격이 너무 짧으면 스킵
-        if (deltaTime <= 0.001f || float.IsInfinity(previousMinDistance))
+        return new DirectionalWarning
         {
-            previousMinDistance = currentMinDistance;
-            previousMeasureTime = currentTime;
-            return;
-        }
-
-        // 현재 거리가 무한대면 (장애물 없음) 상대속도 0
-        if (float.IsInfinity(currentMinDistance))
-        {
-            closingSpeed = 0f;
-            smoothedClosingSpeed = 0f;
-            previousMinDistance = currentMinDistance;
-            previousMeasureTime = currentTime;
-            return;
-        }
-
-        // 상대속도 계산: (이전 거리 - 현재 거리) / 시간
-        // 양수 = 가까워짐 (충돌 방향), 음수 = 멀어짐 (안전 방향)
-        float rawClosingSpeed = (previousMinDistance - currentMinDistance) / deltaTime;
-
-        // 이전 거리가 무한대였으면 (새로운 장애물 감지) 차량 속도를 초기값으로 사용
-        if (float.IsInfinity(previousMinDistance))
-        {
-            rawClosingSpeed = currentSpeed;
-        }
-
-        // 노이즈 필터링: 지수 이동 평균 (Exponential Moving Average)
-        smoothedClosingSpeed = Mathf.Lerp(smoothedClosingSpeed, rawClosingSpeed, closingSpeedSmoothFactor);
-
-        // 너무 작은 값은 노이즈로 간주하여 0 처리
-        if (Mathf.Abs(smoothedClosingSpeed) < minValidClosingSpeed)
-        {
-            smoothedClosingSpeed = 0f;
-        }
-
-        closingSpeed = rawClosingSpeed;
-
-        // 다음 계산을 위해 현재 값 저장
-        previousMinDistance = currentMinDistance;
-        previousMeasureTime = currentTime;
+            level = EvaluateDistanceWarning(dist, currentSpeed),
+            dominantSensor = name,
+            dominantDistance = dist
+        };
     }
 
-    /// <summary>
-    /// 수집된 데이터를 바탕으로 종합적인 위험 수준(WarningLevel)을 결정
-    /// Layer 1: 초음파 긴급정지 판단 (최우선 - 속도와 무관)
-    /// Layer 2: TTC 기반 동적 판단 (레이더 + 속도)
-    /// Layer 3: 저속 시 거리 기반 보완 판단
-    /// </summary>
-    void CalculateWarningLevel()
+    DirectionalWarning EvaluateDirection(
+        (float dist, string name) s0,
+        (float dist, string name) s1,
+        (float dist, string name) s2)
     {
-        currentWarningLevel = WarningLevel.Safe;
-        // 초음파 OR 레이더 중으로 선정
-        detectionSource = "None";
-        // 정확한 센서 이름(위치) 
-        detectionSensor = "None";
-        debugDecisionTrace = "NoObstacle";
+        float minDist = s0.dist;
+        string minName = s0.name;
 
-        // UpdateCurrentMinDistance()에서 이미 계산된 값 재사용
-        float ultrasonicMin = GetMinUltrasonicDistance();
-        float radarMin = GetMinRadarDistance();
-        float ultrasonicClosestConfidence = CurrentSensorData.ultrasonicClosestConfidence;
+        if (s1.dist < minDist) { minDist = s1.dist; minName = s1.name; }
+        if (s2.dist < minDist) { minDist = s2.dist; minName = s2.name; }
 
-        // ========== Layer 1: 초음파 긴급정지 (최우선 - 속도와 무관한 최종 안전장치) ==========
-        float safeEmergencyDistance = Mathf.Max(0.01f, emergencyStopDistance);
-        float safeHardEmergencyDistance = Mathf.Clamp(hardEmergencyStopDistance, 0.01f, safeEmergencyDistance);
-        bool hardDistanceEmergency = ultrasonicMin <= safeHardEmergencyDistance;
-        bool confidenceEmergency = ultrasonicClosestConfidence >= minEmergencyStopConfidence;
-        if (ultrasonicMin <= safeEmergencyDistance && (confidenceEmergency || hardDistanceEmergency))
+        return new DirectionalWarning
         {
-            bool isRearClosest = CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearLeft ||
-                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearRight ||
-                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearCenter;
-            bool isSideClosest = CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.FrontLeft ||
-                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.FrontRight ||
-                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearLeft ||
-                                 CurrentSensorData.ultrasonicClosest == SingleUltrasonicSensor.SensorPosition.RearRight;
-            bool rearRelevant = !enablePathAwareRiskSplit ||
-                                !suppressRearEmergencyWhenNotReversing ||
-                                !isRearClosest ||
-                                currentSpeed < -0.05f;
-            bool turningTowardSide = IsTurningTowardClosestSide();
-            bool allowSideEmergency = true;
-            if (enablePathAwareRiskSplit && isSideClosest)
-            {
-                // 측면 센서는 회피/차선 변경 상황에서 자주 근접하므로,
-                // EmergencyStop은 초근접(hard distance)에서만 허용.
-                allowSideEmergency = ultrasonicMin <= Mathf.Max(0.01f, sideEmergencyHardDistance);
-            }
-
-            if (rearRelevant && allowSideEmergency)
-            {
-                currentWarningLevel = WarningLevel.EmergencyStop;
-                detectionSource = "Ultrasonic";
-                detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
-                string trigger = hardDistanceEmergency
-                    ? $"hardDist({ultrasonicMin:F2}m <= {safeHardEmergencyDistance:F2}m)"
-                    : $"conf({ultrasonicClosestConfidence:F2} >= {minEmergencyStopConfidence:F2})";
-                debugDecisionTrace = $"Layer1 EmergencyStop (ultra={ultrasonicMin:F2}m <= {safeEmergencyDistance:F2}m, {trigger})";
-                lastTtcLevel = WarningLevel.Safe;
-                lastLowSpeedLevel = WarningLevel.Safe;
-                return; // 즉시 반환 - 다른 판단 불필요
-            }
-
-            if (!rearRelevant || !allowSideEmergency)
-            {
-                debugDecisionTrace =
-                    $"Layer1 Suppressed(rearRelevant={rearRelevant}, sideEmergency={allowSideEmergency}, " +
-                    $"turnTowardSide={turningTowardSide}, ultra={ultrasonicMin:F2}m, hard={sideEmergencyHardDistance:F2}m)";
-            }
-        }
-
-        // ========== Layer 2: TTC 기반 동적 판단 ==========
-        WarningLevel ttcLevel = EvaluateTTCWarning();
-        lastTtcLevel = ttcLevel;
-
-        // ========== Layer 3: 저속 시 거리 기반 보완 판단 ==========
-        WarningLevel lowSpeedLevel = WarningLevel.Safe;
-        if (currentSpeed <= lowSpeedThreshold)
-        {
-            float lowSpeedPrimary = enablePathAwareRiskSplit ? currentMinDistance : ultrasonicMin;
-            lowSpeedLevel = EvaluateLowSpeedWarning(lowSpeedPrimary, radarMin);
-        }
-        lastLowSpeedLevel = lowSpeedLevel;
-
-        // TTC 기반 판단이 누락될 수 있는 근접 상황을 보완하기 위한 거리 우선 하한 레벨
-        WarningLevel distancePriorityLevel = EvaluateDistancePriorityWarning(currentMinDistance);
-
-        // 두 판단 중 더 높은 위험도 채택
-        if (ttcLevel >= lowSpeedLevel)
-        {
-            currentWarningLevel = ttcLevel;
-            debugDecisionTrace = $"Layer2 TTC selected (ttcLevel={ttcLevel}, lowSpeedLevel={lowSpeedLevel})";
-            // TTC 판단은 주로 레이더 기반
-            if (!float.IsInfinity(radarMin) && radarMin <= ultrasonicMin)
-            {
-                detectionSource = "Radar";
-                detectionSensor = CurrentSensorData.radarClosest.ToString();
-            }
-            else if (!float.IsInfinity(ultrasonicMin))
-            {
-                detectionSource = "Ultrasonic";
-                detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
-            }
-        }
-        else
-        {
-            currentWarningLevel = lowSpeedLevel;
-            debugDecisionTrace = $"Layer3 LowSpeed selected (ttcLevel={ttcLevel}, lowSpeedLevel={lowSpeedLevel}, speed={currentSpeed:F2}m/s <= {lowSpeedThreshold:F2}m/s)";
-            // 저속 판단 시 가까운 센서 기준
-            if (ultrasonicMin <= radarMin)
-            {
-                detectionSource = "Ultrasonic";
-                detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
-            }
-            else
-            {
-                detectionSource = "Radar";
-                detectionSensor = CurrentSensorData.radarClosest.ToString();
-            }
-        }
-
-        if (distancePriorityLevel > currentWarningLevel)
-        {
-            currentWarningLevel = distancePriorityLevel;
-            if (!float.IsInfinity(ultrasonicMin) && (float.IsInfinity(radarMin) || ultrasonicMin <= radarMin))
-            {
-                detectionSource = "Ultrasonic";
-                detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
-            }
-            else if (!float.IsInfinity(radarMin))
-            {
-                detectionSource = "Radar";
-                detectionSensor = CurrentSensorData.radarClosest.ToString();
-            }
-
-            debugDecisionTrace =
-                $"DistancePriority(min={currentMinDistance:F2}m -> level={distancePriorityLevel}, " +
-                $"ttcLevel={ttcLevel}, lowSpeedLevel={lowSpeedLevel})";
-        }
-
-        // 측면 근접은 기본적으로 보조 정보.
-        // 단, 회피 조향 중 측면 근접이 심하면 최소 Warning까지 상향.
-        if (enablePathAwareRiskSplit &&
-            currentSideMinDistance <= sideTurnBrakeDistance &&
-            IsTurningTowardClosestSide() &&
-            currentWarningLevel < WarningLevel.Warning)
-        {
-            currentWarningLevel = WarningLevel.Warning;
-            detectionSource = "Ultrasonic";
-            detectionSensor = CurrentSensorData.ultrasonicClosest.ToString();
-            debugDecisionTrace = $"SideTurnGuard(side={currentSideMinDistance:F2}m <= {sideTurnBrakeDistance:F2}m)";
-        }
-
-        // 정지 상태에서 레이더 최소 안전거리 체크
-        if (currentSpeed <= 0.01f && radarMin <= radarMinSafeDistance)
-        {
-            if (currentWarningLevel < WarningLevel.Warning)
-            {
-                currentWarningLevel = WarningLevel.Warning;
-                detectionSource = "Radar";
-                detectionSensor = CurrentSensorData.radarClosest.ToString();
-                debugDecisionTrace = $"StopState RadarGuard (speed={currentSpeed:F2}m/s, radar={radarMin:F2}m <= {radarMinSafeDistance:F2}m)";
-            }
-        }
+            level = EvaluateDistanceWarning(minDist, currentSpeed),
+            dominantSensor = minName,
+            dominantDistance = minDist
+        };
     }
 
-    /// <summary>
-    /// 초음파 센서의 최소 거리를 반환 (CurrentSensorData에서 이미 계산된 값 사용)
-    /// </summary>
-    float GetMinUltrasonicDistance()
+    static WarningLevel Max4(WarningLevel a, WarningLevel b, WarningLevel c, WarningLevel d)
     {
-        return Mathf.Min(CurrentSensorData.ultrasonicMinFront, CurrentSensorData.ultrasonicMinRear);
+        WarningLevel ab = a > b ? a : b;
+        WarningLevel cd = c > d ? c : d;
+        return ab > cd ? ab : cd;
     }
 
-    /// <summary>
-    /// 레이더 센서의 최소 거리를 반환 (CurrentSensorData에서 이미 계산된 값 사용)
-    /// </summary>
-    float GetMinRadarDistance()
+    // 거리 기반 경고: 정지 시 정적 임계값, 이동 시 속도 비례 확장
+    WarningLevel EvaluateDistanceWarning(float distance, float speed)
     {
-        return Mathf.Min(CurrentSensorData.radarFront, CurrentSensorData.radarRear);
-    }
+        if (float.IsInfinity(distance)) return WarningLevel.Safe;
 
-    float GetPathMinDistance()
-    {
-        // 정면 진행축: 전방 중앙 초음파 + 전방 레이더 우선
-        float fc = CurrentSensorData.ultrasonicFC;
-        float radarFront = CurrentSensorData.radarFront;
-        float forwardCore = Mathf.Min(fc, radarFront);
+        float expansion = speed * speedMarginFactor;
 
-        // 센터 센서가 모두 비어있으면 전방 최소거리(코너 포함)로 fallback
-        if (float.IsInfinity(forwardCore))
-            forwardCore = CurrentSensorData.ultrasonicMinFront;
-
-        return forwardCore;
-    }
-
-    float GetSideMinDistance()
-    {
-        float leftMin = Mathf.Min(CurrentSensorData.ultrasonicFL, CurrentSensorData.ultrasonicRL);
-        float rightMin = Mathf.Min(CurrentSensorData.ultrasonicFR, CurrentSensorData.ultrasonicRR);
-        return Mathf.Min(leftMin, rightMin);
-    }
-
-    bool IsTurningTowardClosestSide()
-    {
-        if (wheelController == null)
-            return false;
-
-        float steeringAngle = wheelController.GetSteeringAngle();
-        bool turningLeft = steeringAngle > sideTurnSteeringAngleThreshold;
-        bool turningRight = steeringAngle < -sideTurnSteeringAngleThreshold;
-
-        SingleUltrasonicSensor.SensorPosition closest = CurrentSensorData.ultrasonicClosest;
-        bool closestIsLeft = closest == SingleUltrasonicSensor.SensorPosition.FrontLeft ||
-                             closest == SingleUltrasonicSensor.SensorPosition.RearLeft;
-        bool closestIsRight = closest == SingleUltrasonicSensor.SensorPosition.FrontRight ||
-                              closest == SingleUltrasonicSensor.SensorPosition.RearRight;
-
-        return (closestIsLeft && turningLeft) || (closestIsRight && turningRight);
-    }
-
-    /// <summary>
-    /// TTC(Time To Collision) 기반으로 위험도를 평가
-    /// 실제 ADAS와 동일하게 상대속도(Closing Speed) 기반으로 계산
-    /// - 장애물이 가까워지면: 상대속도 기반 TTC
-    /// - 장애물이 멀어지면: 안전 (충돌 없음)
-    /// - 장애물이 정지해 있으면: 차량 속도 기반 TTC (보수적 접근)
-    /// </summary>
-    WarningLevel EvaluateTTCWarning()
-    {
-        // 거리가 무한대면 장애물 없음
-        if (float.IsInfinity(currentMinDistance))
-            return WarningLevel.Safe;
-
-        float ttc;
-
-        // 상대속도가 유효한 경우 (가까워지는 중)
-        if (smoothedClosingSpeed > minValidClosingSpeed)
-        {
-            // 상대속도 기반 TTC (실제 ADAS 방식)
-            ttc = currentMinDistance / smoothedClosingSpeed;
-        }
-        // 상대속도가 0 이하 (멀어지거나 정지)
-        else
-        {
-            // 차량이 움직이고 있고 장애물이 가까우면 보수적 판단
-            if (currentSpeed > 0.01f && currentMinDistance < lowSpeedCautionDistance)
-            {
-                // 정지된 장애물로 가정 (차량 속도 기반)
-                ttc = currentMinDistance / currentSpeed;
-            }
-            else
-            {
-                // 멀어지는 장애물 또는 안전 거리 → 충돌 없음
-                return WarningLevel.Safe;
-            }
-        }
-
-        // TTC가 비정상이면 안전
-        if (float.IsInfinity(ttc) || float.IsNaN(ttc) || ttc < 0f)
-            return WarningLevel.Safe;
-
-        // TTC 기반 단계 판단 (낮은 TTC = 높은 위험)
-        if (ttc <= ttcBrake)
-            return WarningLevel.Brake;
-        if (ttc <= ttcWarning)
-            return WarningLevel.Warning;
-        if (ttc <= ttcSlowDown)
-            return WarningLevel.SlowDown;
-        if (ttc <= ttcCaution)
-            return WarningLevel.Caution;
-        if (ttc <= ttcAwareness)
-            return WarningLevel.Awareness;
-
-        return WarningLevel.Safe;
-    }
-
-    /// <summary>
-    /// 저속 또는 정지 상태에서 거리 기반으로 위험도를 평가
-    /// TTC 판단이 어려운 상황에서 보완 역할
-    /// </summary>
-    WarningLevel EvaluateLowSpeedWarning(float ultrasonicMin, float radarMin)
-    {
-        float minDistance = Mathf.Min(ultrasonicMin, radarMin);
-
-        if (float.IsInfinity(minDistance))
-            return WarningLevel.Safe;
-
-        // 긴급정지는 이미 Layer 1에서 처리됨
-        // 여기서는 저속 시 경고/주의 판단
-        if (minDistance <= lowSpeedWarningDistance)
-            return WarningLevel.Warning;
-        if (minDistance <= lowSpeedCautionDistance)
-            return WarningLevel.Caution;
-
-        return WarningLevel.Safe;
-    }
-
-    WarningLevel EvaluateDistancePriorityWarning(float primaryDistance)
-    {
-        if (float.IsInfinity(primaryDistance))
-            return WarningLevel.Safe;
-
-        float safeEmergencyDistance = Mathf.Max(0.01f, emergencyStopDistance);
-        float safeHardEmergencyDistance = Mathf.Clamp(hardEmergencyStopDistance, 0.01f, safeEmergencyDistance);
-
-        if (primaryDistance <= safeHardEmergencyDistance)
-            return WarningLevel.EmergencyStop;
-        if (primaryDistance <= safeEmergencyDistance)
-            return WarningLevel.Brake;
-        if (primaryDistance <= lowSpeedWarningDistance)
-            return WarningLevel.Warning;
-        if (primaryDistance <= lowSpeedCautionDistance)
-            return WarningLevel.Caution;
+        if (distance <= distEmergency + expansion) return WarningLevel.EmergencyStop;
+        if (distance <= distBrake     + expansion) return WarningLevel.Brake;
+        if (distance <= distWarning   + expansion) return WarningLevel.Warning;
+        if (distance <= distSlowDown  + expansion) return WarningLevel.SlowDown;
+        if (distance <= distCaution   + expansion) return WarningLevel.Caution;
+        if (distance <= distAwareness + expansion) return WarningLevel.Awareness;
 
         return WarningLevel.Safe;
     }
 
 
-
-    /// <summary>
-    /// TTC (Time To Collision, 충돌까지 남은 시간) 계산
-    /// 실제 ADAS 시스템과 동일하게 상대속도(Closing Speed) 기반으로 계산
-    /// 공식: TTC = 거리 / 상대속도
-    /// </summary>
-    void CalculateTTC()
-    {
-        // 장애물이 없으면 TTC 무한대
-        if (float.IsInfinity(currentMinDistance))
-        {
-            currentTTC = float.PositiveInfinity;
-            return;
-        }
-
-        // 상대속도가 0 이하면 (멀어지거나 정지) 충돌 없음
-        if (smoothedClosingSpeed <= minValidClosingSpeed)
-        {
-            // 멀어지는 경우: 충돌 없음 → TTC 무한대
-            // 하지만 차량이 움직이고 있고 장애물이 가까우면 보수적으로 판단
-            if (currentSpeed > 0.01f && currentMinDistance < lowSpeedCautionDistance)
-            {
-                // 정지된 장애물로 가정하고 차량 속도 기반 TTC 계산 (보수적 접근)
-                currentTTC = currentMinDistance / currentSpeed;
-            }
-            else
-            {
-                currentTTC = float.PositiveInfinity;
-            }
-            return;
-        }
-
-        // 상대속도 기반 TTC 계산 (실제 ADAS 방식)
-        currentTTC = currentMinDistance / smoothedClosingSpeed;
-
-        // TTC가 음수가 되는 비정상 상황 방지
-        if (currentTTC < 0f)
-        {
-            currentTTC = float.PositiveInfinity;
-        }
-    }
 
     void PrintDebugInfo()
     {
         bool hasStateChanged = currentWarningLevel != lastLoggedWarningLevel ||
                                detectionSource != lastLoggedDetectionSource ||
-                               detectionSensor != lastLoggedDetectionSensor;
+                               detectionSensor != lastLoggedDetectionSensor ||
+                               currentMotionDirection != lastLoggedMotionDirection;
         bool hasSnapshotIntervalElapsed = debugSnapshotInterval > 0f && (Time.time - lastDebugLogTime) >= debugSnapshotInterval;
+        bool shouldLogContinuously = !debugOnlyOnStateChange;
 
-        if (debugOnlyOnStateChange && !hasStateChanged && !hasSnapshotIntervalElapsed)
+        if (!shouldLogContinuously && !hasStateChanged && !hasSnapshotIntervalElapsed)
             return;
 
-        // Safe 상태에서는 상태 변화 때만 로그 (매 snapshot마다 Safe 로그 스팸 방지)
-        if (currentWarningLevel == WarningLevel.Safe && !hasStateChanged)
-            return;
+        WarningLevel motionWarning = GetMotionRelevantWarning(currentMotionDirection);
 
-        Debug.Log(
-            $"[Collision] Lv={currentWarningLevel}({(int)currentWarningLevel}) Dist={FormatDist(currentMinDistance)} TTC={FormatDist(currentTTC)} Ego={currentSpeed:F1} Close={smoothedClosingSpeed:F2} {detectionSource}-{detectionSensor}"
-        );
+        StringBuilder logBuilder = new StringBuilder();
+        logBuilder.Append($"[Collision] Speed={currentSpeed:F2} m/s | Motion={currentMotionDirection} → {motionWarning}");
+        logBuilder.Append('\n');
+        logBuilder.Append($"  Front: {FormatDirectional(frontWarning)} | Rear: {FormatDirectional(rearWarning)} | Left: {FormatDirectional(leftWarning)} | Right: {FormatDirectional(rightWarning)}");
+
+        if (debugIncludeSensorChannels)
+        {
+            logBuilder.Append('\n');
+            logBuilder.Append($"  Ultra   : {BuildUltrasonicSummary()}");
+        }
+
+        Debug.Log(logBuilder.ToString());
 
         lastLoggedWarningLevel = currentWarningLevel;
         lastLoggedDetectionSource = detectionSource;
         lastLoggedDetectionSensor = detectionSensor;
+        lastLoggedMotionDirection = currentMotionDirection;
         lastDebugLogTime = Time.time;
     }
 
-    static string FormatDist(float v) => float.IsInfinity(v) ? "∞" : $"{v:F2}";
+    static string FormatDirectional(DirectionalWarning w)
+    {
+        if (w.level == WarningLevel.Safe)
+            return "Safe";
+        return $"{w.level} ({w.dominantSensor}: {FormatDist(w.dominantDistance)}m)";
+    }
 
-    //// ========== 외부 참조용 안전 확인 메서드들 (7단계 기준) ==========
+    static string FormatDist(float value) => float.IsInfinity(value) ? "∞" : $"{value:F2}";
 
-    /// <summary>
-    /// 긴급정지가 필요한 상태인지 확인 (EmergencyStop)
-    /// 초음파 근접 감지 - 즉시 모든 동작 중지 필요
-    /// </summary>
+    string BuildUltrasonicSummary()
+    {
+        return
+            $"Front[FL={FormatDist(CurrentSensorData.ultrasonicFL)} FR={FormatDist(CurrentSensorData.ultrasonicFR)} FC={FormatDist(CurrentSensorData.ultrasonicFC)}] " +
+            $"Rear[RL={FormatDist(CurrentSensorData.ultrasonicRL)} RR={FormatDist(CurrentSensorData.ultrasonicRR)} RC={FormatDist(CurrentSensorData.ultrasonicRC)}] " +
+            $"Side[L={FormatDist(CurrentSensorData.ultrasonicSL)} R={FormatDist(CurrentSensorData.ultrasonicSR)}]";
+    }
+
+    // string BuildRadarSummary()
+    // {
+    //     return $"Front={FormatDist(CurrentSensorData.radarFront)} | Rear={FormatDist(CurrentSensorData.radarRear)}";
+    // }
+
+    void ResolveWarningSource(out string source, out string sensor)
+    {
+        if (TryResolveGlobalSource(out source, out sensor))
+            return;
+
+        source = "None";
+        sensor = "None";
+    }
+
+    bool TryResolveGlobalSource(out string source, out string sensor)
+    {
+        float ultrasonicMin = GetUltrasonicDistance(CurrentSensorData.ultrasonicClosest);
+
+        if (!float.IsInfinity(ultrasonicMin))
+        {
+            source = "Ultrasonic";
+            sensor = CurrentSensorData.ultrasonicClosest.ToString();
+            return true;
+        }
+
+        source = "None";
+        sensor = "None";
+        return false;
+    }
+
+    float GetUltrasonicDistance(SingleUltrasonicSensor.SensorPosition position)
+    {
+        return position switch
+        {
+            SingleUltrasonicSensor.SensorPosition.FrontLeft => CurrentSensorData.ultrasonicFL,
+            SingleUltrasonicSensor.SensorPosition.FrontRight => CurrentSensorData.ultrasonicFR,
+            SingleUltrasonicSensor.SensorPosition.FrontCenter => CurrentSensorData.ultrasonicFC,
+            SingleUltrasonicSensor.SensorPosition.RearLeft => CurrentSensorData.ultrasonicRL,
+            SingleUltrasonicSensor.SensorPosition.RearRight => CurrentSensorData.ultrasonicRR,
+            SingleUltrasonicSensor.SensorPosition.RearCenter => CurrentSensorData.ultrasonicRC,
+            SingleUltrasonicSensor.SensorPosition.SideLeft => CurrentSensorData.ultrasonicSL,
+            SingleUltrasonicSensor.SensorPosition.SideRight => CurrentSensorData.ultrasonicSR,
+            _ => float.PositiveInfinity
+        };
+    }
+
     public bool IsEmergencyStop() => currentWarningLevel == WarningLevel.EmergencyStop;
-
-    /// <summary>
-    /// 제동이 필요한 상태인지 확인 (Brake 이상)
-    /// TTC < 1초 또는 긴급정지 - 강한 감속 필요
-    /// </summary>
     public bool ShouldBrake() => currentWarningLevel >= WarningLevel.Brake;
-
-    /// <summary>
-    /// 경고 상태인지 확인 (Warning 이상)
-    /// TTC < 2초 - 적극적 감속 필요
-    /// </summary>
     public bool IsWarning() => currentWarningLevel >= WarningLevel.Warning;
-
-    /// <summary>
-    /// 감속이 필요한 상태인지 확인 (SlowDown 이상)
-    /// TTC < 3초 - 점진적 감속 필요
-    /// </summary>
     public bool ShouldSlowDown() => currentWarningLevel >= WarningLevel.SlowDown;
-
-    /// <summary>
-    /// 주의가 필요한 상태인지 확인 (Caution 이상)
-    /// TTC < 5초 - 전방 주시 필요
-    /// </summary>
     public bool IsCaution() => currentWarningLevel >= WarningLevel.Caution;
-
-    /// <summary>
-    /// 장애물을 인지한 상태인지 확인 (Awareness 이상)
-    /// 장애물 존재 확인됨
-    /// </summary>
     public bool IsAware() => currentWarningLevel >= WarningLevel.Awareness;
-
-    /// <summary>
-    /// 완전히 안전한 상태인지 확인 (Safe)
-    /// </summary>
     public bool IsSafe() => currentWarningLevel == WarningLevel.Safe;
-
-    /// <summary>
-    /// 차량 정지 판단용 통합 메서드
-    /// EmergencyStop 또는 Brake 상태일 때 true
-    /// 도로 주행 중 정지/분기 결정 포인트로 사용
-    /// </summary>
     public bool ShouldStop() => currentWarningLevel >= WarningLevel.Brake;
 
+    public MotionDirection GetMotionDirection() => currentMotionDirection;
+
+    // 방향별 위험도 API
+    public DirectionalWarning GetFrontWarning() => frontWarning;
+    public DirectionalWarning GetRearWarning()  => rearWarning;
+    public DirectionalWarning GetLeftWarning()  => leftWarning;
+    public DirectionalWarning GetRightWarning() => rightWarning;
+
+    // 클리어런스 API — "이 방향으로 조향해도 되는가"
+    public WarningLevel GetClearanceLeft()  => leftWarning.level;
+    public WarningLevel GetClearanceRight() => rightWarning.level;
+
+    // 조향 가능 여부 (Warning 이상이면 해당 방향 조향 제한)
+    public bool CanTurnLeft(WarningLevel limit = WarningLevel.Warning)
+        => leftWarning.level < limit;
+    public bool CanTurnRight(WarningLevel limit = WarningLevel.Warning)
+        => rightWarning.level < limit;
+
     public float GetDistanceToObstacle() => currentMinDistance;
-    public float GetPathDistanceToObstacle() => currentPathMinDistance;
-    public float GetSideDistanceToObstacle() => currentSideMinDistance;
-    public float GetTimeToCollision() => currentTTC;
     public WarningLevel GetWarningLevel() => currentWarningLevel;
-    /// <summary>
-    /// 상대속도(Closing Speed) 반환
-    /// 양수: 장애물이 가까워지는 중 (위험)
-    /// 음수: 장애물이 멀어지는 중 (안전)
-    /// </summary>
-    public float GetClosingSpeed() => smoothedClosingSpeed;
     public float GetEgoSpeed() => currentSpeed;
 
-    // 제동 거리를 고려한 안전 여유 공간 계산
     public float GetSafetyMargin(float reactionTime = 0.5f, float deceleration = 2f)
     {
         if (currentSpeed <= 0.01f)
             return currentMinDistance;
 
-        // 반응 시간 동안 이동 거리 + 제동 거리
         float reactionDistance = currentSpeed * reactionTime;
         float brakingDistance = (currentSpeed * currentSpeed) / (2f * deceleration);
-        float requiredDistance = reactionDistance + brakingDistance;
-
-        // 남은 여유 거리 반환 (음수면 충돌 위험)
-        return currentMinDistance - requiredDistance;
+        return currentMinDistance - (reactionDistance + brakingDistance);
     }
 
-    public bool IsFrontClear(float ultrasonicThreshold = 0.5f, float radarThreshold = 2.0f)
+    public bool IsFrontClear(float ultrasonicThreshold = 0.5f)
     {
-        bool ultrasonicClear = CurrentSensorData.ultrasonicMinFront > ultrasonicThreshold
-                               || float.IsInfinity(CurrentSensorData.ultrasonicMinFront);
-        bool radarClear = CurrentSensorData.radarFront > radarThreshold
-                          || float.IsInfinity(CurrentSensorData.radarFront);
-        return ultrasonicClear && radarClear;
+        return CurrentSensorData.ultrasonicMinFront > ultrasonicThreshold ||
+               float.IsInfinity(CurrentSensorData.ultrasonicMinFront);
     }
 
-    public bool IsRearClear(float ultrasonicThreshold = 0.5f, float radarThreshold = 2.0f)
+    public bool IsRearClear(float ultrasonicThreshold = 0.5f)
     {
-        bool ultrasonicClear = CurrentSensorData.ultrasonicMinRear > ultrasonicThreshold
-                               || float.IsInfinity(CurrentSensorData.ultrasonicMinRear);
-        bool radarClear = CurrentSensorData.radarRear > radarThreshold
-                          || float.IsInfinity(CurrentSensorData.radarRear);
-        return ultrasonicClear && radarClear;
+        return CurrentSensorData.ultrasonicMinRear > ultrasonicThreshold ||
+               float.IsInfinity(CurrentSensorData.ultrasonicMinRear);
     }
 
     public (string source, string sensor, float distance) GetClosestObstacleInfo()
     {
         return (detectionSource, detectionSensor, currentMinDistance);
+    }
+
+    // ============================================
+    // 방향별 주행 제어 API
+    // ============================================
+
+    /// <summary>
+    /// throttle과 steering 입력으로부터 현재 운동 방향을 결정한다.
+    /// </summary>
+    /// <param name="throttle">스로틀 입력 (-1~1, 양수=전진, 음수=후진)</param>
+    /// <param name="steering">조향 입력 (-1~1, 양수=좌회전, 음수=우회전)</param>
+    /// <param name="steeringDeadzone">조향 입력이 이 값 이하면 직진으로 판정</param>
+    /// <param name="throttleDeadzone">스로틀 입력이 이 값 이하면 정지로 판정</param>
+    public static MotionDirection ResolveMotionDirection(
+        float throttle, float steering,
+        float throttleDeadzone = 0.05f, float steeringDeadzone = 0.05f)
+    {
+        bool isStopped = Mathf.Abs(throttle) <= throttleDeadzone;
+        if (isStopped)
+            return MotionDirection.Stopped;
+
+        bool forward = throttle > 0f;
+        bool turningRight = steering > steeringDeadzone;
+        bool turningLeft = steering < -steeringDeadzone;
+
+        if (forward)
+        {
+            if (turningLeft)  return MotionDirection.MoveForwardLeft;
+            if (turningRight) return MotionDirection.MoveForwardRight;
+            return MotionDirection.MoveForward;
+        }
+        else
+        {
+            if (turningLeft)  return MotionDirection.MoveBackwardLeft;
+            if (turningRight) return MotionDirection.MoveBackwardRight;
+            return MotionDirection.MoveBackward;
+        }
+    }
+
+    /// <summary>
+    /// 운동 방향에 해당하는 센서들의 위험도 중 최댓값을 반환한다.
+    /// 방향별 directional warning 조합이 아닌, 개별 센서 거리를 직접 평가하여
+    /// 측면 센서(SL/SR)의 오판을 방지한다.
+    ///
+    /// 센서 매핑:
+    ///   Stopped            → 전방향 (기존 4개 directional max)
+    ///   MoveForward        → FC
+    ///   MoveForwardLeft    → FC, FL, FR (전방 3개 — 회전 시 차체 전면 전체 스윕)
+    ///   MoveForwardRight   → FC, FL, FR (전방 3개)
+    ///   MoveBackward       → RC
+    ///   MoveBackwardLeft   → RC, RL, RR (후방 3개 — 회전 시 차체 후면 전체 스윕)
+    ///   MoveBackwardRight  → RC, RL, RR (후방 3개)
+    /// </summary>
+    public WarningLevel GetMotionRelevantWarning(MotionDirection direction)
+    {
+        SensorData d = CurrentSensorData;
+
+        switch (direction)
+        {
+            case MotionDirection.Stopped:
+                return Max4(frontWarning.level, rearWarning.level,
+                            leftWarning.level, rightWarning.level);
+
+            case MotionDirection.MoveForward:
+                return EvaluateDistanceWarning(d.ultrasonicFC, currentSpeed);
+
+            case MotionDirection.MoveForwardLeft:
+            case MotionDirection.MoveForwardRight:
+                return Max3(
+                    EvaluateDistanceWarning(d.ultrasonicFC, currentSpeed),
+                    EvaluateDistanceWarning(d.ultrasonicFL, currentSpeed),
+                    EvaluateDistanceWarning(d.ultrasonicFR, currentSpeed));
+
+            case MotionDirection.MoveBackward:
+                return EvaluateDistanceWarning(d.ultrasonicRC, currentSpeed);
+
+            case MotionDirection.MoveBackwardLeft:
+            case MotionDirection.MoveBackwardRight:
+                return Max3(
+                    EvaluateDistanceWarning(d.ultrasonicRC, currentSpeed),
+                    EvaluateDistanceWarning(d.ultrasonicRL, currentSpeed),
+                    EvaluateDistanceWarning(d.ultrasonicRR, currentSpeed));
+
+            default:
+                return Max4(frontWarning.level, rearWarning.level,
+                            leftWarning.level, rightWarning.level);
+        }
+    }
+
+    /// <summary>
+    /// 운동 방향에 해당하는 센서들의 방향별 위험도 상세를 반환한다.
+    /// primary=진행 방향 중앙, sideL=좌측 코너, sideR=우측 코너.
+    /// 회전 시에는 해당 면(전방/후방) 3개 센서 전부 반환.
+    /// </summary>
+    public (DirectionalWarning primary, DirectionalWarning sideL, DirectionalWarning sideR)
+        GetMotionRelevantWarnings(MotionDirection direction)
+    {
+        DirectionalWarning none = new DirectionalWarning
+        {
+            level = WarningLevel.Safe,
+            dominantSensor = "None",
+            dominantDistance = float.PositiveInfinity
+        };
+
+        SensorData d = CurrentSensorData;
+
+        switch (direction)
+        {
+            case MotionDirection.Stopped:
+                return (frontWarning, leftWarning, rightWarning);
+
+            case MotionDirection.MoveForward:
+                return (EvaluateDirectionSingle(d.ultrasonicFC, "FC"), none, none);
+
+            case MotionDirection.MoveForwardLeft:
+            case MotionDirection.MoveForwardRight:
+                return (EvaluateDirectionSingle(d.ultrasonicFC, "FC"),
+                        EvaluateDirectionSingle(d.ultrasonicFL, "FL"),
+                        EvaluateDirectionSingle(d.ultrasonicFR, "FR"));
+
+            case MotionDirection.MoveBackward:
+                return (EvaluateDirectionSingle(d.ultrasonicRC, "RC"), none, none);
+
+            case MotionDirection.MoveBackwardLeft:
+            case MotionDirection.MoveBackwardRight:
+                return (EvaluateDirectionSingle(d.ultrasonicRC, "RC"),
+                        EvaluateDirectionSingle(d.ultrasonicRL, "RL"),
+                        EvaluateDirectionSingle(d.ultrasonicRR, "RR"));
+
+            default:
+                return (frontWarning, leftWarning, rightWarning);
+        }
+    }
+
+    static WarningLevel Max2(WarningLevel a, WarningLevel b) => a > b ? a : b;
+    static WarningLevel Max3(WarningLevel a, WarningLevel b, WarningLevel c)
+    {
+        WarningLevel ab = a > b ? a : b;
+        return ab > c ? ab : c;
     }
 }

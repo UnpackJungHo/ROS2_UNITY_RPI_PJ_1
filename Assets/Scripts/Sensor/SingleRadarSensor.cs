@@ -149,6 +149,7 @@ public class SingleRadarSensor : MonoBehaviour
         horizontalRayNum = Mathf.Max(1, horizontalRayNum);
         verticalRayNum = Mathf.Max(1, verticalRayNum);
         maxRelativeVelocity = Mathf.Max(0.1f, maxRelativeVelocity);
+        detectionLayer = SensorPhysicsUtil.SanitizeDetectionLayerMask(detectionLayer, this);
         if (selfRoot == null)
             selfRoot = transform.root;
 

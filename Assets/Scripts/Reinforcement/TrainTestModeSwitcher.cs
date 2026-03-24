@@ -46,7 +46,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
     [Header("Core References")]
     public AutoDriverRLAgent autoDriverRLAgent;
     public RegressionDrivingController regressionDrivingController;
-    public DrivingStatusUIController drivingStatusUIController;
     public TrafficLightDecisionEngine trafficLightDecisionEngine;
     public VehicleMotionController wheelController;
     public BehaviorParameters behaviorParameters;
@@ -145,9 +144,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
         if (regressionDrivingController == null)
             regressionDrivingController = FindOne<RegressionDrivingController>(includeInactiveObjects);
 
-        if (drivingStatusUIController == null)
-            drivingStatusUIController = FindOne<DrivingStatusUIController>(includeInactiveObjects);
-
         if (trafficLightDecisionEngine == null)
             trafficLightDecisionEngine = FindOne<TrafficLightDecisionEngine>(includeInactiveObjects);
 
@@ -220,13 +216,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             regressionDrivingController.useAcademyStepStagger = true;
         }
 
-        if (drivingStatusUIController != null)
-        {
-            drivingStatusUIController.useExternalCollisionTopicForUI = false;
-            drivingStatusUIController.fallbackToLocalCollisionPublisher = true;
-            drivingStatusUIController.forceLocalCollisionUiWhenTraining = true;
-        }
-
         if (trafficLightDecisionEngine != null)
         {
             trafficLightDecisionEngine.useSceneTrafficLightState = true;
@@ -263,13 +252,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
         {
             regressionDrivingController.isAutonomousMode = false;
             regressionDrivingController.predictionOnlyMode = true;
-        }
-
-        if (drivingStatusUIController != null)
-        {
-            drivingStatusUIController.useExternalCollisionTopicForUI = true;
-            drivingStatusUIController.fallbackToLocalCollisionPublisher = false;
-            drivingStatusUIController.forceLocalCollisionUiWhenTraining = false;
         }
 
         if (trafficLightDecisionEngine != null)

@@ -249,9 +249,9 @@ public class RLEpisodeEvaluator : MonoBehaviour
             timeAtDangerLevel += dt;
         }
 
-        float ttc = collisionWarningEngine.GetTimeToCollision();
-        if (!float.IsInfinity(ttc))
-            minObservedTtc = Mathf.Min(minObservedTtc, ttc);
+        float obstacleDist = collisionWarningEngine.GetDistanceToObstacle();
+        if (!float.IsInfinity(obstacleDist))
+            minObservedTtc = Mathf.Min(minObservedTtc, obstacleDist);
 
         float speed = vehicleMotionController != null ? Mathf.Abs(vehicleMotionController.GetSpeedMS()) : 0f;
         bool isDangerStop = level >= dangerLevelThreshold && speed <= stoppedSpeedThreshold;

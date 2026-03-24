@@ -267,10 +267,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -476,10 +476,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -709,10 +709,10 @@ MonoBehaviour:
   clutterVelocityStdDev: 0.2
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
   defaultExternalConfidence: 0.9
@@ -963,6 +963,8 @@ MonoBehaviour:
     maxStep: 0
   hasUpgradedFromAgentParameters: 1
   MaxStep: 0
+  autoFindReferences: 0
+  requestDecisionInFixedUpdateWithoutRequester: 1
   vehicleMotionController: {fileID: 6187067975751547706}
   progressRewardProvider: {fileID: 95263165113997854}
   episodeEvaluator: {fileID: 6826545173591977314}
@@ -986,8 +988,6 @@ MonoBehaviour:
   radarRear: {fileID: 825995468223939761}
   useRandomRoadStart: 1
   randomLateralOffsetM: 0.3
-  autoFindReferences: 0
-  requestDecisionInFixedUpdateWithoutRequester: 1
   useStaggeredDecision: 0
   staggerOffset: -1
   followTargetTransform: {fileID: 7802254047883063259}
@@ -1000,28 +1000,17 @@ MonoBehaviour:
   useEpisodeStartTransformRotation: 1
   residualSteerScale: 1
   residualAccelScale: 1
-  applyTrainingStabilityTuning: 0
-  tunedResidualSteerScale: 0.35
-  tunedResidualAccelScale: 0.25
-  tunedWarningBrake: 0.15
   allowReverse: 1
-  enableSafetyOverride: 0
-  cautionThrottleScale: 0.55
-  warningBrake: 0.35
-  brakeLevelBrake: 0.8
-  emergencyBrake: 1
-  warningBrakeMinSpeed: 0.6
   externalRosCmdInputOnly: 0
   forceInternalControlWhenTraining: 1
-  speedNormalize: 3
-  lateralErrorNormalize: 2
-  headingErrorNormalizeDeg: 45
+  speedNormalize: 2
+  lateralErrorNormalize: 5
+  headingErrorNormalizeDeg: 30
   ttcNormalizeSeconds: 8
   stopLineDistanceNormalize: 30
   includeStopLineDistance: 0
   includeBasePredictions: 0
   includeTrafficDecisionOneHot: 0
-  includeSafetyOverrideLevel: 0
   successTerminalReward: 30
   failureTerminalPenalty: -30
   lastBaseSteering: 0
@@ -1433,8 +1422,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.48688376, y: 0.3147988, z: 0.065633714}
-  m_Center: {x: -0.018571733, y: 0.21453516, z: 0.4671717}
+  m_Size: {x: 0.4459842, y: 0.16741484, z: 0.065633714}
+  m_Center: {x: -0.0060323025, y: 0.2882271, z: 0.46716338}
 --- !u!1 &1079205385195473078
 GameObject:
   m_ObjectHideFlags: 0
@@ -2605,10 +2594,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -2833,7 +2822,7 @@ GameObject:
   - component: {fileID: 3384946636282722396}
   - component: {fileID: 8305313710517596954}
   m_Layer: 0
-  m_Name: AutoCar_Root_Train
+  m_Name: AutoCar_Root_RL_Train
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2877,7 +2866,6 @@ MonoBehaviour:
   includeInactiveObjects: 1
   autoDriverRLAgent: {fileID: 4159083330648792518}
   regressionDrivingController: {fileID: 4494735359675892481}
-  drivingStatusUIController: {fileID: 0}
   trafficLightDecisionEngine: {fileID: 7102873461698130618}
   wheelController: {fileID: 6187067975751547706}
   behaviorParameters: {fileID: 612386458469136431}
@@ -5263,10 +5251,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -7457,10 +7445,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -8172,10 +8160,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -9270,10 +9258,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -9414,42 +9402,28 @@ MonoBehaviour:
   sensorRL: {fileID: 3885927124273908046}
   sensorRR: {fileID: 3662249158891623658}
   sensorRC: {fileID: 6043765204754200245}
-  radarFront: {fileID: 6330470486549932030}
-  radarRear: {fileID: 825995468223939761}
-  ttcAwareness: 5
-  ttcCaution: 3
-  ttcSlowDown: 2
-  ttcWarning: 1.5
-  ttcBrake: 1
-  emergencyStopDistance: 0.3
-  minEmergencyStopConfidence: 0.55
-  hardEmergencyStopDistance: 0.12
-  radarMinSafeDistance: 0.5
-  suppressRearEmergencyWhenNotReversing: 1
-  lowSpeedThreshold: 0.5
-  lowSpeedCautionDistance: 1.5
-  lowSpeedWarningDistance: 0.8
+  sensorSL: {fileID: 205174304047029841}
+  sensorSR: {fileID: 7897773471130077271}
+  distAwareness: 1.5
+  distCaution: 1.2
+  distSlowDown: 0.9
+  distWarning: 0.7
+  distBrake: 0.5
+  distEmergency: 0.2
+  speedMarginFactor: 0.5
+  vehicleMotion: {fileID: 6187067975751547706}
+  motionSpeedThreshold: 0.08
+  motionSteeringThreshold: 0.1
   velocitySource: {fileID: 1756694113144254877}
-  useVelocityForTTC: 1
-  wheelController: {fileID: 6187067975751547706}
-  enablePathAwareRiskSplit: 1
-  sideAdvisoryDistance: 0.45
-  sideTurnBrakeDistance: 0.25
-  sideEmergencyHardDistance: 0.12
-  sideTurnSteeringAngleThreshold: 7
-  showDebugInfo: 0
+  showDebugInfo: 1
   debugOnlyOnStateChange: 1
   debugSnapshotInterval: 1
   debugIncludeSensorChannels: 1
   currentMinDistance: Infinity
-  currentPathMinDistance: Infinity
-  currentSideMinDistance: Infinity
-  currentTTC: Infinity
   currentWarningLevel: 0
   detectionSource: None
   detectionSensor: None
-  closingSpeedSmoothFactor: 0.3
-  minValidClosingSpeed: 0.05
+  currentMotionDirection: 0
 --- !u!114 &1648483763981294531
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11524,10 +11498,10 @@ MonoBehaviour:
   reliableConfidenceThreshold: 0.45
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -12144,10 +12118,10 @@ MonoBehaviour:
   clutterVelocityStdDev: 0.2
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 0
+  showDebugRays: 1
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
   defaultExternalConfidence: 0.9

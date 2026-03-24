@@ -28,10 +28,14 @@ using UnityEngine;
 ///   includeStopLineDistance      → 정지선 거리 (+1D)
 ///   includeBasePredictions       → 모방학습 base 예측 steer/throttle (+2D)
 ///   includeTrafficDecisionOneHot → 신호등 one-hot Go/Caution/Stop (+3D)
-///   includeSafetyOverrideLevel   → safety override level (+1D)
 /// </summary>
 public class AutoDriverRLAgent : Agent
 {
+    [Header("Setup")]
+    public bool autoFindReferences = true;
+    [Tooltip("DecisionRequester가 없을 때 FixedUpdate마다 RequestDecision 호출")]
+    public bool requestDecisionInFixedUpdateWithoutRequester = false;
+
     [Header("References")]
     public VehicleMotionController vehicleMotionController;
     public ProgressRewardProvider progressRewardProvider;
@@ -76,11 +80,6 @@ public class AutoDriverRLAgent : Agent
     [Tooltip("도로 횡방향 최대 오프셋 (m). 도로 폭 내를 벗어나지 않도록 설정")]
     public float randomLateralOffsetM = 0.3f;
 
-    [Header("Setup")]
-    public bool autoFindReferences = true;
-    [Tooltip("DecisionRequester가 없을 때 FixedUpdate마다 RequestDecision 호출")]
-    public bool requestDecisionInFixedUpdateWithoutRequester = false;
-
     [Header("Decision Staggering")]
     [Tooltip("true: DecisionRequester.DecisionStep을 에이전트별로 자동 배정\n" +
              "→ 8대 동시 BehaviourUpdate 스파이크를 프레임별 1~2회로 분산\n" +
@@ -112,25 +111,9 @@ public class AutoDriverRLAgent : Agent
     [Tooltip("RL 보정값의 최대 크기 (accel)")]
     [Range(0.01f, 1f)] public float residualAccelScale = 0.3f;
 
-    [Header("Training Stability Tuning")]
-    [Tooltip("학습 안정화를 위해 residual/safety 파라미터를 권장 범위로 자동 보정")]
-    public bool applyTrainingStabilityTuning = true;
-    [Range(0.2f, 0.5f)] public float tunedResidualSteerScale = 0.35f;
-    [Range(0.15f, 0.35f)] public float tunedResidualAccelScale = 0.25f;
-    [Range(0.1f, 0.2f)] public float tunedWarningBrake = 0.15f;
-
     [Header("Action Mapping")]
     [Tooltip("false면 음수 accel은 브레이크로 처리")]
     public bool allowReverse = false;
-    public bool enableSafetyOverride = true;
-    [Range(0f, 1f)] public float cautionThrottleScale = 0.55f;
-    [Range(0f, 1f)] public float warningBrake = 0.35f;
-    [Range(0f, 1f)] public float brakeLevelBrake = 0.8f;
-    [Range(0f, 1f)] public float emergencyBrake = 1f;
-
-    [Tooltip("Warning 단계에서 brake를 적용할 최소 속도 (m/s). 저속에서는 크리핑을 허용")]
-    public float warningBrakeMinSpeed = 0.6f;
-
 
     [Header("Control Source")]
     [Tooltip("true면 외부 ROS cmd 토픽만 사용하고, Agent/Regression의 내부 제어 출력을 차량에 적용하지 않음")]
@@ -152,8 +135,6 @@ public class AutoDriverRLAgent : Agent
     public bool includeBasePredictions = false;
     [Tooltip("true면 신호등 one-hot (Go, Caution, Stop)을 관측에 포함 (+3D). 신호등 null이면 항상 Go=1.")]
     public bool includeTrafficDecisionOneHot = false;
-    [Tooltip("true면 safety override level (0~1)을 관측에 포함 (+1D). 학습 중 Override 비활성 시 의미 없음.")]
-    public bool includeSafetyOverrideLevel = false;
 
     [Header("Terminal Reward Shaping")]
     public float successTerminalReward = 1f;
@@ -185,7 +166,7 @@ public class AutoDriverRLAgent : Agent
     // ──────────────────────────────────────────────
 
     /// <summary>
-    /// Agent 최초 초기화. 레퍼런스 탐색, 학습 안정화 튜닝, 시작 포즈 캐시,
+    /// Agent 최초 초기화. 레퍼런스 탐색, 시작 포즈 캐시,
     /// 에피소드 종료 이벤트 구독, Residual 모드 활성화를 순서대로 수행한다.
     /// </summary>
     public override void Initialize()
@@ -194,22 +175,19 @@ public class AutoDriverRLAgent : Agent
         if (autoFindReferences)
             AutoFindReferences();
 
-        // 2) 학습 안정화를 위해 residual/safety 파라미터를 권장 범위로 클램프
-        ApplyTrainingStabilityTuning();
-
-        // 3) 에피소드 시작 위치/회전을 캐시해 두어 리셋 시 사용
+        // 2) 에피소드 시작 위치/회전을 캐시해 두어 리셋 시 사용
         CacheStartPose();
 
-        // 4) EpisodeEvaluator의 종료 이벤트에 구독 (에피소드 종료 시 보상 부여 + EndEpisode 호출)
+        // 3) EpisodeEvaluator의 종료 이벤트에 구독 (에피소드 종료 시 보상 부여 + EndEpisode 호출)
         RefreshTerminalSubscription();
 
-        // 5) 모방학습 컨트롤러를 predictionOnly 모드로 전환하여 RL이 제어 우선권을 가짐
+        // 4) 모방학습 컨트롤러를 predictionOnly 모드로 전환하여 RL이 제어 우선권을 가짐
         EnableResidualMode();
 
-        // 6) 초기화 완료 플래그 설정 (종료 콜백에서 초기화 전 호출 방지용)
+        // 5) 초기화 완료 플래그 설정 (종료 콜백에서 초기화 전 호출 방지용)
         agentInitialized = true;
 
-        // 7) Stagger 활성화: DecisionRequester.DecisionStep에 에이전트별 오프셋 배정
+        // 6) Stagger 활성화: DecisionRequester.DecisionStep에 에이전트별 오프셋 배정
         //    DecisionRequester는 그대로 유지 — 공식 ML-Agents API로 분산 처리
         if (useStaggeredDecision && decisionRequester != null)
         {
@@ -285,20 +263,17 @@ public class AutoDriverRLAgent : Agent
         if (autoFindReferences)
             AutoFindReferences();
 
-        // 2) 학습 안정화 파라미터 재적용
-        ApplyTrainingStabilityTuning();
-
-        // 3) 에피소드 종료 이벤트 구독 갱신
+        // 2) 에피소드 종료 이벤트 구독 갱신
         RefreshTerminalSubscription();
 
-        // 4) Agent Transform 동기화
+        // 3) Agent Transform 동기화
         SyncToFollowTarget();
 
-        // 5) 랜덤 도로 스폰 활성 시 시작 포즈를 매 에피소드 새로 샘플링
+        // 4) 랜덤 도로 스폰 활성 시 시작 포즈를 매 에피소드 새로 샘플링
         if (useRandomRoadStart)
             ApplyRandomRoadStartPose();
 
-        // 6) 차량 위치/회전/속도를 시작 포즈로 리셋
+        // 5) 차량 위치/회전/속도를 시작 포즈로 리셋
         if (resetVehicleTransformOnEpisodeBegin)
         {
             // Residual RL 모드에서는 시작 회전을 강제 적용해야 모방학습이 올바르게 동작
@@ -319,10 +294,10 @@ public class AutoDriverRLAgent : Agent
             ResetVehicleState();
         }
 
-        // 7) 모방학습을 predictionOnly 모드로, RL이 제어 우선권을 갖도록 설정
+        // 6) 모방학습을 predictionOnly 모드로, RL이 제어 우선권을 갖도록 설정
         EnableResidualMode();
 
-        // 8) 모방학습 컨트롤러의 내부 상태를 리셋
+        // 7) 모방학습 컨트롤러의 내부 상태를 리셋
         //    forceInference=false: TeleportRoot 직후 카메라가 아직 이전 위치를 가리킬 수 있으므로
         //    즉시 추론하지 않고 다음 Update()에서 물리 정착 후 추론
         if (regressionDrivingController != null)
@@ -330,7 +305,7 @@ public class AutoDriverRLAgent : Agent
             regressionDrivingController.ResetForEpisodeRestart(forceInference: false);
         }
 
-        // 9) 에피소드 평가기 또는 보상 제공자의 상태를 리셋
+        // 8) 에피소드 평가기 또는 보상 제공자의 상태를 리셋
         //    에피소드 리셋의 소유권을 단일화하여 이중 리셋과 인덱스 드리프트를 방지
         if (episodeEvaluator != null)
         {
@@ -344,10 +319,7 @@ public class AutoDriverRLAgent : Agent
             progressRewardProvider.ResetRewardState();
         }
 
-        // 9) 학습/테스트 모드에 따라 SafetyOverride 자동 전환
-        AutoConfigureSafetyOverride();
-
-        // 10) 디버그 상태 초기화
+        // 9) 디버그 상태 초기화
         lastTerminalReason = "None";
         lastConsumedStepReward = 0f;
     }
@@ -355,7 +327,7 @@ public class AutoDriverRLAgent : Agent
     /// <summary>
     /// 매 스텝마다 환경 관측값(observation)을 수집하여 정책 네트워크에 전달한다.
     /// 기본 8D: speed, signedLateralError, headingError, ttc, warningLevel, steer, throttle, brake
-    /// Optional 플래그로 stopLineDistance(+1), basePredictions(+2), trafficOneHot(+3), safetyOverrideLevel(+1) 추가 가능.
+    /// Optional 플래그로 stopLineDistance(+1), basePredictions(+2), trafficOneHot(+3) 추가 가능.
     /// </summary>
     public override void CollectObservations(VectorSensor sensor)
     {
@@ -365,9 +337,9 @@ public class AutoDriverRLAgent : Agent
 
         // 현재 차량 속도 (m/s)
         float speed = vehicleMotionController != null ? vehicleMotionController.GetSpeedMS() : 0f;
-        // 충돌까지 남은 시간 (TTC, seconds)
+        // 충돌 경고 존 최소 거리 (TTC 제거 후 대체)
         float ttc = collisionWarningEngine != null
-            ? collisionWarningEngine.GetTimeToCollision()
+            ? collisionWarningEngine.GetDistanceToObstacle()
             : float.PositiveInfinity;
         // 충돌 경고 레벨 정규화 (0~1, 6단계 기준)
         float warningLevelNorm = collisionWarningEngine != null
@@ -437,10 +409,6 @@ public class AutoDriverRLAgent : Agent
             sensor.AddObservation(decision == 1 ? 1f : 0f);                               // opt: Caution (주의)
             sensor.AddObservation(decision == 2 ? 1f : 0f);                               // opt: Stop (정지)
         }
-
-        // ─── Safety Override Level 관측 (Optional, includeSafetyOverrideLevel=true 시 +1D) ───
-        if (includeSafetyOverrideLevel)
-            sensor.AddObservation(ComputeSafetyOverrideLevel());                           // opt: safety override level (0~1)
 
         // ─── 초음파 + 레이더 센서 관측 (Optional, includeSensorObservations=true 시 +10D) ───
         if (includeSensorObservations)
@@ -609,23 +577,8 @@ public class AutoDriverRLAgent : Agent
     }
 
     // ──────────────────────────────────────────────
-    //  제어 모드 & 학습 안정화
+    //  제어 모드
     // ──────────────────────────────────────────────
-
-    /// <summary>
-    /// 학습(Communicator 연결) 여부에 따라 enableSafetyOverride를 자동 전환한다.
-    /// 학습 시: false (Override가 PPO credit assignment를 방해하지 않도록)
-    /// 테스트/추론 시: true (실제 주행 안전 보장)
-    /// </summary>
-    void AutoConfigureSafetyOverride()
-    {
-        bool isTraining = IsTrainingMode();
-        if (enableSafetyOverride == isTraining)
-        {
-            enableSafetyOverride = !isTraining;
-            Debug.Log($"[AutoDriverRLAgent] AutoConfigureSafetyOverride: enableSafetyOverride={enableSafetyOverride} (isTraining={isTraining})");
-        }
-    }
 
     /// <summary>
     /// 모방학습 컨트롤러를 predictionOnly 모드로 설정하고,
@@ -658,23 +611,6 @@ public class AutoDriverRLAgent : Agent
         // 휠 컨트롤러를 외부 제어 모드로 설정 (RL Agent가 직접 조향/스로틀/브레이크 제어)
         if (vehicleMotionController != null)
             vehicleMotionController.externalControlEnabled = true;
-    }
-
-    /// <summary>
-    /// 학습 안정화를 위해 residualScale과 warningBrake를 튜닝된 범위로 클램프한다.
-    /// applyTrainingStabilityTuning이 true일 때만 동작한다.
-    /// </summary>
-    void ApplyTrainingStabilityTuning()
-    {
-        if (!applyTrainingStabilityTuning)
-            return;
-
-        // 조향 보정 스케일을 0.2~0.5 범위로 제한 (커브 교정 유효 범위 확대)
-        residualSteerScale = Mathf.Clamp(tunedResidualSteerScale, 0.2f, 0.5f);
-        // 가속 보정 스케일을 0.15~0.35 범위로 제한
-        residualAccelScale = Mathf.Clamp(tunedResidualAccelScale, 0.15f, 0.35f);
-        // 경고 시 브레이크 강도를 0.1~0.2 범위로 제한
-        warningBrake = Mathf.Clamp(tunedWarningBrake, 0.1f, 0.2f);
     }
 
     // ──────────────────────────────────────────────
@@ -842,13 +778,12 @@ public class AutoDriverRLAgent : Agent
     }
 
     // ──────────────────────────────────────────────
-    //  Residual 행동 적용 & 안전 오버라이드
+    //  Residual 행동 적용
     // ──────────────────────────────────────────────
 
     /// <summary>
     /// RL 정책의 delta 행동을 모방학습 base 예측에 합산하여 차량에 적용한다.
     /// 최종 제어값 = clamp(base + delta * residualScale)
-    /// 안전 오버라이드가 활성화되면 충돌 경고/신호등에 따라 throttle/brake를 보정한다.
     /// </summary>
     void ApplyResidualAction(ActionBuffers actions)
     {
@@ -905,11 +840,7 @@ public class AutoDriverRLAgent : Agent
             }
         }
 
-        // 5) 안전 오버라이드 적용 (충돌 경고/신호등에 따른 throttle/brake 보정)
-        if (enableSafetyOverride)
-            ApplySafetyOverride(ref throttle, ref brake);
-
-        // 6) 최종 클램프 후 차량에 적용
+        // 5) 최종 클램프 후 차량에 적용
         float clampedThrottle = Mathf.Clamp(throttle, allowReverse ? -1f : 0f, 1f);
         float clampedBrake = Mathf.Clamp01(brake);
 
@@ -918,7 +849,7 @@ public class AutoDriverRLAgent : Agent
         vehicleMotionController.SetThrottle(clampedThrottle);
         vehicleMotionController.SetBrake(clampedBrake);
 
-        // 7) 디버그용 마지막 적용값 기록
+        // 6) 디버그용 마지막 적용값 기록
         lastDeltaSteering = deltaSteer;
         lastDeltaAccel = deltaAccel;
         lastAppliedSteer = finalSteer;
@@ -941,64 +872,6 @@ public class AutoDriverRLAgent : Agent
 
         // 외부 입력이 활성 = externalRosCmdInputOnly가 켜져 있고 && 강제 내부 제어가 아닐 때
         return externalRosCmdInputOnly && !runtimeForceInternalControlActive;
-    }
-
-    /// <summary>
-    /// 충돌 경고 레벨과 신호등 결정에 따라 throttle/brake를 안전하게 오버라이드한다.
-    /// 경고 레벨이 높을수록 더 강한 제동을 적용하며, 신호등 Stop/Caution에도 반응한다.
-    /// </summary>
-    void ApplySafetyOverride(ref float throttle, ref float brake)
-    {
-        // ─── 충돌 경고 기반 안전 오버라이드 ───
-        if (collisionWarningEngine != null)
-        {
-            CollisionWarningEngine.WarningLevel level = collisionWarningEngine.GetWarningLevel();
-
-            if (level >= CollisionWarningEngine.WarningLevel.EmergencyStop)
-            {
-                // 비상 정지: 스로틀 0, 최대 브레이크
-                throttle = 0f;
-                brake = Mathf.Max(brake, emergencyBrake);
-            }
-            else if (level >= CollisionWarningEngine.WarningLevel.Brake)
-            {
-                // 브레이크 단계: 스로틀 0, 강한 브레이크
-                throttle = 0f;
-                brake = Mathf.Max(brake, brakeLevelBrake);
-            }
-            else if (level >= CollisionWarningEngine.WarningLevel.Warning)
-            {
-                // 경고 단계: 스로틀 제한, 최소 속도 이상이면 브레이크 적용
-                throttle = Mathf.Min(throttle, 0.15f);
-                float speed = vehicleMotionController != null ? vehicleMotionController.GetSpeedMS() : 0f;
-                if (Mathf.Abs(speed) >= Mathf.Max(0f, warningBrakeMinSpeed))
-                    brake = Mathf.Max(brake, warningBrake);
-            }
-            else if (level >= CollisionWarningEngine.WarningLevel.SlowDown)
-            {
-                // 감속 단계: 스로틀만 제한 (부드러운 감속)
-                throttle = Mathf.Min(throttle, cautionThrottleScale);
-            }
-        }
-
-        // ─── 신호등 기반 안전 오버라이드 ───
-        if (trafficLightDecisionEngine != null)
-        {
-            TrafficLightDecisionEngine.TrafficDecision decision = trafficLightDecisionEngine.GetDecision();
-
-            if (decision == TrafficLightDecisionEngine.TrafficDecision.Stop)
-            {
-                // 정지 신호: 스로틀 0, 권장 브레이크 적용
-                throttle = 0f;
-                brake = Mathf.Max(brake, trafficLightDecisionEngine.GetRecommendedBrake());
-            }
-            else if (decision == TrafficLightDecisionEngine.TrafficDecision.Caution)
-            {
-                // 주의 신호: 스로틀 제한 + 권장 브레이크 적용
-                throttle = Mathf.Min(throttle, trafficLightDecisionEngine.GetRecommendedThrottleScale());
-                brake = Mathf.Max(brake, trafficLightDecisionEngine.GetRecommendedBrake());
-            }
-        }
     }
 
     // ──────────────────────────────────────────────
@@ -1101,7 +974,7 @@ public class AutoDriverRLAgent : Agent
 
     /// <summary>
     /// ML-Agents Communicator(학습 파이썬 프로세스)가 연결된 학습 모드인지 반환한다.
-    /// AutoConfigureSafetyOverride, IsExternalRosCmdInputActive 등에서 공유 사용.
+    /// IsExternalRosCmdInputActive 등에서 공유 사용.
     /// </summary>
     static bool IsTrainingMode() => Academy.Instance != null && Academy.Instance.IsCommunicatorOn;
 
@@ -1124,26 +997,6 @@ public class AutoDriverRLAgent : Agent
         // 분모가 0에 가까울 때 나눗셈 오류 방지
         float safeDenom = Mathf.Max(1e-4f, denom);
         return Mathf.Clamp(value / safeDenom, -1f, 1f);
-    }
-
-    /// <summary>
-    /// 현재 Safety Override 강도를 0~1로 변환한다.
-    /// Agent가 override 상태를 관측하여 위험 상황에서 스스로 제동을 학습할 수 있도록 한다.
-    /// Safe/Caution → 0, SlowDown → 0.3, Warning → 0.6, Brake/Emergency → 1.0
-    /// </summary>
-    float ComputeSafetyOverrideLevel()
-    {
-        if (collisionWarningEngine == null)
-            return 0f;
-
-        return collisionWarningEngine.GetWarningLevel() switch
-        {
-            CollisionWarningEngine.WarningLevel.SlowDown    => 0.3f,
-            CollisionWarningEngine.WarningLevel.Warning     => 0.6f,
-            CollisionWarningEngine.WarningLevel.Brake       => 1.0f,
-            CollisionWarningEngine.WarningLevel.EmergencyStop => 1.0f,
-            _ => 0f
-        };
     }
 
     /// <summary>

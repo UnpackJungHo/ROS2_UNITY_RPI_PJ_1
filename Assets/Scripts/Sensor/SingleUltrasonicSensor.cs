@@ -25,6 +25,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
     [Tooltip("센서 위치 (FL, FR, FC, RL, RR, RC, SL, SR) - 이 설정에 따라 센서 이름과 역할이 결정됨")]
     public SensorPosition sensorPosition = SensorPosition.FrontLeft;
 
+    // 현재 0.02m ~ 4m 까지 인식, 30도로 5개의 레이로 검사, 0.05 보다 낮거나 2.5보다 멀면 confidence(신뢰도)감소,  미검출 확률 근거리 2%, 원거리 12%, 신뢰로 인정하는 최소 신뢰도 45%
     [Header("Ultrasonic Specifications (초음파 센서 사양)")]
     [Tooltip("최소 감지 거리 (m) - 이 거리 미만의 물체는 무시됨")]
     public float rangeMin = 0.02f;
@@ -136,6 +137,7 @@ public class SingleUltrasonicSensor : MonoBehaviour
     {
         reliableRangeMin = Mathf.Clamp(reliableRangeMin, rangeMin, rangeMax);
         reliableRangeMax = Mathf.Clamp(reliableRangeMax, reliableRangeMin, rangeMax);
+        detectionLayer = SensorPhysicsUtil.SanitizeDetectionLayerMask(detectionLayer, this);
         if (selfRoot == null)
             selfRoot = transform.root;
 
@@ -299,11 +301,13 @@ public class SingleUltrasonicSensor : MonoBehaviour
 
         // 초음파는 정면 반사(법선 정렬)가 유리, 사각 입사에서 신뢰도 감소
         float incidenceAngle = Vector3.Angle(-rayDirection, hitNormal); // 0deg=정면, 90deg=사각
+        // 정면 반사일수록 높음, 사각 입사일수록 낮음. 75deg 이상이면 신뢰도 0 설정
         float incidenceConfidence = Mathf.Clamp01((75f - incidenceAngle) / 75f);
-
         float distanceRatio = Mathf.InverseLerp(reliableRangeMin, rangeMax, distance);
         float dropoutProbability = Mathf.Lerp(dropoutProbabilityNear, dropoutProbabilityFar, distanceRatio);
+        // 입사각이 나쁠수록 미검출 확률 증가
         dropoutProbability += (1f - incidenceConfidence) * 0.2f;
+        // 미검출 확률은 최대 95%. 5%는 검출 확률을 남겨놈
         dropoutProbability = Mathf.Clamp(dropoutProbability, 0f, 0.95f);
 
         if (UnityEngine.Random.value < dropoutProbability)
