@@ -105,7 +105,6 @@ public class RLEpisodeCsvLogger : MonoBehaviour
             "terminal_reason",
             "cumulative_reward",
             "progress_reward",
-            "zone_reward",
             "heading_reward",
             "lateral_reward",
             "safety_penalty",
@@ -148,7 +147,6 @@ public class RLEpisodeCsvLogger : MonoBehaviour
         }
 
         float progressReward = 0f;
-        float zoneReward = 0f;
         float headingReward = 0f;
         float lateralReward = 0f;
         float safetyPenalty = 0f;
@@ -158,7 +156,6 @@ public class RLEpisodeCsvLogger : MonoBehaviour
         if (progressRewardProvider != null)
         {
             progressReward = progressRewardProvider.GetCumulativeProgressReward();
-            zoneReward = progressRewardProvider.GetCumulativeZoneReward();
             headingReward = progressRewardProvider.GetCumulativeHeadingReward();
             lateralReward = progressRewardProvider.GetCumulativeLateralReward();
             safetyPenalty = progressRewardProvider.GetCumulativeSafetyPenalty();
@@ -175,7 +172,6 @@ public class RLEpisodeCsvLogger : MonoBehaviour
             Escape(evaluator.GetTerminalReason()),
             cumulativeReward.ToString("F3"),
             progressReward.ToString("F3"),
-            zoneReward.ToString("F3"),
             headingReward.ToString("F3"),
             lateralReward.ToString("F3"),
             safetyPenalty.ToString("F3"),

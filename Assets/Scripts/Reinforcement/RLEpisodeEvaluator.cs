@@ -66,6 +66,10 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [Tooltip("상대 충돌속도가 이 값 이상일 때만 충돌 실패로 인정")]
     public float collisionMinRelativeSpeed = 0.1f;
 
+    [Header("Checkpoint Anti-Exploit")]
+    [Tooltip("체크포인트 유효화에 필요한 스폰 지점 대비 최소 이동 거리(m). 0이면 비활성.")]
+    public float checkpointMinDistanceFromSpawn = 5f;
+
     [Header("Stuck Detection")]
     /// <summary>에피소드 시작 직후 모델 로드/초기 추론 대기를 위한 유예 시간(초). 이 기간에는 stuck 감지 비활성.</summary>
     [Tooltip("에피소드 시작 후 이 시간(초)이 지나야 stuck 감지 시작")]
@@ -142,6 +146,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [SerializeField] private float stuckDistanceAccum = 0f;
     /// <summary>stuck 감지를 위해 이전 프레임의 차량 월드 위치를 저장 (fallback용).</summary>
     private Vector3 stuckLastPosition;
+    /// <summary>체크포인트 익스플로잇 방지용 에피소드 시작 위치.</summary>
+    private Vector3 episodeSpawnPosition;
     /// <summary>stuck 감지 윈도우 시작 시점의 경로 진행거리(pathS). 경로 진행 기반 stuck 판정에 사용.</summary>
     private float stuckPathSAtWindowStart = 0f;
 
@@ -224,6 +230,7 @@ public class RLEpisodeEvaluator : MonoBehaviour
         stuckTimer = 0f;
         stuckDistanceAccum = 0f;
         stuckLastPosition = vehicleMotionController != null ? vehicleMotionController.transform.position : transform.position;
+        episodeSpawnPosition = stuckLastPosition;
         stuckPathSAtWindowStart = progressRewardProvider != null ? progressRewardProvider.GetCurrentPathS() : 0f;
 
         if (progressRewardProvider != null)
@@ -341,24 +348,40 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (!episodeActive || terminalReached || collision == null)
+        if (collision == null)
             return;
 
-        int otherLayerMask = 1 << collision.collider.gameObject.layer;
+        NotifyCollision(collision.collider, collision.relativeVelocity.magnitude);
+    }
+
+    /// <summary>
+    /// 물리 충돌 또는 트리거 릴레이로부터 전달된 충돌 후보를 실패 조건으로 판정한다.
+    /// 반환값은 실제로 FailCollision 종료가 발생했는지 여부다.
+    /// </summary>
+    public bool NotifyCollision(Collider otherCollider, float relativeSpeed)
+    {
+        if (!episodeActive || terminalReached || otherCollider == null)
+            return false;
+
+        int otherLayerMask = 1 << otherCollider.gameObject.layer;
         if ((collisionFailLayers.value & otherLayerMask) == 0)
-            return;
+            return false;
 
-        float relativeSpeed = collision.relativeVelocity.magnitude;
         if (relativeSpeed < collisionMinRelativeSpeed)
-            return;
+            return false;
 
         collisionCount++;
-        lastCollisionObjectName = collision.collider != null ? collision.collider.name : "Unknown";
+        lastCollisionObjectName = otherCollider.name;
         lastCollisionRelativeSpeed = relativeSpeed;
+        // Debug.Log(
+        //     $"[RLEpisodeEvaluator] Collision detected: obj={otherCollider.name}, layer={LayerMask.LayerToName(otherCollider.gameObject.layer)}, relV={relativeSpeed:F2}m/s, count={collisionCount}",
+        //     this
+        // );
         SetTerminal(
             TerminalType.FailCollision,
-            $"Collision(obj={collision.collider.name}, relV={relativeSpeed:F2}m/s)"
+            $"Collision(obj={otherCollider.name}, relV={relativeSpeed:F2}m/s)"
         );
+        return true;
     }
 
     /// <summary>
@@ -494,4 +517,15 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
     public bool HasPassedCheckpoint() => checkpointPassed;
     public void SetCheckpointPassed(bool passed) => checkpointPassed = passed;
+
+    /// <summary>스폰 지점 대비 최소 거리를 이동했는지 확인. 체크포인트 게이밍 방지용.</summary>
+    public bool HasTraveledMinDistanceFromSpawn()
+    {
+        if (checkpointMinDistanceFromSpawn <= 0f) return true;
+        Vector3 currentPos = vehicleMotionController != null
+            ? vehicleMotionController.transform.position : transform.position;
+        Vector3 delta = currentPos - episodeSpawnPosition;
+        delta.y = 0f;
+        return delta.magnitude >= checkpointMinDistanceFromSpawn;
+    }
 }

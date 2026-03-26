@@ -4,30 +4,32 @@ using Unity.MLAgents.Sensors;
 using UnityEngine;
 
 /// <summary>
-/// Residual RL Agent: 모방학습(Regression) 출력 위에 보정값(delta)을 학습.
-///
-/// 최종 제어 = clamp(base + delta)
-///   base: RegressionDrivingController의 ONNX 추론 결과
-///   delta: RL 정책이 출력하는 보정값
+/// 순수 RL Agent (또는 Residual RL): 차량 주행 정책을 학습.
 ///
 /// Continuous action space (2):
-///   0: delta_steering [-1, 1] (실제 효과는 residualScale로 제한)
-///   1: delta_accel    [-1, 1]
+///   0: steering [-1, 1]
+///   1: accel    [-1, 1]
 ///
-/// Observation space (8, 기본 활성):
-///   0: speed (속도)
-///   1: signedLateralError (부호 있는 횡방향 오차)
-///   2: headingError (헤딩 오차)
-///   3: ttc (충돌까지 남은 시간)
-///   4: warningLevel (충돌 경고 레벨)
-///   5: currentSteer (현재 조향 입력)
-///   6: currentThrottle (현재 스로틀 입력)
-///   7: currentBrake (현재 브레이크 입력)
+/// Observation space (13, 기본 활성):
+///   0: speed (속도, /2.0)
+///   1: signedLateralError (부호 있는 횡방향 오차, /5.0)
+///   2: headingCos (cos(headingError) — 정렬 품질: 1=정렬, -1=역주행)
+///   3: headingSin (sin(headingError) — 편향 방향: +=우측, -=좌측)
+///   4: frontWarningLevel (전방 위험도 0~1)
+///   5: rearWarningLevel  (후방 위험도 0~1)
+///   6: leftWarningLevel  (좌측 위험도 0~1)
+///   7: rightWarningLevel (우측 위험도 0~1)
+///   8: currentSteer (현재 조향 입력)
+///   9: currentThrottle (현재 스로틀 입력)
+///  10: currentBrake (현재 브레이크 입력)
+///  11: acceleration (가속도, /5.0)
+///  12: lookaheadHeadingDeg (전방 도로 방향 변화, /90°, +=우회전 -=좌회전)
 ///
-///   비활성 (Inspector 플래그로 재활성화 가능):
+///   Optional (Inspector 플래그):
 ///   includeStopLineDistance      → 정지선 거리 (+1D)
 ///   includeBasePredictions       → 모방학습 base 예측 steer/throttle (+2D)
 ///   includeTrafficDecisionOneHot → 신호등 one-hot Go/Caution/Stop (+3D)
+///   includeSensorObservations    → 초음파 8D (+8D)
 /// </summary>
 public class AutoDriverRLAgent : Agent
 {
@@ -46,13 +48,9 @@ public class AutoDriverRLAgent : Agent
     public VehicleCmdSubscriber vehicleCmdSubscriber;
     public DecisionRequester decisionRequester;
 
-    [Header("Sensor Observations (+10D)")]
-    [Tooltip("true면 초음파 8D + 레이더 2D 를 관측에 포함 (총 +10D). BehaviorParameters도 동일하게 변경 필요")]
-    public bool includeSensorObservations = false;
+    [Header("Sensor Observations (+8D)")]
     [Tooltip("초음파 거리 정규화 기준 (m) — rangeMax=4m 에 맞춤")]
     public float ultrasonicNormalizeM = 4f;
-    [Tooltip("레이더 거리 정규화 기준 (m)")]
-    public float radarNormalizeM = 10f;
     [Tooltip("초음파 FL — ultrasonic_fl_link의 SingleUltrasonicSensor")]
     public SingleUltrasonicSensor sensorFL;
     [Tooltip("초음파 FR — ultrasonic_fr_link의 SingleUltrasonicSensor")]
@@ -69,10 +67,6 @@ public class AutoDriverRLAgent : Agent
     public SingleUltrasonicSensor sensorSL;
     [Tooltip("초음파 SR — ultrasonic_sr_link의 SingleUltrasonicSensor")]
     public SingleUltrasonicSensor sensorSR;
-    [Tooltip("레이더 전방 — SingleRadarSensor (Front)")]
-    public SingleRadarSensor radarFront;
-    [Tooltip("레이더 후방 — SingleRadarSensor (Rear)")]
-    public SingleRadarSensor radarRear;
 
     [Header("Random Road Start")]
     [Tooltip("true면 에피소드마다 ProgressRewardProvider 중심선 위 랜덤 위치로 스폰")]
@@ -122,13 +116,14 @@ public class AutoDriverRLAgent : Agent
     public bool forceInternalControlWhenTraining = true;
 
     [Header("Observation Normalization")]
-    public float speedNormalize = 3f;
-    public float lateralErrorNormalize = 2f;
-    public float headingErrorNormalizeDeg = 45f;
-    public float ttcNormalizeSeconds = 8f;
+    public float speedNormalize = 2f;
+    public float lateralErrorNormalize = 5f;
     public float stopLineDistanceNormalize = 30f;
+    public float accelNormalize = 5f;
 
     [Header("Optional Observations")]
+    [Tooltip("true면 초음파 8D를 관측에 포함 (총 +8D). BehaviorParameters도 동일하게 변경 필요")]
+    public bool includeSensorObservations = false;
     [Tooltip("true면 정지선 거리를 관측에 포함 (+1D). 현재 맵에 정지선 학습 미포함 시 비활성 권장.")]
     public bool includeStopLineDistance = false;
     [Tooltip("true면 모방학습 base 예측 (steer, throttle)을 관측에 포함 (+2D). regressionDrivingController=null이면 항상 0.")]
@@ -153,6 +148,8 @@ public class AutoDriverRLAgent : Agent
     [SerializeField] private float lastSignedLateralError = 0f;
     [SerializeField] private string lastTerminalReason = "None";
     [SerializeField] private bool runtimeForceInternalControlActive = false;
+    [SerializeField] private float lastAcceleration = 0f;
+    [SerializeField] private float lastLookaheadHeadingDeg = 0f;
 
     private Vector3 startPosition;           // 에피소드 시작 위치 캐시
     private Quaternion startRotation;        // 에피소드 시작 회전 캐시
@@ -160,6 +157,7 @@ public class AutoDriverRLAgent : Agent
     private ArticulationBody rootArticulation; // 차량 루트 ArticulationBody (물리 리셋용)
     private RLEpisodeEvaluator subscribedEvaluator; // 현재 구독 중인 에피소드 평가기 (중복 구독 방지)
     private bool agentInitialized = false;   // Initialize() 완료 여부 플래그
+    private float previousSpeed = 0f;        // 가속도 관측용 이전 프레임 속도
 
     // ──────────────────────────────────────────────
     //  ML-Agents 라이프사이클 오버라이드
@@ -322,36 +320,29 @@ public class AutoDriverRLAgent : Agent
         // 9) 디버그 상태 초기화
         lastTerminalReason = "None";
         lastConsumedStepReward = 0f;
+        previousSpeed = 0f;
     }
 
     /// <summary>
     /// 매 스텝마다 환경 관측값(observation)을 수집하여 정책 네트워크에 전달한다.
-    /// 기본 8D: speed, signedLateralError, headingError, ttc, warningLevel, steer, throttle, brake
-    /// Optional 플래그로 stopLineDistance(+1), basePredictions(+2), trafficOneHot(+3) 추가 가능.
+    /// 기본 11D: speed, signedLateralError, headingCos, headingSin,
+    ///           frontWarning, rearWarning, leftWarning, rightWarning,
+    ///           steer, throttle, brake
+    /// Optional 플래그로 stopLineDistance(+1), basePredictions(+2), trafficOneHot(+3), sensor(+8) 추가 가능.
     /// </summary>
     public override void CollectObservations(VectorSensor sensor)
     {
-        // SyncToFollowTarget() ← 제거: FixedUpdate()에서 이미 수행됨
-
-        // ─── 환경 상태 관측 (인덱스 0~4, 필수) ───
+        // ─── 환경 상태 관측 (기본 11D) ───
 
         // 현재 차량 속도 (m/s)
         float speed = vehicleMotionController != null ? vehicleMotionController.GetSpeedMS() : 0f;
-        // 충돌 경고 존 최소 거리 (TTC 제거 후 대체)
-        float ttc = collisionWarningEngine != null
-            ? collisionWarningEngine.GetDistanceToObstacle()
-            : float.PositiveInfinity;
-        // 충돌 경고 레벨 정규화 (0~1, 6단계 기준)
-        float warningLevelNorm = collisionWarningEngine != null
-            ? Mathf.Clamp01((int)collisionWarningEngine.GetWarningLevel() / 6f)
-            : 0f;
+
         // 정지선까지 거리
         float stopLineDistance = trafficLightDecisionEngine != null
             ? trafficLightDecisionEngine.GetDecisionDistance()
             : float.PositiveInfinity;
 
-        // ProgressRewardProvider 캐시에서 헤딩/횡오차 읽기 (O(N) → O(1))
-        // ProgressRewardProvider.FixedUpdate()가 CollectObservations()보다 먼저 실행됨이 보장된다.
+        // ProgressRewardProvider 캐시에서 헤딩/횡오차 읽기 (O(1))
         float headingErrorDeg;
         float signedLateralError;
         if (progressRewardProvider != null)
@@ -366,24 +357,55 @@ public class AutoDriverRLAgent : Agent
         lastHeadingErrorDeg = headingErrorDeg;
         lastSignedLateralError = signedLateralError;
 
-        // 관측값을 정규화하여 센서에 추가 (기본 8D)
-        sensor.AddObservation(NormalizeSigned(speed, speedNormalize));                    // 0: 속도 (부호 있는 정규화)
-        sensor.AddObservation(NormalizeSigned(signedLateralError, lateralErrorNormalize)); // 1: 횡방향 오차 부호 포함 (-1~1)
-        sensor.AddObservation(NormalizeSigned(headingErrorDeg, headingErrorNormalizeDeg)); // 2: 헤딩 오차 (-1~1)
-        sensor.AddObservation(Normalize01(ttc, ttcNormalizeSeconds, 1f));                  // 3: TTC (0~1, 무한대→1)
-        sensor.AddObservation(warningLevelNorm);                                           // 4: 충돌 경고 레벨 (0~1)
+        // 헤딩 오차를 sin/cos로 분해 (360° 전 구간 구분, 포화 없음)
+        // headingErrorDeg: +=우측(시계방향), -=좌측(반시계방향)
+        float headingRad = headingErrorDeg * Mathf.Deg2Rad;
+        float headingCos = Mathf.Cos(headingRad); // 정렬 품질: 1=정렬, -1=역주행
+        float headingSin = Mathf.Sin(headingRad); // 편향 방향: +=우측, -=좌측
+
+        // 방향별 충돌 경고 레벨 (0~1, 6단계 기준)
+        float frontWarningNorm = collisionWarningEngine != null
+            ? Mathf.Clamp01((int)collisionWarningEngine.GetFrontWarning().level / 6f) : 0f;
+        float rearWarningNorm = collisionWarningEngine != null
+            ? Mathf.Clamp01((int)collisionWarningEngine.GetRearWarning().level / 6f) : 0f;
+        float leftWarningNorm = collisionWarningEngine != null
+            ? Mathf.Clamp01((int)collisionWarningEngine.GetLeftWarning().level / 6f) : 0f;
+        float rightWarningNorm = collisionWarningEngine != null
+            ? Mathf.Clamp01((int)collisionWarningEngine.GetRightWarning().level / 6f) : 0f;
+
+        sensor.AddObservation(NormalizeSigned(speed, speedNormalize));                     // 0: 속도 (부호 있는 정규화, /2.0)
+        sensor.AddObservation(NormalizeSigned(signedLateralError, lateralErrorNormalize));  // 1: 횡방향 오차 (-1~1, /5.0)
+        sensor.AddObservation(headingCos);                                                  // 2: 헤딩 cos (정렬 품질)
+        sensor.AddObservation(headingSin);                                                  // 3: 헤딩 sin (편향 방향)
+        sensor.AddObservation(frontWarningNorm);                                            // 4: 전방 위험도 (0~1)
+        sensor.AddObservation(rearWarningNorm);                                             // 5: 후방 위험도 (0~1)
+        sensor.AddObservation(leftWarningNorm);                                             // 6: 좌측 위험도 (0~1)
+        sensor.AddObservation(rightWarningNorm);                                            // 7: 우측 위험도 (0~1)
 
         if (includeStopLineDistance)
             sensor.AddObservation(Normalize01(stopLineDistance, stopLineDistanceNormalize, 1f)); // opt: 정지선 거리 (0~1)
 
-        // ─── 현재 차량 입력 관측 (인덱스 5~7) ───
+        // ─── 현재 차량 입력 관측 (인덱스 8~10) ───
 
         float currentSteer = vehicleMotionController != null ? vehicleMotionController.GetSteeringInput() : 0f;
         float currentThrottle = vehicleMotionController != null ? vehicleMotionController.GetThrottleInput() : 0f;
         float currentBrake = vehicleMotionController != null ? vehicleMotionController.GetBrakeInput() : 0f;
-        sensor.AddObservation(Mathf.Clamp(currentSteer, -1f, 1f));                        // 5: 현재 조향 입력
-        sensor.AddObservation(Mathf.Clamp(currentThrottle, -1f, 1f));                     // 6: 현재 스로틀 입력
-        sensor.AddObservation(Mathf.Clamp01(currentBrake));                                // 7: 현재 브레이크 입력
+        sensor.AddObservation(Mathf.Clamp(currentSteer, -1f, 1f));                         // 8: 현재 조향 입력
+        sensor.AddObservation(Mathf.Clamp(currentThrottle, -1f, 1f));                      // 9: 현재 스로틀 입력
+        sensor.AddObservation(Mathf.Clamp01(currentBrake));                                 // 10: 현재 브레이크 입력
+
+        // ─── 가속도 관측 (인덱스 11) ───
+        float fixedDt = Time.fixedDeltaTime;
+        float acceleration = fixedDt > 0f ? (speed - previousSpeed) / fixedDt : 0f;
+        previousSpeed = speed;
+        lastAcceleration = acceleration;
+        sensor.AddObservation(NormalizeSigned(acceleration, accelNormalize));               // 11: 가속도
+
+        // ─── 전방 도로 방향 변화 관측 (인덱스 12) ───
+        float lookaheadHeadingDeg = progressRewardProvider != null
+            ? progressRewardProvider.GetLookaheadHeadingDeg() : 0f;
+        lastLookaheadHeadingDeg = lookaheadHeadingDeg;
+        sensor.AddObservation(NormalizeSigned(lookaheadHeadingDeg, 90f));                  // 12: 전방 헤딩 변화 (+=우회전, -=좌회전)
 
         // ─── 모방학습 base 예측값 관측 (Optional, includeBasePredictions=true 시 +2D) ───
 
@@ -392,8 +414,8 @@ public class AutoDriverRLAgent : Agent
 
         if (includeBasePredictions)
         {
-            sensor.AddObservation(Mathf.Clamp(baseSteering, -1f, 1f));                    // opt: base 조향 예측
-            sensor.AddObservation(Mathf.Clamp(baseThrottle, 0f, 1f));                     // opt: base 스로틀 예측
+            sensor.AddObservation(Mathf.Clamp(baseSteering, -1f, 1f));                     // opt: base 조향 예측
+            sensor.AddObservation(Mathf.Clamp(baseThrottle, 0f, 1f));                      // opt: base 스로틀 예측
         }
 
         // 디버그용 마지막 base 값 기록
@@ -405,29 +427,24 @@ public class AutoDriverRLAgent : Agent
         if (includeTrafficDecisionOneHot)
         {
             int decision = trafficLightDecisionEngine != null ? (int)trafficLightDecisionEngine.GetDecision() : 0;
-            sensor.AddObservation(decision == 0 ? 1f : 0f);                               // opt: Go (진행)
-            sensor.AddObservation(decision == 1 ? 1f : 0f);                               // opt: Caution (주의)
-            sensor.AddObservation(decision == 2 ? 1f : 0f);                               // opt: Stop (정지)
+            sensor.AddObservation(decision == 0 ? 1f : 0f);                                // opt: Go (진행)
+            sensor.AddObservation(decision == 1 ? 1f : 0f);                                // opt: Caution (주의)
+            sensor.AddObservation(decision == 2 ? 1f : 0f);                                // opt: Stop (정지)
         }
 
-        // ─── 초음파 + 레이더 센서 관측 (Optional, includeSensorObservations=true 시 +10D) ───
+        // ─── 초음파 센서 관측 (Optional, includeSensorObservations=true 시 +8D) ───
         if (includeSensorObservations)
         {
             float uMax = Mathf.Max(1f, ultrasonicNormalizeM);
             // 초음파 8개: FL/FR/FC/RL/RR/RC/SL/SR 순서 고정 (미할당 시 1.0=장애물 없음)
-            sensor.AddObservation(NormalizeDist(sensorFL  != null ? sensorFL.Distance  : float.PositiveInfinity, uMax)); // 8: 초음파 FL
-            sensor.AddObservation(NormalizeDist(sensorFR  != null ? sensorFR.Distance  : float.PositiveInfinity, uMax)); // 9: 초음파 FR
-            sensor.AddObservation(NormalizeDist(sensorFC  != null ? sensorFC.Distance  : float.PositiveInfinity, uMax)); // 10: 초음파 FC
-            sensor.AddObservation(NormalizeDist(sensorRL  != null ? sensorRL.Distance  : float.PositiveInfinity, uMax)); // 11: 초음파 RL
-            sensor.AddObservation(NormalizeDist(sensorRR  != null ? sensorRR.Distance  : float.PositiveInfinity, uMax)); // 12: 초음파 RR
-            sensor.AddObservation(NormalizeDist(sensorRC  != null ? sensorRC.Distance  : float.PositiveInfinity, uMax)); // 13: 초음파 RC
-            sensor.AddObservation(NormalizeDist(sensorSL  != null ? sensorSL.Distance  : float.PositiveInfinity, uMax)); // 14: 초음파 SL
-            sensor.AddObservation(NormalizeDist(sensorSR  != null ? sensorSR.Distance  : float.PositiveInfinity, uMax)); // 15: 초음파 SR
-
-            float rMax = Mathf.Max(1f, radarNormalizeM);
-            // 레이더 2개: Front/Rear (미할당 시 1.0=감지 없음)
-            sensor.AddObservation(NormalizeDist(radarFront != null ? radarFront.Distance : float.PositiveInfinity, rMax)); // 16: 레이더 전방
-            sensor.AddObservation(NormalizeDist(radarRear  != null ? radarRear.Distance  : float.PositiveInfinity, rMax)); // 17: 레이더 후방
+            sensor.AddObservation(NormalizeDist(sensorFL  != null ? sensorFL.Distance  : float.PositiveInfinity, uMax)); // 11: 초음파 FL
+            sensor.AddObservation(NormalizeDist(sensorFR  != null ? sensorFR.Distance  : float.PositiveInfinity, uMax)); // 12: 초음파 FR
+            sensor.AddObservation(NormalizeDist(sensorFC  != null ? sensorFC.Distance  : float.PositiveInfinity, uMax)); // 13: 초음파 FC
+            sensor.AddObservation(NormalizeDist(sensorRL  != null ? sensorRL.Distance  : float.PositiveInfinity, uMax)); // 14: 초음파 RL
+            sensor.AddObservation(NormalizeDist(sensorRR  != null ? sensorRR.Distance  : float.PositiveInfinity, uMax)); // 15: 초음파 RR
+            sensor.AddObservation(NormalizeDist(sensorRC  != null ? sensorRC.Distance  : float.PositiveInfinity, uMax)); // 16: 초음파 RC
+            sensor.AddObservation(NormalizeDist(sensorSL  != null ? sensorSL.Distance  : float.PositiveInfinity, uMax)); // 17: 초음파 SL
+            sensor.AddObservation(NormalizeDist(sensorSR  != null ? sensorSR.Distance  : float.PositiveInfinity, uMax)); // 18: 초음파 SR
         }
     }
 

@@ -70,6 +70,9 @@ public class FinishLineGate : MonoBehaviour
         var evaluator = vehicleCollider.transform.root.GetComponentInChildren<RLEpisodeEvaluator>();
         if (evaluator == null || evaluator.IsTerminalReached()) return;
 
+        // 스폰 직후 체크포인트 게이밍 방지: 최소 이동 거리 미달 시 무시
+        if (!evaluator.HasTraveledMinDistanceFromSpawn()) return;
+
         evaluator.SetCheckpointPassed(true);
         Debug.Log("체크포인트 통과!");
     }

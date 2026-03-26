@@ -270,7 +270,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -479,7 +479,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -712,7 +712,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
   defaultExternalConfidence: 0.9
@@ -929,7 +929,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_BrainParameters:
-    VectorObservationSize: 18
+    VectorObservationSize: 21
     NumStackedVectorObservations: 1
     m_ActionSpec:
       m_NumContinuousActions: 2
@@ -973,9 +973,7 @@ MonoBehaviour:
   regressionDrivingController: {fileID: 0}
   vehicleCmdSubscriber: {fileID: 1519878728667346806}
   decisionRequester: {fileID: 1696420975499934141}
-  includeSensorObservations: 1
   ultrasonicNormalizeM: 4
-  radarNormalizeM: 10
   sensorFL: {fileID: 3746642224027788228}
   sensorFR: {fileID: 5105114971436956309}
   sensorFC: {fileID: 3215122723163762781}
@@ -984,8 +982,6 @@ MonoBehaviour:
   sensorRC: {fileID: 6043765204754200245}
   sensorSL: {fileID: 205174304047029841}
   sensorSR: {fileID: 7897773471130077271}
-  radarFront: {fileID: 6330470486549932030}
-  radarRear: {fileID: 825995468223939761}
   useRandomRoadStart: 1
   randomLateralOffsetM: 0.3
   useStaggeredDecision: 0
@@ -1005,9 +1001,9 @@ MonoBehaviour:
   forceInternalControlWhenTraining: 1
   speedNormalize: 2
   lateralErrorNormalize: 5
-  headingErrorNormalizeDeg: 30
-  ttcNormalizeSeconds: 8
   stopLineDistanceNormalize: 30
+  accelNormalize: 5
+  includeSensorObservations: 1
   includeStopLineDistance: 0
   includeBasePredictions: 0
   includeTrafficDecisionOneHot: 0
@@ -1025,6 +1021,8 @@ MonoBehaviour:
   lastSignedLateralError: 0
   lastTerminalReason: None
   runtimeForceInternalControlActive: 0
+  lastAcceleration: 0
+  lastLookaheadHeadingDeg: 0
 --- !u!114 &1696420975499934141
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1192,6 +1190,7 @@ GameObject:
   - component: {fileID: 5052256863981608670}
   - component: {fileID: 6187067975751547706}
   - component: {fileID: 3506496409581599437}
+  - component: {fileID: 277120691020860436}
   m_Layer: 11
   m_Name: base_link
   m_TagString: Untagged
@@ -1424,6 +1423,23 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.4459842, y: 0.16741484, z: 0.065633714}
   m_Center: {x: -0.0060323025, y: 0.2882271, z: 0.46716338}
+--- !u!114 &277120691020860436
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1058269563358656476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4df560210343fe26b8a2da4d14606c0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  episodeEvaluator: {fileID: 6826545173591977314}
+  vehicleMotionController: {fileID: 6187067975751547706}
+  autoFindReferences: 1
+  ignoreSelfColliders: 1
+  attachedListenerCount: 0
 --- !u!1 &1079205385195473078
 GameObject:
   m_ObjectHideFlags: 0
@@ -2597,7 +2613,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -2822,7 +2838,7 @@ GameObject:
   - component: {fileID: 3384946636282722396}
   - component: {fileID: 8305313710517596954}
   m_Layer: 0
-  m_Name: AutoCar_Root_RL_Train
+  m_Name: AC_Train
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5254,7 +5270,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -7448,7 +7464,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -8163,7 +8179,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -8245,16 +8261,17 @@ MonoBehaviour:
   autoDriverRLAgent: {fileID: 4159083330648792518}
   autoBeginOnStart: 1
   stopVehicleOnTerminal: 1
-  maxEpisodeSeconds: 300
+  maxEpisodeSeconds: 200
   enableFinishLineTerminal: 1
   dangerLevelThreshold: 5
-  dangerStopHoldSeconds: 0.7
+  dangerStopHoldSeconds: 9999
   stoppedSpeedThreshold: 0.05
   maxLateralErrorForFailure: 0
   collisionFailLayers:
     serializedVersion: 2
-    m_Bits: 55
-  collisionMinRelativeSpeed: 0.1
+    m_Bits: 1
+  collisionMinRelativeSpeed: 0
+  checkpointMinDistanceFromSpawn: 15
   stuckGracePeriod: 5
   stuckTimeWindow: 20
   stuckDistanceThreshold: 1
@@ -9261,7 +9278,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -9415,7 +9432,7 @@ MonoBehaviour:
   motionSpeedThreshold: 0.08
   motionSteeringThreshold: 0.1
   velocitySource: {fileID: 1756694113144254877}
-  showDebugInfo: 1
+  showDebugInfo: 0
   debugOnlyOnStateChange: 1
   debugSnapshotInterval: 1
   debugIncludeSensorChannels: 1
@@ -10742,32 +10759,34 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   triggerTarget: {fileID: 1058269563358656476}
-  progressRewardScale: 1
+  progressRewardScale: 2
   reverseProgressPenaltyScale: 1.4
-  zoneRewardWeight: 0.5
-  zoneRewardNoProgressScale: 0
-  zoneRewardFullScaleProgressSpeed: 0.5
-  headingRewardWeight: 2.5
-  headingErrorNormalizeDeg: 30
+  reverseGearPenaltyPerSec: 2
+  targetSpeedMs: 2
+  speedBonusMin: 0.5
+  speedBonusMax: 1.5
+  headingRewardWeight: 0.3
   lateralRewardWeight: 1
   lateralErrorMaxM: 5
   collisionWarningEngine: {fileID: 1551831686719741408}
-  cautionPenaltyPerSec: 0.05
-  warningPenaltyPerSec: 0.15
-  brakePenaltyPerSec: 0.35
-  emergencyPenaltyPerSec: 1.2
+  cautionPenaltyPerSec: 0.1
+  warningPenaltyPerSec: 0.3
+  brakePenaltyPerSec: 0.5
+  emergencyPenaltyPerSec: 1.5
   trafficLightDecisionEngine: {fileID: 7102873461698130618}
   vehicleMotionController: {fileID: 6187067975751547706}
   redViolationSpeedThreshold: 0.2
   redViolationPenaltyPerSec: 0.6
   headingRecoveryThresholdDeg: 90
   headingRecoveryPenaltyWeight: 0.5
+  headingFlatPenaltyThresholdDeg: 120
+  headingFlatPenaltyPerSec: 1.5
+  headingErrorNormalizeDeg: 45
   accumulateOnlyWhenEpisodeActive: 1
   episodeEvaluator: {fileID: 6826545173591977314}
   showSegmentGizmos: 0
   cumulativeReward: 0
   cumulativeProgressReward: 0
-  cumulativeZoneReward: 0
   currentLateralError: 0
   cumulativeHeadingReward: 0
   cumulativeLateralReward: 0
@@ -10777,7 +10796,6 @@ MonoBehaviour:
   currentZoneName: None
   activeZoneCount: 0
   lastProgressReward: 0
-  lastZoneReward: 0
   lastHeadingReward: 0
   lastLateralReward: 0
   targetZoneName: None
@@ -10785,8 +10803,13 @@ MonoBehaviour:
   lastTrafficPenalty: 0
   lastHeadingRecoveryPenalty: 0
   cumulativeHeadingRecoveryPenalty: 0
+  lastHeadingFlatPenalty: 0
+  cumulativeHeadingFlatPenalty: 0
+  lastReverseGearPenalty: 0
+  cumulativeReverseGearPenalty: 0
   lastStepReward: 0
   lastForwardProgress: 0
+  lastLookaheadHeadingDeg: 0
   progressWaypoints: []
   isLoopedPath: 0
   cachedHeadingErrorDeg: 0
@@ -11501,7 +11524,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
@@ -12121,7 +12144,7 @@ MonoBehaviour:
     m_Bits: 1
   ignoreSelfColliders: 1
   selfRoot: {fileID: 0}
-  showDebugRays: 1
+  showDebugRays: 0
   hitColor: {r: 1, g: 0, b: 0, a: 1}
   missColor: {r: 1, g: 0.5, b: 0.5, a: 0.3}
   defaultExternalConfidence: 0.9

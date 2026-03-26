@@ -201,8 +201,6 @@ public class AutoCarSetup
             rlAgent.sensorRC                   = sRC;
             rlAgent.sensorSL                   = sSL;
             rlAgent.sensorSR                   = sSR;
-            rlAgent.radarFront                 = radarFrontSensor;
-            rlAgent.radarRear                  = radarRearSensor;
             rlAgent.followTargetTransform      = baseLinkGo.transform;
             rlAgent.episodeStartTransform      = rlStartPoseT;
             EditorUtility.SetDirty(rlAgent);
