@@ -2,14 +2,14 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// 카메라 설정, RenderTexture 관리, Stabilizer를 담당하는 로직 컴포넌트.
+/// 카메라 설정, RenderTexture 관리를 담당하는 로직 컴포넌트.
 /// ROS 발행은 CameraPublisher가 담당한다.
 /// </summary>
 public class CameraRenderer : MonoBehaviour
 {
     [Header("Camera Settings")]
-    public int imageWidth = 640;
-    public int imageHeight = 480;
+    public int imageWidth = 200;
+    public int imageHeight = 66;
 
     [Tooltip("카메라 X축 회전 각도 (피치)")]
     [Range(-90f, 90f)]
@@ -30,31 +30,11 @@ public class CameraRenderer : MonoBehaviour
     [Tooltip("다중 차량 시 렌더 시점을 분산하여 프레임당 GPU 부하를 평활화")]
     public bool enableRenderStagger = true;
 
-    [Header("Camera Stabilization (흔들림 방지)")]
-    [Tooltip("카메라 안정화 활성화 - 물리 시뮬레이션 흔들림 방지")]
-    public bool enableStabilization = true;
-
-    [Tooltip("위치 안정화 강도 (낮을수록 부드러움)")]
-    [Range(0.01f, 0.5f)]
-    public float positionSmoothTime = 0.08f;
-
-    [Tooltip("회전 안정화 강도 (낮을수록 부드러움)")]
-    [Range(0.01f, 0.5f)]
-    public float rotationSmoothTime = 0.06f;
-
-    [Tooltip("수직 흔들림 추가 안정화")]
-    public bool stabilizeVertical = true;
-
-    [Tooltip("롤(좌우 기울기) 안정화")]
-    public bool stabilizeRoll = true;
-
     [Header("Render Rate")]
     public float renderRate = 10f;
 
     private Camera cam;
     private RenderTexture renderTexture;
-    private CameraStabilizer stabilizer;
-    private bool createdStabilizerAtRuntime;
     private bool createdRuntimeFrontCameraAtRuntime;
     private float renderInterval;
     private float lastRenderTime;
@@ -117,7 +97,12 @@ public class CameraRenderer : MonoBehaviour
         cam.farClipPlane = 100f;
         cam.fieldOfView = 60f;
 
-        SetupStabilization();
+        if (cameraTransform != null)
+        {
+            cam.transform.position = cameraTransform.position;
+            cam.transform.rotation = cameraTransform.rotation * Quaternion.Euler(cameraXRotation, 0f, 0f);
+        }
+
         SetupRenderResources();
 
         int vehicleLayer = LayerMask.NameToLayer("RLVehicle");
@@ -145,42 +130,6 @@ public class CameraRenderer : MonoBehaviour
         }
 
         cam = frontViewCamera;
-    }
-
-    void SetupStabilization()
-    {
-        if (cam == null)
-            return;
-
-        if (enableStabilization)
-        {
-            stabilizer = cam.GetComponent<CameraStabilizer>();
-            if (stabilizer == null)
-            {
-                stabilizer = cam.gameObject.AddComponent<CameraStabilizer>();
-                createdStabilizerAtRuntime = true;
-            }
-
-            stabilizer.enabled = true;
-            stabilizer.targetTransform = cameraTransform;
-            stabilizer.positionSmoothTime = positionSmoothTime;
-            stabilizer.rotationSmoothTime = rotationSmoothTime;
-            stabilizer.stabilizeVertical = stabilizeVertical;
-            stabilizer.stabilizeRoll = stabilizeRoll;
-            stabilizer.stabilizePitch = false;
-            stabilizer.targetXRotation = cameraXRotation;
-        }
-        else
-        {
-            if (stabilizer != null)
-                stabilizer.enabled = false;
-
-            if (cameraTransform != null)
-            {
-                cam.transform.position = cameraTransform.position;
-                cam.transform.rotation = cameraTransform.rotation * Quaternion.Euler(cameraXRotation, 0f, 0f);
-            }
-        }
     }
 
     void SetupRenderResources()
@@ -335,9 +284,6 @@ public class CameraRenderer : MonoBehaviour
             Destroy(renderTexture);
             renderTexture = null;
         }
-
-        if (createdStabilizerAtRuntime && stabilizer != null)
-            Destroy(stabilizer);
 
         if (createdRuntimeFrontCameraAtRuntime && cam != null)
             Destroy(cam.gameObject);

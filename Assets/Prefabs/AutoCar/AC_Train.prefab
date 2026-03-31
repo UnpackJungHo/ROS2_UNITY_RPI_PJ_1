@@ -105,7 +105,6 @@ GameObject:
   - component: {fileID: 6840177212239814188}
   - component: {fileID: 7573555483658728640}
   - component: {fileID: 3885927124273908046}
-  - component: {fileID: 3829391089609313848}
   m_Layer: 11
   m_Name: ultrasonic_rl_link
   m_TagString: Untagged
@@ -274,32 +273,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &3829391089609313848
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 144756746394148178}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 3885927124273908046}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &197920527159481329
 GameObject:
   m_ObjectHideFlags: 0
@@ -314,7 +287,6 @@ GameObject:
   - component: {fileID: 8207501865432623004}
   - component: {fileID: 4404817573922078324}
   - component: {fileID: 3215122723163762781}
-  - component: {fileID: 4220962962931736587}
   m_Layer: 11
   m_Name: ultrasonic_fc_link
   m_TagString: Untagged
@@ -483,32 +455,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &4220962962931736587
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 197920527159481329}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 3215122723163762781}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &342633533847563785
 GameObject:
   m_ObjectHideFlags: 0
@@ -984,8 +930,6 @@ MonoBehaviour:
   sensorSR: {fileID: 7897773471130077271}
   useRandomRoadStart: 1
   randomLateralOffsetM: 0.3
-  useStaggeredDecision: 0
-  staggerOffset: -1
   followTargetTransform: {fileID: 7802254047883063259}
   followTargetPosition: 1
   followTargetRotation: 1
@@ -1486,6 +1430,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   topicName: /ultrasonic
   publishRate: 20
+  publishAggregatedTopic: 1
+  useExternalTopicInput: 0
+  inputTopicName: 
+  externalDataTimeoutSec: 0.5
+  fallbackToRaycastWhenExternalStale: 1
+  defaultExternalConfidence: 1
   sensorFL: {fileID: 3746642224027788228}
   sensorFR: {fileID: 5105114971436956309}
   sensorFC: {fileID: 3215122723163762781}
@@ -1495,6 +1445,10 @@ MonoBehaviour:
   sensorSL: {fileID: 205174304047029841}
   sensorSR: {fileID: 7897773471130077271}
   showDebugInfo: 0
+  resolvedOutputTopicName: 
+  resolvedInputTopicName: 
+  hasExternalMessage: 0
+  lastExternalMessageTime: -999
 --- !u!1 &1096596782289401466
 GameObject:
   m_ObjectHideFlags: 0
@@ -2448,7 +2402,6 @@ GameObject:
   - component: {fileID: 7571204831916826436}
   - component: {fileID: 9100380708190421980}
   - component: {fileID: 3746642224027788228}
-  - component: {fileID: 2966356468823943015}
   m_Layer: 11
   m_Name: ultrasonic_fl_link
   m_TagString: Untagged
@@ -2617,32 +2570,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &2966356468823943015
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1643787780464398785}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 3746642224027788228}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &1738214136953129487
 GameObject:
   m_ObjectHideFlags: 0
@@ -2913,31 +2840,28 @@ MonoBehaviour:
   - component: {fileID: 5789462542021418718}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 5311151497823823712}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 4307335406402655410}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 8152624646279016328}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 316842098866632400}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 3829391089609313848}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 4220962962931736587}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 5290218713232117319}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
-  - component: {fileID: 2966356468823943015}
-    enableInTrain: 0
-    enableInTest: 1
-  - component: {fileID: 1648483763981294531}
+  - component: {fileID: 0}
     enableInTrain: 0
     enableInTest: 1
   - component: {fileID: 8716756160231209909}
@@ -2962,9 +2886,8 @@ MonoBehaviour:
   testRenderRate: 10
   trainFixedDeltaTime: 0.04
   testFixedDeltaTime: 0
-  modeText: {fileID: 0}
   lastAppliedMode: 0
-  lastAppliedSummary: Mode=Train, RosTopics=24
+  lastAppliedSummary: Mode=Train, RosTopics=23
 --- !u!114 &3384946636282722396
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5105,7 +5028,6 @@ GameObject:
   - component: {fileID: 9059312748460101524}
   - component: {fileID: 1967148091097399417}
   - component: {fileID: 205174304047029841}
-  - component: {fileID: 4307335406402655410}
   m_Layer: 11
   m_Name: ultrasonic_sl_link
   m_TagString: Untagged
@@ -5274,32 +5196,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &4307335406402655410
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3432182888733736363}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 205174304047029841}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &3470094104543569071
 GameObject:
   m_ObjectHideFlags: 0
@@ -6806,11 +6702,6 @@ MonoBehaviour:
   frontViewCamera: {fileID: 0}
   preferDedicatedRuntimeCamera: 1
   enableRenderStagger: 1
-  enableStabilization: 0
-  positionSmoothTime: 0.08
-  rotationSmoothTime: 0.06
-  stabilizeVertical: 1
-  stabilizeRoll: 1
   renderRate: 5
 --- !u!114 &6469039219535524364
 MonoBehaviour:
@@ -7299,7 +7190,6 @@ GameObject:
   - component: {fileID: 6161736567539589517}
   - component: {fileID: 4950670203244813341}
   - component: {fileID: 3662249158891623658}
-  - component: {fileID: 316842098866632400}
   m_Layer: 11
   m_Name: ultrasonic_rr_link
   m_TagString: Untagged
@@ -7468,32 +7358,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &316842098866632400
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4807544459594092557}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 3662249158891623658}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &4856880319998639511
 GameObject:
   m_ObjectHideFlags: 0
@@ -7906,7 +7770,6 @@ Transform:
   - {fileID: 5658589265059947757}
   - {fileID: 2244197096533637084}
   - {fileID: 481504022293293201}
-  - {fileID: 8594231504288426816}
   m_Father: {fileID: 8766363039812940070}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5557858337902807258
@@ -8014,7 +7877,6 @@ GameObject:
   - component: {fileID: 5629810716737348832}
   - component: {fileID: 6783576862496211051}
   - component: {fileID: 7897773471130077271}
-  - component: {fileID: 5311151497823823712}
   m_Layer: 11
   m_Name: ultrasonic_sr_link
   m_TagString: Untagged
@@ -8183,32 +8045,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &5311151497823823712
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5610061858830370714}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 7897773471130077271}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &5624179910772356705
 GameObject:
   m_ObjectHideFlags: 0
@@ -8270,31 +8106,18 @@ MonoBehaviour:
   collisionFailLayers:
     serializedVersion: 2
     m_Bits: 1
-  collisionMinRelativeSpeed: 0
   checkpointMinDistanceFromSpawn: 15
   stuckGracePeriod: 5
   stuckTimeWindow: 20
   stuckDistanceThreshold: 1
-  finishBonus: 20
-  baseFailurePenalty: 10
-  riskStopExtraPenalty: 6
-  collisionExtraPenalty: 10
-  timeoutExtraPenalty: 4
-  stuckExtraPenalty: 8
-  wrongLaneExtraPenalty: 15
-  lowProgressTrashThreshold: 0.1
   episodeIndex: 0
   episodeActive: 0
   terminalReached: 0
   episodeSuccess: 0
-  isTrashEpisode: 0
   checkpointPassed: 0
   terminalType: 0
   terminalReason: None
-  trashReason: None
   elapsedSeconds: 0
-  episodeScore: 0
-  episodeRewardBase: 0
   dangerStoppedDuration: 0
   timeAtDangerLevel: 0
   collisionCount: 0
@@ -9003,56 +8826,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46398bc5d6905ad429a6d2d973afe002, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!1 &6571349660871526142
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 8594231504288426816}
-  - component: {fileID: 1265925075588881052}
-  m_Layer: 11
-  m_Name: RL Debug
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &8594231504288426816
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6571349660871526142}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 6165730329919750536}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1265925075588881052
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6571349660871526142}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 276b0c4d4b3558bf5b83636b87cc2de9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  episodeEvaluator: {fileID: 6826545173591977314}
-  progressRewardProvider: {fileID: 95263165113997854}
-  autoDriverRLAgent: {fileID: 4159083330648792518}
-  outputFolder: Logs/RL
-  filePrefix: rl_episodes
-  autoFindReferences: 1
 --- !u!1 &6666757649826538982
 GameObject:
   m_ObjectHideFlags: 0
@@ -9113,7 +8886,6 @@ GameObject:
   - component: {fileID: 3739479361229474761}
   - component: {fileID: 850910001642902602}
   - component: {fileID: 5105114971436956309}
-  - component: {fileID: 5290218713232117319}
   m_Layer: 11
   m_Name: ultrasonic_fr_link
   m_TagString: Untagged
@@ -9282,32 +9054,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &5290218713232117319
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6721721499478155014}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 5105114971436956309}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &6729536977142701260
 GameObject:
   m_ObjectHideFlags: 0
@@ -9371,7 +9117,6 @@ GameObject:
   m_Component:
   - component: {fileID: 7944873381633896464}
   - component: {fileID: 1551831686719741408}
-  - component: {fileID: 1648483763981294531}
   m_Layer: 11
   m_Name: Sensors
   m_TagString: Untagged
@@ -9441,23 +9186,6 @@ MonoBehaviour:
   detectionSource: None
   detectionSensor: None
   currentMotionDirection: 0
---- !u!114 &1648483763981294531
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6741646227052884880}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1bd54c7ac01d75303b854a19f168b563, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  engine: {fileID: 1551831686719741408}
-  warningTopicName: /collision_warning
-  distanceTopicName: /obstacle_distance
-  publishRate: 20
-  rosPublishingEnabled: 0
 --- !u!1 &6748162183188057138
 GameObject:
   m_ObjectHideFlags: 0
@@ -10074,8 +9802,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   vehicleId: Vehicle0
-  cameraPublisher: {fileID: 6469039219535524364}
-  frontViewCameraOverride: {fileID: 0}
+  cameraRenderer: {fileID: 1024976204902312210}
   followTarget: {fileID: 7802254047883063259}
   autoFindReferences: 1
   topViewHeight: 5
@@ -10759,15 +10486,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   triggerTarget: {fileID: 1058269563358656476}
-  progressRewardScale: 2
-  reverseProgressPenaltyScale: 1.4
-  reverseGearPenaltyPerSec: 2
+  progressRewardWeight: 1
+  reverseProgressPenaltyWeight: 1.4
   targetSpeedMs: 2
   speedBonusMin: 0.5
   speedBonusMax: 1.5
   headingRewardWeight: 0.3
   lateralRewardWeight: 1
-  lateralErrorMaxM: 5
   collisionWarningEngine: {fileID: 1551831686719741408}
   cautionPenaltyPerSec: 0.1
   warningPenaltyPerSec: 0.3
@@ -10777,11 +10502,6 @@ MonoBehaviour:
   vehicleMotionController: {fileID: 6187067975751547706}
   redViolationSpeedThreshold: 0.2
   redViolationPenaltyPerSec: 0.6
-  headingRecoveryThresholdDeg: 90
-  headingRecoveryPenaltyWeight: 0.5
-  headingFlatPenaltyThresholdDeg: 120
-  headingFlatPenaltyPerSec: 1.5
-  headingErrorNormalizeDeg: 45
   accumulateOnlyWhenEpisodeActive: 1
   episodeEvaluator: {fileID: 6826545173591977314}
   showSegmentGizmos: 0
@@ -10801,12 +10521,6 @@ MonoBehaviour:
   targetZoneName: None
   lastSafetyPenalty: 0
   lastTrafficPenalty: 0
-  lastHeadingRecoveryPenalty: 0
-  cumulativeHeadingRecoveryPenalty: 0
-  lastHeadingFlatPenalty: 0
-  cumulativeHeadingFlatPenalty: 0
-  lastReverseGearPenalty: 0
-  cumulativeReverseGearPenalty: 0
   lastStepReward: 0
   lastForwardProgress: 0
   lastLookaheadHeadingDeg: 0
@@ -11359,7 +11073,6 @@ GameObject:
   - component: {fileID: 8446794103642021518}
   - component: {fileID: 2043297711864180998}
   - component: {fileID: 6043765204754200245}
-  - component: {fileID: 8152624646279016328}
   m_Layer: 11
   m_Name: ultrasonic_rc_link
   m_TagString: Untagged
@@ -11528,32 +11241,6 @@ MonoBehaviour:
   hitColor: {r: 0, g: 1, b: 1, a: 1}
   missColor: {r: 0, g: 0, b: 1, a: 1}
   defaultExternalConfidence: 1
---- !u!114 &8152624646279016328
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8664566396814204551}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3277f1601ef149b3f90c7089438503fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  sensor: {fileID: 6043765204754200245}
-  useExternalTopicInput: 0
-  autoTopicFromSensorPosition: 1
-  inputTopicName: 
-  externalDataTimeoutSec: 0.5
-  fallbackToRaycastWhenExternalStale: 1
-  defaultExternalConfidence: 1
-  resolvedInputTopicName: 
-  hasExternalMessage: 0
-  lastExternalMessageTime: -999
-  publishRawTopic: 1
-  autoOutputTopicFromSensorPosition: 1
-  outputTopicName: 
-  resolvedOutputTopicName: 
 --- !u!1 &8788879352991618599
 GameObject:
   m_ObjectHideFlags: 0
@@ -11902,7 +11589,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8860509221648244575}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f644adf5b756ac9f2a91b2944eeafbb1, type: 3}
   m_Name: 
@@ -11917,7 +11604,7 @@ MonoBehaviour:
   verticalAngleMax: 0.2617994
   detectionLayer:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 1
   lidarTransform: {fileID: 7485480274859841938}
   scanRate: 10
   enableScanStagger: 1
@@ -11939,7 +11626,7 @@ MonoBehaviour:
   topicName: /velodyne_points
   frameId: lidar_link
   publishRate: 10
-  sensor: {fileID: 0}
+  sensor: {fileID: 3750707911050148654}
   enablePublishStagger: 1
 --- !u!1 &8867848687656805187
 GameObject:

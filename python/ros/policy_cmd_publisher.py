@@ -100,7 +100,8 @@ class RadarSample:
     stamp_sec: float = -1e9
 
 
-ULTRASONIC_ORDER: Tuple[str, ...] = ("fl", "fr", "fc", "rl", "rr", "rc")
+ULTRASONIC_ORDER: Tuple[str, ...] = ("fl", "fr", "fc", "rl", "rr", "rc", "sl", "sr")
+ULTRASONIC_FIELDS_PER_SENSOR = 3
 RADAR_ORDER: Tuple[str, ...] = ("front", "rear")
 ULTRASONIC_ID_MAP: Dict[str, int] = {
     "fl": 0,
@@ -109,11 +110,13 @@ ULTRASONIC_ID_MAP: Dict[str, int] = {
     "rr": 3,
     "fc": 4,
     "rc": 5,
+    "sl": 6,
+    "sr": 7,
 }
 ULTRASONIC_REAR_IDS = {2, 3, 5}
-ULTRASONIC_SIDE_IDS = {0, 1, 2, 3}
-ULTRASONIC_LEFT_IDS = {0, 2}
-ULTRASONIC_RIGHT_IDS = {1, 3}
+ULTRASONIC_SIDE_IDS = {0, 1, 2, 3, 6, 7}
+ULTRASONIC_LEFT_IDS = {0, 2, 6}
+ULTRASONIC_RIGHT_IDS = {1, 3, 7}
 
 
 class PolicyCmdPublisher(Node):
@@ -200,14 +203,7 @@ class PolicyCmdPublisher(Node):
         cmd_topic = resolve_topic(args.namespace, args.cmd_topic)
         collision_topic = resolve_topic(args.namespace, args.collision_warning_topic)
         collision_ui_topic = resolve_topic(args.namespace, args.collision_ui_topic)
-        ultrasonic_topics = {
-            "fl": resolve_topic(args.namespace, args.ultrasonic_fl_topic),
-            "fr": resolve_topic(args.namespace, args.ultrasonic_fr_topic),
-            "fc": resolve_topic(args.namespace, args.ultrasonic_fc_topic),
-            "rl": resolve_topic(args.namespace, args.ultrasonic_rl_topic),
-            "rr": resolve_topic(args.namespace, args.ultrasonic_rr_topic),
-            "rc": resolve_topic(args.namespace, args.ultrasonic_rc_topic),
-        }
+        ultrasonic_topic = resolve_topic(args.namespace, args.ultrasonic_topic)
         radar_topics = {
             "front": resolve_topic(args.namespace, args.radar_front_topic),
             "rear": resolve_topic(args.namespace, args.radar_rear_topic),
@@ -221,13 +217,7 @@ class PolicyCmdPublisher(Node):
         if args.collision_mode in ("topic", "hybrid"):
             self.create_subscription(Float32MultiArray, collision_topic, self._on_collision_warning, 10)
         if args.collision_mode in ("raw", "hybrid"):
-            for key, topic in ultrasonic_topics.items():
-                self.create_subscription(
-                    Float32MultiArray,
-                    topic,
-                    lambda msg, sensor_key=key: self._on_ultrasonic_raw(sensor_key, msg),
-                    10,
-                )
+            self.create_subscription(Float32MultiArray, ultrasonic_topic, self._on_ultrasonic_array, 10)
             for key, topic in radar_topics.items():
                 self.create_subscription(
                     Float32MultiArray,
@@ -292,7 +282,7 @@ class PolicyCmdPublisher(Node):
         if args.collision_mode in ("raw", "hybrid"):
             self.get_logger().info(
                 "Raw collision topics | "
-                f"ultra={ultrasonic_topics} radar={radar_topics} timeout={args.sensor_timeout_sec:.2f}s"
+                f"ultra={ultrasonic_topic} radar={radar_topics} timeout={args.sensor_timeout_sec:.2f}s"
             )
         if args.collision_mode in ("topic", "hybrid"):
             self.get_logger().info(f"Collision warning topic | {collision_topic}")
@@ -480,24 +470,33 @@ class PolicyCmdPublisher(Node):
         self.current_ttc = self.collision_state.ttc
         self.collision_warning_level = self.collision_state.warning_level
 
-    def _on_ultrasonic_raw(self, key: str, msg: Float32MultiArray) -> None:
+    def _set_ultrasonic_sample(self, key: str, distance_value: float, confidence_value: float, stamp_sec: float) -> None:
         sample = self.ultrasonic_samples.get(key)
         if sample is None:
             return
+
+        distance = to_inf_if_negative(float(distance_value))
+        confidence = clamp(float(confidence_value), 0.0, 1.0) if math.isfinite(float(confidence_value)) else 1.0
+        sample.distance = distance if math.isfinite(distance) and distance > 0.0 else math.inf
+        sample.confidence = confidence
+        sample.stamp_sec = stamp_sec
+
+    def _on_ultrasonic_array(self, msg: Float32MultiArray) -> None:
         now_sec = self._now_sec()
         data = msg.data if msg is not None else None
         if data is None or len(data) == 0:
-            sample.distance = math.inf
-            sample.confidence = 0.0
-            sample.stamp_sec = now_sec
+            for key in ULTRASONIC_ORDER:
+                self._set_ultrasonic_sample(key, -1.0, 0.0, now_sec)
             return
 
-        distance = to_inf_if_negative(float(data[0]))
-        confidence = clamp(float(data[1]), 0.0, 1.0) if len(data) > 1 and math.isfinite(float(data[1])) else 1.0
-
-        sample.distance = distance if math.isfinite(distance) and distance > 0.0 else math.inf
-        sample.confidence = confidence
-        sample.stamp_sec = now_sec
+        has_triplets = len(data) >= len(ULTRASONIC_ORDER) * ULTRASONIC_FIELDS_PER_SENSOR
+        for index, key in enumerate(ULTRASONIC_ORDER):
+            if has_triplets:
+                base = index * ULTRASONIC_FIELDS_PER_SENSOR
+                self._set_ultrasonic_sample(key, data[base], data[base + 1], now_sec)
+            else:
+                distance = data[index] if index < len(data) else -1.0
+                self._set_ultrasonic_sample(key, distance, 1.0, now_sec)
 
     def _on_radar_raw(self, key: str, msg: Float32MultiArray) -> None:
         sample = self.radar_samples.get(key)
@@ -641,8 +640,8 @@ class PolicyCmdPublisher(Node):
 
     @staticmethod
     def _compute_side_min_distance(ultra_dist: Dict[str, float]) -> float:
-        left_min = min(ultra_dist["fl"], ultra_dist["rl"])
-        right_min = min(ultra_dist["fr"], ultra_dist["rr"])
+        left_min = min(ultra_dist["fl"], ultra_dist["sl"], ultra_dist["rl"])
+        right_min = min(ultra_dist["fr"], ultra_dist["sr"], ultra_dist["rr"])
         return min(left_min, right_min)
 
     def _is_turning_toward_closest_side(self, closest_ultrasonic_id: int) -> bool:
@@ -960,6 +959,8 @@ class PolicyCmdPublisher(Node):
                 3: "RearRight",
                 4: "FrontCenter",
                 5: "RearCenter",
+                6: "SideLeft",
+                7: "SideRight",
             }
             return mapping.get(self.collision_state.closest_ultrasonic_id, "Unknown")
         if source == 2:
@@ -1213,12 +1214,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--collision-mode", type=str, choices=["raw", "topic", "hybrid"], default="raw")
     parser.add_argument("--collision-warning-topic", type=str, default="/collision_warning")
     parser.add_argument("--collision-ui-topic", type=str, default="/policy/collision_warning")
-    parser.add_argument("--ultrasonic-fl-topic", type=str, default="/ultrasonic/fl")
-    parser.add_argument("--ultrasonic-fr-topic", type=str, default="/ultrasonic/fr")
-    parser.add_argument("--ultrasonic-fc-topic", type=str, default="/ultrasonic/fc")
-    parser.add_argument("--ultrasonic-rl-topic", type=str, default="/ultrasonic/rl")
-    parser.add_argument("--ultrasonic-rr-topic", type=str, default="/ultrasonic/rr")
-    parser.add_argument("--ultrasonic-rc-topic", type=str, default="/ultrasonic/rc")
+    parser.add_argument("--ultrasonic-topic", type=str, default="/ultrasonic")
     parser.add_argument("--radar-front-topic", type=str, default="/radar/front")
     parser.add_argument("--radar-rear-topic", type=str, default="/radar/rear")
     parser.add_argument("--sensor-timeout-sec", type=float, default=0.5)

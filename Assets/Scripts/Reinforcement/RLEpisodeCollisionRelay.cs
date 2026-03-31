@@ -37,6 +37,12 @@ public class RLEpisodeCollisionRelay : MonoBehaviour
 
         vehicleRoot = transform.root;
 
+        if (vehicleMotionController != null && vehicleMotionController.UsingHybridBackend())
+        {
+            AttachHybridCollisionProxy();
+            return;
+        }
+
         AttachListenersToChildLinks();
     }
 
@@ -106,6 +112,26 @@ public class RLEpisodeCollisionRelay : MonoBehaviour
                   $"+ {attachedListenerCount} child link listeners attached");
     }
 
+    void AttachHybridCollisionProxy()
+    {
+        attachedListenerCount = 0;
+
+        GameObject collisionSource = vehicleMotionController.GetCollisionSource();
+        if (collisionSource == null)
+        {
+            Debug.LogWarning("[RLEpisodeCollisionRelay] Hybrid collision source is null.");
+            return;
+        }
+
+        HybridCollisionProxy proxy = collisionSource.GetComponent<HybridCollisionProxy>();
+        if (proxy == null)
+            proxy = collisionSource.AddComponent<HybridCollisionProxy>();
+
+        proxy.relay = this;
+        attachedListenerCount = 1;
+        Debug.Log($"[RLEpisodeCollisionRelay] Hybrid collision proxy attached on {collisionSource.name}");
+    }
+
     // ────────────────────────────────────────
     //  공통 처리
     // ────────────────────────────────────────
@@ -131,6 +157,20 @@ public class RLEpisodeCollisionRelay : MonoBehaviour
     /// </summary>
     [DisallowMultipleComponent]
     public class ChildCollisionListener : MonoBehaviour
+    {
+        [HideInInspector] public RLEpisodeCollisionRelay relay;
+
+        void OnCollisionEnter(Collision collision)
+        {
+            if (relay == null || collision == null || collision.collider == null)
+                return;
+
+            relay.HandleCollision(collision.collider, collision.relativeVelocity.magnitude);
+        }
+    }
+
+    [DisallowMultipleComponent]
+    public class HybridCollisionProxy : MonoBehaviour
     {
         [HideInInspector] public RLEpisodeCollisionRelay relay;
 

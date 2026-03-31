@@ -68,13 +68,13 @@ public class AutoCarSetup
         var cmdController  = autoCar.GetComponent<VehicleCmdController>();
         var tlEngine       = crosswalkGo?.GetComponent<TrafficLightDecisionEngine>();
         var cwe            = sensorsGo?.GetComponent<CollisionWarningEngine>();
-        var cwBridge       = sensorsGo?.GetComponent<CollisionWarningRosBridge>();
         var progressReward = rewardGo?.GetComponent<ProgressRewardProvider>();
         var obsPublisher   = rewardGo?.GetComponent<ReinforcementObservationPublisher>();
         var rlEval         = rlEpisodeGo?.GetComponent<RLEpisodeEvaluator>();
         var rlAgent        = agentGo?.GetComponent<AutoDriverRLAgent>();
         var behaviorParams = agentGo?.GetComponent<BehaviorParameters>();
         var camPub         = cameraLinkGo?.GetComponent<CameraPublisher>();
+        var camRenderer    = cameraLinkGo?.GetComponent<CameraRenderer>();
         var viewProvider   = amrViewGo?.GetComponent<VehicleViewProvider>();
 
         // 초음파 센서 컴포넌트
@@ -297,7 +297,7 @@ public class AutoCarSetup
         if (viewProvider != null)
         {
             viewProvider.vehicleId    = "Vehicle0";
-            viewProvider.cameraPublisher = camPub;
+            viewProvider.cameraRenderer = camRenderer;
             viewProvider.followTarget = baseLinkGo.transform;
             EditorUtility.SetDirty(viewProvider);
             log.AppendLine("  ✅ VehicleViewProvider (vehicleId='Vehicle0')"); ok++;

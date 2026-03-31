@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 초음파 센서 데이터를 기반으로 충돌 위험을 감지하고 경고 레벨을 계산하는 엔진.
-/// ROS 발행은 CollisionWarningRosBridge가 담당한다.
+/// 계산 결과는 Unity 내부 로직에서 직접 소비한다.
 ///
 /// [레이더 미사용 근거]
 /// 본 프로젝트의 AMR은 최대 속도 2.0 m/s로 운행된다.

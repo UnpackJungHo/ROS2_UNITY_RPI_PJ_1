@@ -52,7 +52,7 @@ public class TrainTestModeSwitcher : MonoBehaviour
 
     [Header("ROS 토픽 개별 제어")]
     [Tooltip("각 ROS 퍼블리셔/서브스크라이버를 할당하고 모드별 활성화를 개별 설정.\n" +
-             "CameraPublisher, CollisionWarningRosBridge는 rosPublishingEnabled 제어.\n" +
+             "CameraPublisher는 rosPublishingEnabled 제어.\n" +
              "나머지는 enabled 제어.\n" +
              "[Populate ROS Topics] 컨텍스트 메뉴로 자동 탐색 가능.")]
     public RosTopicEntry[] rosTopics = new RosTopicEntry[0];
@@ -69,9 +69,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
     public float trainFixedDeltaTime = 0f;
     [Tooltip("테스트 시 Physics.fixedDeltaTime 복원 값. 0이면 변경 안 함.")]
     public float testFixedDeltaTime = 0f;
-
-    [Header("Optional UI")]
-    public TMP_Text modeText;
 
     [Header("Debug (Read Only)")]
     [SerializeField] private RuntimeMode lastAppliedMode = (RuntimeMode)(-1);
@@ -122,7 +119,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             else
                 ApplyTestMode();
 
-            UpdateModeText();
             lastAppliedMode = selectedMode;
             int rosTopicCount = rosTopics != null ? rosTopics.Length : 0;
             lastAppliedSummary = $"Mode={selectedMode}, RosTopics={rosTopicCount}";
@@ -157,19 +153,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
 
             if (behaviorParameters == null)
                 behaviorParameters = FindOne<BehaviorParameters>(includeInactiveObjects);
-        }
-
-        if (modeText == null)
-        {
-            TMP_Text[] texts = FindAll<TMP_Text>(includeInactiveObjects);
-            for (int i = 0; i < texts.Length; i++)
-            {
-                if (texts[i] != null && texts[i].name == "ModeText")
-                {
-                    modeText = texts[i];
-                    break;
-                }
-            }
         }
     }
 
@@ -267,7 +250,7 @@ public class TrainTestModeSwitcher : MonoBehaviour
 
     /// <summary>
     /// rosTopics 배열의 각 항목에 대해 모드별 활성화/비활성화를 적용한다.
-    /// CameraPublisher, CollisionWarningRosBridge는 rosPublishingEnabled 제어.
+    /// CameraPublisher는 rosPublishingEnabled 제어.
     /// 나머지는 enabled 제어.
     /// </summary>
     void ApplyRosTopicToggles(RuntimeMode mode)
@@ -284,9 +267,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             {
                 case CameraPublisher cam:
                     cam.rosPublishingEnabled = shouldEnable;
-                    break;
-                case CollisionWarningRosBridge cwb:
-                    cwb.rosPublishingEnabled = shouldEnable;
                     break;
                 default:
                     entry.component.enabled = shouldEnable;
@@ -309,10 +289,12 @@ public class TrainTestModeSwitcher : MonoBehaviour
         {
             foreach (var entry in rosTopics)
             {
-                if (entry?.component != null)
-                    existing.Add(entry.component);
+                if (entry?.component == null)
+                    continue;
+
+                existing.Add(entry.component);
+                list.Add(entry);
             }
-            list.AddRange(rosTopics);
         }
 
         System.Type[] rosTypes = new System.Type[]
@@ -325,8 +307,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             typeof(UltrasonicSensorPublisher),
             typeof(RadarSensorPublisher),
             typeof(SingleRadarSensorRosBridge),
-            typeof(SingleUltrasonicSensorRosBridge),
-            typeof(CollisionWarningRosBridge),
             typeof(ReinforcementObservationPublisher),
             typeof(ClockPublisher),
             typeof(StaticTfPublisher),
@@ -358,12 +338,12 @@ public class TrainTestModeSwitcher : MonoBehaviour
 
     void ApplySensorMode(bool useExternalTopicInput, bool fallbackToRaycastWhenExternalStale)
     {
-        // 초음파 Bridge에서 외부 입력 모드 제어
-        foreach (var bridge in GetComponentsInChildren<SingleUltrasonicSensorRosBridge>(includeInactiveObjects))
+        // 초음파 집계 퍼블리셔에서 외부 입력 모드 제어
+        foreach (var publisher in GetComponentsInChildren<UltrasonicSensorPublisher>(includeInactiveObjects))
         {
-            if (bridge == null) continue;
-            bridge.useExternalTopicInput = useExternalTopicInput;
-            bridge.fallbackToRaycastWhenExternalStale = fallbackToRaycastWhenExternalStale;
+            if (publisher == null) continue;
+            publisher.useExternalTopicInput = useExternalTopicInput;
+            publisher.fallbackToRaycastWhenExternalStale = fallbackToRaycastWhenExternalStale;
         }
 
         // 레이더 Bridge에서 외부 입력 모드 제어
@@ -373,16 +353,6 @@ public class TrainTestModeSwitcher : MonoBehaviour
             bridge.useExternalTopicInput = useExternalTopicInput;
             bridge.fallbackToRaycastWhenExternalStale = fallbackToRaycastWhenExternalStale;
         }
-    }
-
-    void UpdateModeText()
-    {
-        if (modeText == null)
-            return;
-
-        modeText.text = selectedMode == RuntimeMode.Train
-            ? "Mode: TRAIN (Internal)"
-            : "Mode: TEST (External)";
     }
 
     /// <summary>

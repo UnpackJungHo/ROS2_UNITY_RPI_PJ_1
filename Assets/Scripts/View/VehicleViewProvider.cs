@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 차량별 뷰 제공자. RootAMR 프리팹 내부의 AMRView 오브젝트에 부착.
-/// 자신의 CameraPublisher/followTarget을 기반으로 Front/Top/Back 뷰를 제공한다.
+/// 자신의 CameraRenderer/followTarget을 기반으로 Front/Top/Back 뷰를 제공한다.
 ///
 /// VehicleSelector가 displayCamera를 넘기면 해당 뷰 모드로 카메라를 포지셔닝한다.
 /// </summary>
@@ -21,11 +21,8 @@ public class VehicleViewProvider : MonoBehaviour
     public string vehicleId = "Vehicle";
 
     [Header("References")]
-    [Tooltip("차량의 CameraPublisher (Front View 카메라 소스)")]
-    public CameraPublisher cameraPublisher;
-
-    [Tooltip("Front View 카메라 직접 지정 (CameraPublisher보다 우선)")]
-    public Camera frontViewCameraOverride;
+    [Tooltip("차량의 CameraRenderer (Front View 카메라 소스 및 pose 제공)")]
+    public CameraRenderer cameraRenderer;
 
     [Tooltip("Top/Back View가 추적할 타겟 (base_link 등)")]
     public Transform followTarget;
@@ -72,9 +69,9 @@ public class VehicleViewProvider : MonoBehaviour
 
     public void AutoFindReferences()
     {
-        if (cameraPublisher == null)
-            cameraPublisher = GetComponentInChildren<CameraPublisher>(true)
-                ?? GetComponentInParent<CameraPublisher>();
+        if (cameraRenderer == null)
+            cameraRenderer = GetComponentInChildren<CameraRenderer>(true)
+                ?? GetComponentInParent<CameraRenderer>();
 
         if (followTarget == null)
         {
@@ -100,10 +97,7 @@ public class VehicleViewProvider : MonoBehaviour
 
     public Camera ResolveFrontCamera()
     {
-        if (frontViewCameraOverride != null)
-            return frontViewCameraOverride;
-
-        return cameraPublisher != null ? cameraPublisher.GetCamera() : null;
+        return cameraRenderer != null ? cameraRenderer.GetCamera() : null;
     }
 
     public Transform ResolveFollowTarget()
@@ -117,6 +111,17 @@ public class VehicleViewProvider : MonoBehaviour
         return followTarget;
     }
 
+    public Transform ResolveFrontViewAnchor()
+    {
+        if (cameraRenderer != null && cameraRenderer.cameraTransform != null)
+            return cameraRenderer.cameraTransform;
+
+        if (autoFindReferences)
+            AutoFindReferences();
+
+        return cameraRenderer != null ? cameraRenderer.cameraTransform : null;
+    }
+
     /// <summary>
     /// 외부 displayCamera를 지정된 뷰 모드로 포지셔닝한다.
     /// backViewVelocity는 Back View 스무스 댐핑용으로 호출자가 관리한다.
@@ -128,25 +133,27 @@ public class VehicleViewProvider : MonoBehaviour
             return;
 
         Camera sourceCamera = ResolveFrontCamera();
+        Transform frontViewAnchor = ResolveFrontViewAnchor();
         Transform target = ResolveFollowTarget();
-
-        if (target == null)
-            return;
 
         ApplyBaseDisplayCameraSettings(displayCamera, sourceCamera);
 
         switch (mode)
         {
             case ViewMode.FrontView:
-                ApplyFrontView(displayCamera, sourceCamera, target);
+                ApplyFrontView(displayCamera, sourceCamera, frontViewAnchor, target);
                 break;
 
             case ViewMode.TopView:
+                if (target == null)
+                    return;
                 ApplyTopView(displayCamera, sourceCamera, target);
                 backViewVelocity = Vector3.zero;
                 break;
 
             case ViewMode.BackView:
+                if (target == null)
+                    return;
                 ApplyBackView(displayCamera, sourceCamera, target,
                     ref backViewVelocity, forceResetVelocity);
                 break;
@@ -171,22 +178,22 @@ public class VehicleViewProvider : MonoBehaviour
         displayCamera.orthographic = false;
     }
 
-    void ApplyFrontView(Camera displayCamera, Camera sourceCamera, Transform target)
+    void ApplyFrontView(Camera displayCamera, Camera sourceCamera, Transform frontViewAnchor, Transform target)
     {
-        // camera_link(cameraTransform)를 직접 추적한다.
-        // RuntimeFrontCamera + CameraStabilizer 경유 방식은 LateUpdate 실행 순서와
-        // AddComponent 초기화 타이밍에 의존하여 FrontView가 고정처럼 보이는 버그를 유발한다.
-        if (cameraPublisher != null && cameraPublisher.cameraTransform != null)
+        // front_view는 CameraRenderer가 사용하는 cameraTransform pose를 그대로 따른다.
+        if (frontViewAnchor != null)
         {
-            Transform camLink = cameraPublisher.cameraTransform;
-            Quaternion rot = camLink.rotation * Quaternion.Euler(cameraPublisher.cameraXRotation, 0f, 0f);
-            displayCamera.transform.SetPositionAndRotation(camLink.position, rot);
+            Quaternion rot = frontViewAnchor.rotation;
+            if (cameraRenderer != null)
+                rot *= Quaternion.Euler(cameraRenderer.cameraXRotation, 0f, 0f);
+
+            displayCamera.transform.SetPositionAndRotation(frontViewAnchor.position, rot);
             if (sourceCamera != null)
                 displayCamera.cullingMask = sourceCamera.cullingMask;
             return;
         }
 
-        // 폴백: sourceCamera transform 복사 (frontViewCameraOverride 등 직접 지정된 경우)
+        // 폴백: 실제 렌더링 카메라 transform 복사
         if (sourceCamera != null)
         {
             displayCamera.transform.SetPositionAndRotation(

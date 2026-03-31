@@ -74,18 +74,6 @@ public class AutoDriverRLAgent : Agent
     [Tooltip("도로 횡방향 최대 오프셋 (m). 도로 폭 내를 벗어나지 않도록 설정")]
     public float randomLateralOffsetM = 0.3f;
 
-    [Header("Decision Staggering")]
-    [Tooltip("true: DecisionRequester.DecisionStep을 에이전트별로 자동 배정\n" +
-             "→ 8대 동시 BehaviourUpdate 스파이크를 프레임별 1~2회로 분산\n" +
-             "DecisionRequester가 반드시 붙어 있어야 함")]
-    public bool useStaggeredDecision = false;
-    [Tooltip("-1이면 Play 진입 시 자동 배정 (에이전트 등록 순서 0~N, mod DecisionPeriod)")]
-    [SerializeField] private int staggerOffset = -1;
-
-    // Play 진입마다 정적 카운터를 0으로 초기화 (도메인 리로드 안전)
-    private static int s_staggerCounter;
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStaggerCounter() => s_staggerCounter = 0;
     [Tooltip("할당하면 Agent Transform이 이 타겟(base_link 등)을 추적")]
     public Transform followTargetTransform;
     public bool followTargetPosition = true;
@@ -185,14 +173,6 @@ public class AutoDriverRLAgent : Agent
         // 5) 초기화 완료 플래그 설정 (종료 콜백에서 초기화 전 호출 방지용)
         agentInitialized = true;
 
-        // 6) Stagger 활성화: DecisionRequester.DecisionStep에 에이전트별 오프셋 배정
-        //    DecisionRequester는 그대로 유지 — 공식 ML-Agents API로 분산 처리
-        if (useStaggeredDecision && decisionRequester != null)
-        {
-            if (staggerOffset < 0)
-                staggerOffset = s_staggerCounter++;
-            decisionRequester.DecisionStep = staggerOffset % decisionRequester.DecisionPeriod;
-        }
     }
 
     /// <summary>
@@ -729,7 +709,9 @@ public class AutoDriverRLAgent : Agent
         ArticulationBody articulationRoot = ResolveArticulationRoot(resetTarget);
         if (hasStartPose)
         {
-            if (articulationRoot != null)
+            if (vehicleMotionController != null && vehicleMotionController.UsingHybridBackend())
+                vehicleMotionController.ResetVehiclePose(startPosition, startRotation);
+            else if (articulationRoot != null)
                 // ArticulationBody가 있으면 물리 엔진의 TeleportRoot 사용
                 articulationRoot.TeleportRoot(startPosition, startRotation);
             else
@@ -742,7 +724,7 @@ public class AutoDriverRLAgent : Agent
         }
 
         // 모든 ArticulationBody의 선속도/각속도를 0으로 초기화
-        if (resetRootArticulationVelocity)
+        if (resetRootArticulationVelocity && !(vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()))
         {
             ArticulationBody velocityRoot = articulationRoot != null ? articulationRoot : rootArticulation;
             if (velocityRoot == null)

@@ -4,12 +4,19 @@ using UnityEngine;
 
 /// <summary>
 /// 강화학습 보상 신호 제공기 (Zone 세그먼트 기반).
-/// - 주 보상: 전진 진행도 (velocity dot segment direction)
-/// - 보조 보상: RewardZone 점수
-/// - 보조 패널티: 충돌 위험도/신호 위반/헤딩 오차/횡오차
 ///
-/// 기존 waypoint path-s 투영 방식을 제거하고,
-/// Zone 세그먼트 MeshFilter 정점에서 도로 진행 방향을 직접 추출한다.
+/// Step 보상 구성:
+///   lastStepReward = progressReward + headingReward + lateralReward
+///                    - safetyPenalty - trafficPenalty
+///
+/// - progressReward : 전진 진행도 × heading 감쇠 × speed bonus
+/// - headingReward  : cos(headingError) 기반 연속 패널티 (recovery/flat 항 통합)
+/// - lateralReward  : +Zone 중심선 기준 횡오차 패널티
+/// - safetyPenalty  : 충돌 위험 등급 패널티
+/// - trafficPenalty : 신호 위반 패널티
+///
+/// Zone 세그먼트 MeshFilter 정점에서 도로 진행 방향을 직접 추출하며,
+/// 기존 waypoint path-s 투영 방식은 제거됨.
 /// </summary>
 public class ProgressRewardProvider : MonoBehaviour
 {
@@ -19,11 +26,9 @@ public class ProgressRewardProvider : MonoBehaviour
 
     [Header("Progress Weights")]
     [Tooltip("전진 진행 보상 스케일 (velocity·segDirection * scale * dt)")]
-    public float progressRewardScale = 1.0f;
+    public float progressRewardWeight = 1.0f;
     [Tooltip("역주행(음의 progress)에 대한 추가 패널티 배율")]
-    public float reverseProgressPenaltyScale = 1.4f;
-    // 레거시 필드 (cos 기반 progressMultiplier로 대체, 사용하지 않음)
-    [HideInInspector] public float reverseGearPenaltyPerSec = 0f;
+    public float reverseProgressPenaltyWeight = 1.4f;
 
     [Header("Speed Bonus")]
     [Tooltip("목표 순항 속도 (m/s). 이 속도에서 speedBonus=1.0")]
@@ -39,8 +44,6 @@ public class ProgressRewardProvider : MonoBehaviour
     public float headingRewardWeight = 0.3f;
     [Tooltip("횡오차 패널티 가중치 (m당, 초당). 1m 이탈 시 -weight×dt/step 패널티.")]
     public float lateralRewardWeight = 0.5f;
-    [Tooltip("이 거리(m) 초과 시 패널티를 선형 증가 대신 클램프. 0이면 순수 선형(무제한).")]
-    public float lateralErrorMaxM = 5f;
 
     [Header("Safety Penalty")]
     public CollisionWarningEngine collisionWarningEngine;
@@ -55,14 +58,6 @@ public class ProgressRewardProvider : MonoBehaviour
     [Tooltip("정지 지시인데 이 속도 이상이면 위반 패널티 적용")]
     public float redViolationSpeedThreshold = 0.2f;
     public float redViolationPenaltyPerSec = 0.6f;
-
-    // ── 레거시 Heading Recovery 필드 (cos 기반 통합으로 더 이상 사용하지 않음) ──
-    // 인스펙터 직렬화 호환을 위해 [HideInInspector]로 유지
-    [HideInInspector] public float headingRecoveryThresholdDeg = 90f;
-    [HideInInspector] public float headingRecoveryPenaltyWeight = 0.5f;
-    [HideInInspector] public float headingFlatPenaltyThresholdDeg = 120f;
-    [HideInInspector] public float headingFlatPenaltyPerSec = 1.5f;
-    [HideInInspector] public float headingErrorNormalizeDeg = 45f;
 
     [Header("Episode Guard")]
     [Tooltip("RLEpisodeEvaluator가 활성 상태일 때만 보상을 누적")]
@@ -90,12 +85,6 @@ public class ProgressRewardProvider : MonoBehaviour
     [SerializeField] private string targetZoneName = "None";
     [SerializeField] private float lastSafetyPenalty = 0f;
     [SerializeField] private float lastTrafficPenalty = 0f;
-    [SerializeField] private float lastHeadingRecoveryPenalty = 0f;
-    [SerializeField] private float cumulativeHeadingRecoveryPenalty = 0f;
-    [SerializeField] private float lastHeadingFlatPenalty = 0f;
-    [SerializeField] private float cumulativeHeadingFlatPenalty = 0f;
-    [SerializeField] private float lastReverseGearPenalty = 0f;
-    [SerializeField] private float cumulativeReverseGearPenalty = 0f;
     [SerializeField] private float lastStepReward = 0f;
     [SerializeField] private float lastForwardProgress = 0f;
     [SerializeField] private float lastLookaheadHeadingDeg = 0f;
@@ -532,53 +521,36 @@ public class ProgressRewardProvider : MonoBehaviour
         float speedRatio = targetSpeedMs > 0f ? currentSpeed / targetSpeedMs : 1f;
         float speedBonus = Mathf.Clamp(speedRatio, speedBonusMin, speedBonusMax);
 
-        float progressReward = progressRewardScale * forwardProgress * progressMultiplier * speedBonus * dt;
+        float progressReward = progressRewardWeight * forwardProgress * progressMultiplier * speedBonus * dt;
         if (forwardProgress < 0f)
-            progressReward *= reverseProgressPenaltyScale;
-
-        float reverseGearPenalty = 0f; // 레거시 호환 (0 고정)
+            progressReward *= reverseProgressPenaltyWeight;
 
         // Heading shaping (cos 기반):
-        // (cosθ - 1): 0(정렬) → -1(직각) → -2(역주행)
-        // 전 구간 연속 gradient, clamp/불연속 없음.
+        // (cosθ - 1): 0°→0, 90°→-1, 180°→-2. 전 구간 연속 gradient, clamp/불연속 없음.
+        // recovery/flat 패널티는 이 항에 통합되어 별도 계산 불필요.
         float headingReward = headingRewardWeight * (headingCos - 1f) * dt;
 
-        // recovery/flat 항은 cos에 이미 포함되어 불필요 → 0으로 고정
-        float headingRecoveryPenalty = 0f;
-        float absHeadingErr = Mathf.Abs(cachedHeadingErrorDeg);
-
         // Lateral shaping: targetZone(+zone) 중심 기준 횡오차 패널티.
-        float cte = lateralErrorMaxM > 0f
-            ? Mathf.Min(currentLateralError, lateralErrorMaxM)
-            : currentLateralError;
+        float cte = currentLateralError;
         float lateralReward = -lateralRewardWeight * cte * dt;
 
         float safetyPenalty = ComputeSafetyPenalty(dt);
         float trafficPenalty = ComputeTrafficPenalty(dt);
 
-        float headingFlatPenalty = 0f;
-
         lastProgressReward = progressReward;
         lastHeadingReward = headingReward;
-        lastHeadingRecoveryPenalty = headingRecoveryPenalty;
-        lastHeadingFlatPenalty = headingFlatPenalty;
-        lastReverseGearPenalty = reverseGearPenalty;
         lastLateralReward = lateralReward;
         lastSafetyPenalty = safetyPenalty;
         lastTrafficPenalty = trafficPenalty;
 
         cumulativeProgressReward += progressReward;
         cumulativeHeadingReward += headingReward;
-        cumulativeHeadingRecoveryPenalty += headingRecoveryPenalty;
-        cumulativeHeadingFlatPenalty += headingFlatPenalty;
-        cumulativeReverseGearPenalty += reverseGearPenalty;
         cumulativeLateralReward += lateralReward;
         cumulativeSafetyPenalty += safetyPenalty;
         cumulativeTrafficPenalty += trafficPenalty;
 
-        lastStepReward = progressReward + headingReward - headingRecoveryPenalty
-                         - headingFlatPenalty - reverseGearPenalty
-                         + lateralReward - safetyPenalty - trafficPenalty;
+        lastStepReward = progressReward + headingReward + lateralReward
+                         - safetyPenalty - trafficPenalty;
         unconsumedStepReward += lastStepReward;
         cumulativeReward += lastStepReward;
     }
@@ -756,8 +728,6 @@ public class ProgressRewardProvider : MonoBehaviour
 
         lastProgressReward = 0f;
         lastHeadingReward = 0f;
-        lastHeadingRecoveryPenalty = 0f;
-        lastHeadingFlatPenalty = 0f;
         lastLateralReward = 0f;
         lastSafetyPenalty = 0f;
         lastTrafficPenalty = 0f;
@@ -766,9 +736,6 @@ public class ProgressRewardProvider : MonoBehaviour
 
         cumulativeProgressReward = 0f;
         cumulativeHeadingReward = 0f;
-        cumulativeHeadingRecoveryPenalty = 0f;
-        cumulativeHeadingFlatPenalty = 0f;
-        cumulativeReverseGearPenalty = 0f;
         cumulativeLateralReward = 0f;
         cumulativeSafetyPenalty = 0f;
         cumulativeTrafficPenalty = 0f;
@@ -886,7 +853,7 @@ public class ProgressRewardProvider : MonoBehaviour
                 float absErr    = Mathf.Abs(cachedHeadingErrorDeg);
                 float errRatio  = Mathf.Clamp01(absErr / 180f);
                 Color errColor  = Color.Lerp(Color.green, Color.red, errRatio);
-                if (absErr > headingRecoveryThresholdDeg) errColor = Color.red;
+                if (absErr > 90f) errColor = Color.red;
 
 #if UNITY_EDITOR
                 UnityEditor.Handles.color = Color.magenta;
@@ -895,9 +862,8 @@ public class ProgressRewardProvider : MonoBehaviour
 
                 // 헤딩 정보 라벨 (차량 위)
                 UnityEditor.Handles.color = errColor;
-                string recoveryTag = absErr > headingRecoveryThresholdDeg ? " [RECOVERY]" : "";
                 UnityEditor.Handles.Label(vehiclePos + Vector3.up * 1.2f,
-                    $"Heading Err: {cachedHeadingErrorDeg:+0.0;-0.0}°{recoveryTag}\n" +
+                    $"Heading Err: {cachedHeadingErrorDeg:+0.0;-0.0}°\n" +
                     $"Safety: {collisionWarningEngine?.GetWarningLevel().ToString() ?? "N/A"}");
 
                 // 흰=차량방향 라벨

@@ -185,36 +185,6 @@
         현재 Python 정책은 직접 구독하지 않으며, 다중 객체 추적, 고스트/클러터 분석, 시각화·디버깅, 향후 확장용 상세 토픽에 가깝습니다.
         
 - **안전/인지**
-    - ***/collision_warning***
-        
-        **타입**: std_msgs/Float32MultiArray
-        
-        **발행자**: Unity 충돌 경고 발행기 (CollisionWarningRosBridge.cs)
-        
-        **기본 토픽명**: /collision_warning
-        
-        **기본 주기**: 20 Hz (publishRate=20f)
-        
-        **역할**: 초음파와 레이더를 융합해 현재 충돌 위험 상태를 요약해 발행하는 종합 안전 인지 토픽
-        
-        min_distance, TTC, warning_level, ego_speed, closing_speed, 초음파 6채널, 레이더 전/후 거리, 감지 소스, closest sensor, confidence를 하나의 17개 float 배열로 담습니다.
-        
-        Python 정책 노드는 collision_mode=topic 또는 hybrid fallback일 때 이 토픽을 구독해 충돌 위험도와 RL observation 일부를 구성합니다.
-        
-    - ***/obstacle_distance***
-        
-        **타입**: std_msgs/Float32
-        
-        **발행자**: Unity 충돌 경고 발행기 (CollisionWarningRosBridge.cs)
-        
-        **기본 토픽명**: /obstacle_distance
-        
-        **기본 주기**: 20 Hz (publishRate=20f)
-        
-        **역할**: 현재 가장 가까운 장애물 거리만 단일 scalar 값으로 내보내는 경량 안전 인지 토픽
-        
-        값은 currentMinDistance의 단순 요약본이며, 감지가 없으면 -1로 발행됩니다. 현재 코드상 뚜렷한 직접 구독처보다는 경량 모니터링·디버깅 용도로 제공됩니다.
-        
     - ***/traffic_light/state***
         
         **타입**: std_msgs/String

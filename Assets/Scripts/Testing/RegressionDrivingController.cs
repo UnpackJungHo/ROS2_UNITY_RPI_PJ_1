@@ -309,6 +309,10 @@ public class RegressionDrivingController : MonoBehaviour
                 ApplyAIControl();
             }
         }
+        else if (wheelController != null && !predictionOnlyMode)
+        {
+            wheelController.externalControlEnabled = false;
+        }
     }
 
     bool IsManualInputDetected()
@@ -584,6 +588,7 @@ public class RegressionDrivingController : MonoBehaviour
     void ApplyAIControl()
     {
         if (wheelController == null) return;
+        if (predictionOnlyMode) return;
 
         float currentSpeed = wheelController.GetSpeedMS();
         float adjustedThrottle = appliedThrottle;

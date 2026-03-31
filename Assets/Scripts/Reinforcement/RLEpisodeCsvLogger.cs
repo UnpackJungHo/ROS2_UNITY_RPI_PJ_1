@@ -110,13 +110,10 @@ public class RLEpisodeCsvLogger : MonoBehaviour
             "safety_penalty",
             "traffic_penalty",
             "terminal_reward",
-            "episode_score",
             "collision_count",
             "max_warning_level",
             "min_ttc",
-            "time_at_danger",
-            "is_trash",
-            "trash_reason"
+            "time_at_danger"
         }));
         writer.Flush();
         headerWritten = true;
@@ -177,13 +174,10 @@ public class RLEpisodeCsvLogger : MonoBehaviour
             safetyPenalty.ToString("F3"),
             trafficPenalty.ToString("F3"),
             terminalReward.ToString("F3"),
-            evaluator.GetEpisodeScore().ToString("F3"),
             evaluator.GetCollisionCount().ToString(),
             evaluator.GetMaxWarningLevel().ToString(),
             evaluator.GetMinObservedTtc().ToString("F2"),
-            evaluator.GetTimeAtDangerLevel().ToString("F2"),
-            evaluator.IsTrash() ? "1" : "0",
-            Escape(evaluator.GetTrashReason())
+            evaluator.GetTimeAtDangerLevel().ToString("F2")
         });
 
         writer.WriteLine(line);

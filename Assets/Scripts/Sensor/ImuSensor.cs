@@ -9,6 +9,7 @@ public class ImuSensor : MonoBehaviour
 {
     [Header("Vehicle Reference")]
     public ArticulationBody vehicleBody;
+    public VehicleMotionController vehicleMotionController;
 
     [Header("Base Link Reference")]
     [Tooltip("base_link 게임오브젝트를 지정. 비워두면 이 오브젝트 자신을 사용.")]
@@ -54,9 +55,14 @@ public class ImuSensor : MonoBehaviour
             vehicleBody = baseLinkTransform.GetComponentInChildren<ArticulationBody>();
             if (vehicleBody == null)
                 vehicleBody = baseLinkTransform.GetComponentInParent<ArticulationBody>();
-            if (vehicleBody == null)
-                Debug.LogError("[ImuSensor] ArticulationBody not found!");
         }
+
+        if (vehicleMotionController == null)
+            vehicleMotionController = baseLinkTransform.GetComponent<VehicleMotionController>()
+                ?? baseLinkTransform.GetComponentInParent<VehicleMotionController>();
+
+        if (vehicleBody == null && vehicleMotionController == null)
+            Debug.LogError("[ImuSensor] vehicle motion source not found!");
 
         filterInitialized = false;
         velocityBuffer = new Vector3[velocityBufferSize];
@@ -66,9 +72,11 @@ public class ImuSensor : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (vehicleBody == null) return;
+        if (vehicleBody == null && vehicleMotionController == null) return;
 
-        Vector3 currentVelocity = vehicleBody.velocity;
+        Vector3 currentVelocity = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+            ? vehicleMotionController.GetWorldVelocity()
+            : (vehicleBody != null ? vehicleBody.velocity : Vector3.zero);
 
         // 가속도 계산: 다중 프레임 미분
         Vector3 rawAcceleration;
@@ -100,7 +108,9 @@ public class ImuSensor : MonoBehaviour
         rawAcceleration -= Physics.gravity;
 
         // 각속도: 물리 엔진 직접 제공
-        Vector3 rawAngularVelocity = vehicleBody.angularVelocity;
+        Vector3 rawAngularVelocity = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+            ? vehicleMotionController.GetWorldAngularVelocity()
+            : (vehicleBody != null ? vehicleBody.angularVelocity : Vector3.zero);
 
         // 저역통과 필터 (EMA)
         if (!filterInitialized)

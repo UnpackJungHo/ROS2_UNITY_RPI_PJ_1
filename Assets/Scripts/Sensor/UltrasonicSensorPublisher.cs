@@ -3,39 +3,58 @@ using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Std;
 
 /// <summary>
-/// 6개의 초음파 센서(전/후 코너 + 전/후 중앙) 데이터를 수집하여 ROS 메시지로 발행하는 클래스입니다.
-/// 각 개별 센서(SingleUltrasonicSensor)의 거리 데이터를 종합 관리하고,
-/// ROS 2 시스템으로 Float32MultiArray 메시지를 전송합니다.
+/// 8개 초음파 센서를 집계하여 단일 ROS 토픽으로 발행하고,
+/// 필요 시 동일한 집계 포맷의 외부 토픽을 구독해 각 센서에 주입한다.
+/// 집계 데이터 순서는 FL, FR, FC, RL, RR, RC, SL, SR이며
+/// 각 센서마다 [distance_m, confidence, angle_deg] 3개 값을 사용한다.
 /// </summary>
 public class UltrasonicSensorPublisher : MonoBehaviour
 {
-    [Header("ROS Settings (ROS 설정)")]
-    public string topicName = "/ultrasonic"; // 발행할 토픽 이름
-    public float publishRate = 20f; // 초당 발행 횟수 (Hz)
+    private const int SensorCount = 8;
+    private const int FieldsPerSensor = 3;
+    private const int DistanceIndex = 0;
+    private const int ConfidenceIndex = 1;
+    private const int AngleIndex = 2;
 
-    [Header("Sensor References (각 센서 오브젝트에서 수동 할당)")]
-    // 각 위치별 개별 초음파 센서 참조
-    [Tooltip("전방 좌측 초음파 센서")]
+    [Header("ROS Output Settings")]
+    [Tooltip("집계 초음파 발행 토픽")]
+    public string topicName = "/ultrasonic";
+    public float publishRate = 20f;
+    [Tooltip("true면 집계 초음파 토픽을 발행")]
+    public bool publishAggregatedTopic = true;
+
+    [Header("External Topic Input")]
+    [Tooltip("true면 개별 레이캐스트 대신 집계 초음파 입력 토픽을 우선 사용")]
+    public bool useExternalTopicInput = false;
+    [Tooltip("비어 있으면 topicName과 동일한 입력 토픽을 사용")]
+    public string inputTopicName = "";
+    [Tooltip("이 시간(초) 이상 새 메시지가 없으면 stale로 판단")]
+    public float externalDataTimeoutSec = 0.5f;
+    [Tooltip("외부 입력이 stale일 때 시뮬레이션 레이캐스트로 fallback")]
+    public bool fallbackToRaycastWhenExternalStale = true;
+    [Tooltip("confidence가 메시지에 없을 때 사용할 기본값")]
+    [Range(0f, 1f)]
+    public float defaultExternalConfidence = 1f;
+
+    [Header("Sensor References")]
     public SingleUltrasonicSensor sensorFL;
-    [Tooltip("전방 우측 초음파 센서")]
     public SingleUltrasonicSensor sensorFR;
-    [Tooltip("전방 중앙 초음파 센서")]
     public SingleUltrasonicSensor sensorFC;
-    [Tooltip("후방 좌측 초음파 센서")]
     public SingleUltrasonicSensor sensorRL;
-    [Tooltip("후방 우측 초음파 센서")]
     public SingleUltrasonicSensor sensorRR;
-    [Tooltip("후방 중앙 초음파 센서")]
     public SingleUltrasonicSensor sensorRC;
-    [Tooltip("측면 좌측 초음파 센서")]
     public SingleUltrasonicSensor sensorSL;
-    [Tooltip("측면 우측 초음파 센서")]
     public SingleUltrasonicSensor sensorSR;
 
-    [Header("Debug (디버그)")]
-    public bool showDebugInfo = false; // 거리 정보 로그 출력 여부
+    [Header("Debug")]
+    public bool showDebugInfo = false;
 
-    // 각 센서의 거리 값 접근 프로퍼티 (센서가 없으면 무한대 반환)
+    [Header("Topic Debug (Read Only)")]
+    [SerializeField] private string resolvedOutputTopicName = "";
+    [SerializeField] private string resolvedInputTopicName = "";
+    [SerializeField] private bool hasExternalMessage = false;
+    [SerializeField] private float lastExternalMessageTime = -999f;
+
     public float FrontLeftDistance => sensorFL != null ? sensorFL.Distance : float.PositiveInfinity;
     public float FrontRightDistance => sensorFR != null ? sensorFR.Distance : float.PositiveInfinity;
     public float FrontCenterDistance => sensorFC != null ? sensorFC.Distance : float.PositiveInfinity;
@@ -45,48 +64,41 @@ public class UltrasonicSensorPublisher : MonoBehaviour
     public float SideLeftDistance => sensorSL != null ? sensorSL.Distance : float.PositiveInfinity;
     public float SideRightDistance => sensorSR != null ? sensorSR.Distance : float.PositiveInfinity;
 
-    // 방향별 최소 거리 계산
     public float MinFrontDistance => Mathf.Min(FrontLeftDistance, FrontRightDistance, FrontCenterDistance);
     public float MinRearDistance => Mathf.Min(RearLeftDistance, RearRightDistance, RearCenterDistance);
     public float MinSideDistance => Mathf.Min(SideLeftDistance, SideRightDistance);
-    // 전체 센서 중 가장 가까운 거리
     public float MinDistance => Mathf.Min(MinFrontDistance, Mathf.Min(MinRearDistance, MinSideDistance));
 
-    // 가장 가까운 장애물이 감지된 센서의 위치와 거리
     public SingleUltrasonicSensor.SensorPosition ClosestSensorPosition { get; private set; }
     public float ClosestDistance { get; private set; } = float.PositiveInfinity;
     public float ClosestConfidence { get; private set; } = 0f;
 
-    // 내부 변수
     private ROSConnection ros;
     private float publishInterval;
     private float lastPublishTime;
-    private SingleUltrasonicSensor[] allSensors; // 전체 센서 배열
+    private SingleUltrasonicSensor[] allSensors;
+    private bool aggregatedPublisherReady = false;
 
     void Start()
     {
-        // ROS 연결 인스턴스 가져오기 및 퍼블리셔 등록
         ros = ROSConnection.GetOrCreateInstance();
-        topicName = RosTopicNamespace.Resolve(gameObject, topicName);
-        ros.RegisterPublisher<Float32MultiArrayMsg>(topicName);
 
-        // 센서 배열 초기화 및 검증
         ValidateSensors();
-        // 모든 센서의 스캔 주기를 발행 주기에 맞춤
         SyncScanIntervals();
 
-        publishInterval = 1f / publishRate;
+        if (publishAggregatedTopic)
+            SetupAggregatedTopicOutput();
+        if (useExternalTopicInput)
+            SetupExternalTopicInput();
+
+        publishInterval = 1f / Mathf.Max(1f, publishRate);
         lastPublishTime = Time.time;
 
         Debug.Log($"[UltrasonicManager] Initialized - {CountActiveSensors()}/8 sensors active");
     }
 
-    /// <summary>
-    /// 할당된 센서들을 배열로 묶고 누락된 참조를 경고합니다.
-    /// </summary>
     void ValidateSensors()
     {
-        // 자동 할당 로직 추가
         if (sensorFL == null)
         {
             var obj = GameObject.Find("ultrasonic_fl_link");
@@ -128,7 +140,11 @@ public class UltrasonicSensorPublisher : MonoBehaviour
             if (obj != null) sensorSR = obj.GetComponent<SingleUltrasonicSensor>();
         }
 
-        allSensors = new SingleUltrasonicSensor[] { sensorFL, sensorFR, sensorFC, sensorRL, sensorRR, sensorRC, sensorSL, sensorSR };
+        allSensors = new[]
+        {
+            sensorFL, sensorFR, sensorFC, sensorRL,
+            sensorRR, sensorRC, sensorSL, sensorSR
+        };
 
         if (sensorFL == null) Debug.LogWarning("[UltrasonicManager] sensorFL이 할당되지 않았습니다. ('ultrasonic_fl_link' 오브젝트를 찾을 수 없음)");
         if (sensorFR == null) Debug.LogWarning("[UltrasonicManager] sensorFR이 할당되지 않았습니다. ('ultrasonic_fr_link' 오브젝트를 찾을 수 없음)");
@@ -140,18 +156,41 @@ public class UltrasonicSensorPublisher : MonoBehaviour
         if (sensorSR == null) Debug.LogWarning("[UltrasonicManager] sensorSR이 할당되지 않았습니다. ('ultrasonic_sr_link' 오브젝트를 찾을 수 없음)");
     }
 
-    /// <summary>
-    /// 모든 개별 센서의 스캔 주기를 퍼블리셔의 발행 주기에 맞춰 동기화합니다.
-    /// </summary>
+    void SetupAggregatedTopicOutput()
+    {
+        resolvedOutputTopicName = RosTopicNamespace.Resolve(gameObject, topicName);
+        ros.RegisterPublisher<Float32MultiArrayMsg>(resolvedOutputTopicName);
+        aggregatedPublisherReady = true;
+    }
+
+    void SetupExternalTopicInput()
+    {
+        string requestedInputTopic = string.IsNullOrWhiteSpace(inputTopicName) ? topicName : inputTopicName;
+        if (string.IsNullOrWhiteSpace(requestedInputTopic))
+        {
+            Debug.LogWarning("[UltrasonicManager] inputTopicName이 비어 있어 외부 입력 모드를 비활성화합니다.");
+            useExternalTopicInput = false;
+            return;
+        }
+
+        resolvedInputTopicName = RosTopicNamespace.Resolve(gameObject, requestedInputTopic);
+        if (aggregatedPublisherReady && resolvedInputTopicName == resolvedOutputTopicName)
+        {
+            Debug.LogWarning($"[UltrasonicManager] input/output topic이 동일({resolvedInputTopicName})하여 self-loop 방지를 위해 집계 발행을 비활성화합니다.");
+            aggregatedPublisherReady = false;
+        }
+
+        ros.Subscribe<Float32MultiArrayMsg>(resolvedInputTopicName, OnExternalData);
+        Debug.Log($"[UltrasonicManager] External topic subscribed: {resolvedInputTopicName}");
+    }
+
     void SyncScanIntervals()
     {
-        float interval = 1f / publishRate;
+        float interval = 1f / Mathf.Max(1f, publishRate);
         foreach (var sensor in allSensors)
         {
             if (sensor != null)
-            {
                 sensor.SetScanInterval(interval);
-            }
         }
     }
 
@@ -167,93 +206,90 @@ public class UltrasonicSensorPublisher : MonoBehaviour
 
     void Update()
     {
-        // 일정 주기마다 데이터 갱신 및 발행
+        ApplyExternalInputState();
+
         if (Time.time - lastPublishTime >= publishInterval)
         {
-            UpdateClosestSensor(); // 가장 가까운 센서 정보 갱신
-            PublishData();         // ROS 메시지 발행
+            UpdateClosestSensor();
+            if (publishAggregatedTopic && aggregatedPublisherReady)
+                PublishData();
             lastPublishTime = Time.time;
 
             if (showDebugInfo)
-            {
                 PrintDebugInfo();
+        }
+    }
+
+    void ApplyExternalInputState()
+    {
+        if (useExternalTopicInput)
+        {
+            bool externalFresh = hasExternalMessage &&
+                                 (Time.time - lastExternalMessageTime) <= Mathf.Max(0.02f, externalDataTimeoutSec);
+            foreach (var sensor in allSensors)
+            {
+                if (sensor != null)
+                    sensor.SetExternalInputState(externalFresh, fallbackToRaycastWhenExternalStale);
+            }
+        }
+        else
+        {
+            foreach (var sensor in allSensors)
+            {
+                if (sensor != null)
+                    sensor.SetExternalInputState(false, true);
             }
         }
     }
 
-    /// <summary>
-    /// 모든 센서를 순회하며 가장 가까운 장애물을 감지한 센서를 찾습니다.
-    /// </summary>
     void UpdateClosestSensor()
     {
         ClosestDistance = float.PositiveInfinity;
         ClosestConfidence = 0f;
         ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.FrontCenter;
 
-        if (sensorFL != null && (sensorFL.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorFL.Distance - ClosestDistance) < 0.02f && sensorFL.Confidence > ClosestConfidence)))
+        foreach (var sensor in allSensors)
         {
-            ClosestDistance = sensorFL.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.FrontLeft;
-            ClosestConfidence = sensorFL.Confidence;
-        }
-        if (sensorFR != null && (sensorFR.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorFR.Distance - ClosestDistance) < 0.02f && sensorFR.Confidence > ClosestConfidence)))
-        {
-            ClosestDistance = sensorFR.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.FrontRight;
-            ClosestConfidence = sensorFR.Confidence;
-        }
-        if (sensorFC != null && (sensorFC.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorFC.Distance - ClosestDistance) < 0.02f && sensorFC.Confidence > ClosestConfidence)))
-        {
-            ClosestDistance = sensorFC.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.FrontCenter;
-            ClosestConfidence = sensorFC.Confidence;
-        }
-        if (sensorRL != null && (sensorRL.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorRL.Distance - ClosestDistance) < 0.02f && sensorRL.Confidence > ClosestConfidence)))
-        {
-            ClosestDistance = sensorRL.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.RearLeft;
-            ClosestConfidence = sensorRL.Confidence;
-        }
-        if (sensorRR != null && (sensorRR.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorRR.Distance - ClosestDistance) < 0.02f && sensorRR.Confidence > ClosestConfidence)))
-        {
-            ClosestDistance = sensorRR.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.RearRight;
-            ClosestConfidence = sensorRR.Confidence;
-        }
-        if (sensorRC != null && (sensorRC.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorRC.Distance - ClosestDistance) < 0.02f && sensorRC.Confidence > ClosestConfidence)))
-        {
-            ClosestDistance = sensorRC.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.RearCenter;
-            ClosestConfidence = sensorRC.Confidence;
-        }
-        if (sensorSL != null && (sensorSL.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorSL.Distance - ClosestDistance) < 0.02f && sensorSL.Confidence > ClosestConfidence)))
-        {
-            ClosestDistance = sensorSL.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.SideLeft;
-            ClosestConfidence = sensorSL.Confidence;
-        }
-        if (sensorSR != null && (sensorSR.Distance < ClosestDistance ||
-            (Mathf.Abs(sensorSR.Distance - ClosestDistance) < 0.02f && sensorSR.Confidence > ClosestConfidence)))
-        {
-            ClosestDistance = sensorSR.Distance;
-            ClosestSensorPosition = SingleUltrasonicSensor.SensorPosition.SideRight;
-            ClosestConfidence = sensorSR.Confidence;
+            if (sensor == null)
+                continue;
+
+            bool isCloser = sensor.Distance < ClosestDistance;
+            bool isSameDistanceButMoreReliable =
+                Mathf.Abs(sensor.Distance - ClosestDistance) < 0.02f && sensor.Confidence > ClosestConfidence;
+
+            if (isCloser || isSameDistanceButMoreReliable)
+            {
+                ClosestDistance = sensor.Distance;
+                ClosestSensorPosition = sensor.sensorPosition;
+                ClosestConfidence = sensor.Confidence;
+            }
         }
     }
 
-    /// <summary>
-    /// 수집된 초음파 데이터를 ROS 메시지(Float32MultiArray)로 변환하여 발행합니다.
-    /// 데이터 순서: FL, FR, FC, RL, RR, RC, MinFront, MinRear, ClosestDist, ClosestPos, ClosestConf, MinDist
-    /// </summary>
     void PublishData()
     {
+        if (ros == null || string.IsNullOrWhiteSpace(resolvedOutputTopicName))
+            return;
+
+        float[] payload = new float[SensorCount * FieldsPerSensor];
+        for (int i = 0; i < allSensors.Length; i++)
+        {
+            int baseIndex = i * FieldsPerSensor;
+            SingleUltrasonicSensor sensor = allSensors[i];
+
+            if (sensor == null || !sensor.HasDetection)
+            {
+                payload[baseIndex + DistanceIndex] = -1f;
+                payload[baseIndex + ConfidenceIndex] = 0f;
+                payload[baseIndex + AngleIndex] = 0f;
+                continue;
+            }
+
+            payload[baseIndex + DistanceIndex] = sensor.Distance;
+            payload[baseIndex + ConfidenceIndex] = sensor.Confidence;
+            payload[baseIndex + AngleIndex] = sensor.DetectedAngle;
+        }
+
         Float32MultiArrayMsg msg = new Float32MultiArrayMsg
         {
             layout = new MultiArrayLayoutMsg
@@ -262,35 +298,79 @@ public class UltrasonicSensorPublisher : MonoBehaviour
                 {
                     new MultiArrayDimensionMsg
                     {
-                        label = "ultrasonic_data",
-                        size = 15,
-                        stride = 15
+                        label = "sensor",
+                        size = SensorCount,
+                        stride = SensorCount * FieldsPerSensor
+                    },
+                    new MultiArrayDimensionMsg
+                    {
+                        label = "distance_confidence_angle",
+                        size = FieldsPerSensor,
+                        stride = FieldsPerSensor
                     }
                 },
                 data_offset = 0
             },
-            data = new float[]
-            {
-                // 무한대(감지 안됨)일 경우 -1로 변환하여 전송 (ROS 표준에 맞춤)
-                float.IsInfinity(FrontLeftDistance) ? -1f : FrontLeftDistance,
-                float.IsInfinity(FrontRightDistance) ? -1f : FrontRightDistance,
-                float.IsInfinity(FrontCenterDistance) ? -1f : FrontCenterDistance,
-                float.IsInfinity(RearLeftDistance) ? -1f : RearLeftDistance,
-                float.IsInfinity(RearRightDistance) ? -1f : RearRightDistance,
-                float.IsInfinity(RearCenterDistance) ? -1f : RearCenterDistance,
-                float.IsInfinity(SideLeftDistance) ? -1f : SideLeftDistance,
-                float.IsInfinity(SideRightDistance) ? -1f : SideRightDistance,
-                float.IsInfinity(MinFrontDistance) ? -1f : MinFrontDistance,
-                float.IsInfinity(MinRearDistance) ? -1f : MinRearDistance,
-                float.IsInfinity(MinSideDistance) ? -1f : MinSideDistance,
-                float.IsInfinity(ClosestDistance) ? -1f : ClosestDistance,
-                (float)ClosestSensorPosition,
-                ClosestConfidence,
-                float.IsInfinity(MinDistance) ? -1f : MinDistance
-            }
+            data = payload
         };
 
-        ros.Publish(topicName, msg);
+        ros.Publish(resolvedOutputTopicName, msg);
+    }
+
+    void OnExternalData(Float32MultiArrayMsg msg)
+    {
+        hasExternalMessage = true;
+        lastExternalMessageTime = Time.time;
+
+        float[] data = msg != null ? msg.data : null;
+        if (data == null || data.Length == 0)
+        {
+            ResetAllSensors();
+            return;
+        }
+
+        bool hasTriplets = data.Length >= SensorCount * FieldsPerSensor;
+        for (int i = 0; i < allSensors.Length; i++)
+        {
+            SingleUltrasonicSensor sensor = allSensors[i];
+            if (sensor == null)
+                continue;
+
+            if (hasTriplets)
+            {
+                int baseIndex = i * FieldsPerSensor;
+                sensor.ApplyExternalData(new[]
+                {
+                    data[baseIndex + DistanceIndex],
+                    data[baseIndex + ConfidenceIndex],
+                    data[baseIndex + AngleIndex]
+                });
+                continue;
+            }
+
+            if (i < data.Length)
+            {
+                sensor.ApplyExternalData(new[]
+                {
+                    data[i],
+                    sensor.defaultExternalConfidence > 0f ? sensor.defaultExternalConfidence : defaultExternalConfidence,
+                    0f
+                });
+            }
+            else
+            {
+                sensor.ApplyExternalData(new[] { -1f });
+            }
+        }
+    }
+
+    void ResetAllSensors()
+    {
+        foreach (var sensor in allSensors)
+        {
+            if (sensor != null)
+                sensor.ApplyExternalData(new[] { -1f });
+        }
     }
 
     void PrintDebugInfo()
@@ -307,33 +387,28 @@ public class UltrasonicSensorPublisher : MonoBehaviour
         Debug.Log($"[Ultrasonic] FL:{fl} FR:{fr} FC:{fc} RL:{rl} RR:{rr} RC:{rc} SL:{sl} SR:{sr} | Closest: {ClosestSensorPosition} (conf:{ClosestConfidence:F2})");
     }
 
-    // 전방 안전 여부 확인 (임계값 이상이면 안전)
     public bool IsFrontClear(float threshold = 0.5f)
     {
         return MinFrontDistance > threshold || float.IsInfinity(MinFrontDistance);
     }
 
-    // 후방 안전 여부 확인
     public bool IsRearClear(float threshold = 0.5f)
     {
         return MinRearDistance > threshold || float.IsInfinity(MinRearDistance);
     }
 
-    // 좌측(전/후) 안전 여부 확인
     public bool IsLeftClear(float threshold = 0.5f)
     {
         float leftMin = Mathf.Min(FrontLeftDistance, Mathf.Min(RearLeftDistance, SideLeftDistance));
         return leftMin > threshold || float.IsInfinity(leftMin);
     }
 
-    // 우측(전/후/측면) 안전 여부 확인
     public bool IsRightClear(float threshold = 0.5f)
     {
         float rightMin = Mathf.Min(FrontRightDistance, Mathf.Min(RearRightDistance, SideRightDistance));
         return rightMin > threshold || float.IsInfinity(rightMin);
     }
 
-    // 측면 안전 여부 확인
     public bool IsSideClear(float threshold = 0.5f)
     {
         return MinSideDistance > threshold || float.IsInfinity(MinSideDistance);

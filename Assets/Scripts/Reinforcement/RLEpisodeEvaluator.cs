@@ -5,7 +5,7 @@ using UnityEngine;
 /// 강화학습 에피소드 종료/평가기.
 /// - 성공: FinishLineGate 통과
 /// - 실패: 위험단계(5,6) 정지 지속, 충돌, 타임아웃
-/// - 종료 시 점수 산출 + 쓰레기 학습 여부 라벨링
+/// - 종료 시 상태를 고정하고 종료 이벤트를 발행
 /// </summary>
 public class RLEpisodeEvaluator : MonoBehaviour
 {
@@ -62,9 +62,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public float maxLateralErrorForFailure = 0f;
     /// <summary>충돌 실패를 판정할 레이어 마스크. 해당 레이어의 오브젝트와 충돌해야 실패 처리.</summary>
     public LayerMask collisionFailLayers = ~0;
-    /// <summary>충돌 시 상대 속도(m/s)가 이 값 미만이면 경미한 접촉으로 무시.</summary>
-    [Tooltip("상대 충돌속도가 이 값 이상일 때만 충돌 실패로 인정")]
-    public float collisionMinRelativeSpeed = 0.1f;
 
     [Header("Checkpoint Anti-Exploit")]
     [Tooltip("체크포인트 유효화에 필요한 스폰 지점 대비 최소 이동 거리(m). 0이면 비활성.")]
@@ -81,25 +78,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [Tooltip("stuckTimeWindow 동안 최소 이동거리 (m)")]
     public float stuckDistanceThreshold = 1f;
 
-    [Header("Scoring")]
-    /// <summary>성공(Finish) 시 보상에 가산되는 보너스 점수.</summary>
-    public float finishBonus = 30f;
-    /// <summary>실패 시 공통으로 차감되는 기본 페널티.</summary>
-    public float baseFailurePenalty = 20f;
-    /// <summary>FailRiskStop(위험 정지) 실패 시 추가 차감 페널티.</summary>
-    public float riskStopExtraPenalty = 6f;
-    /// <summary>FailCollision(물리 충돌) 실패 시 추가 차감 페널티.</summary>
-    public float collisionExtraPenalty = 10f;
-    /// <summary>FailTimeout(시간 초과) 실패 시 추가 차감 페널티.</summary>
-    public float timeoutExtraPenalty = 4f;
-    /// <summary>FailStuck(이동 불능) 실패 시 추가 차감 페널티.</summary>
-    public float stuckExtraPenalty = 8f;
-    /// <summary>FailWrongLane(반대 차선 통과) 실패 시 추가 차감 페널티.</summary>
-    public float wrongLaneExtraPenalty = 15f;
-    /// <summary>실패 에피소드에서 경로 진행률이 이 비율 미만이면 "쓰레기 학습(trash)"으로 라벨링.</summary>
-    [Tooltip("실패 시 progress ratio가 이 값 미만이면 쓰레기 학습으로 라벨")]
-    [Range(0f, 1f)] public float lowProgressTrashThreshold = 0.1f;
-
     [Header("Debug (Read Only)")]
     /// <summary>현재까지 실행된 에피소드 누적 인덱스 (1부터 시작).</summary>
     [SerializeField] private int episodeIndex = 0;
@@ -109,22 +87,14 @@ public class RLEpisodeEvaluator : MonoBehaviour
     [SerializeField] private bool terminalReached = false;
     /// <summary>현재 에피소드가 성공(Finish)으로 종료되었는지 여부.</summary>
     [SerializeField] private bool episodeSuccess = false;
-    /// <summary>현재 에피소드가 "쓰레기 학습"으로 라벨링되었는지 여부. 학습 데이터 필터링에 사용.</summary>
-    [SerializeField] private bool isTrashEpisode = false;
     /// <summary>중간 체크포인트를 통과했는지 여부. FinishLineGate에서 설정, BeginEpisode에서 리셋.</summary>
     [SerializeField] private bool checkpointPassed = false;
     /// <summary>에피소드가 어떤 유형으로 종료되었는지 (Finish, FailRiskStop 등).</summary>
     [SerializeField] private TerminalType terminalType = TerminalType.None;
     /// <summary>종료 사유를 사람이 읽을 수 있는 문자열로 기록 (로그/CSV용).</summary>
     [SerializeField] private string terminalReason = "None";
-    /// <summary>쓰레기 학습 판정 사유 문자열 (해당 없으면 "None").</summary>
-    [SerializeField] private string trashReason = "None";
     /// <summary>에피소드 시작 후 경과 시간(초).</summary>
     [SerializeField] private float elapsedSeconds = 0f;
-    /// <summary>최종 에피소드 점수 = rewardBase ± 보너스/페널티. 정책 평가 지표.</summary>
-    [SerializeField] private float episodeScore = 0f;
-    /// <summary>ProgressRewardProvider가 산출한 누적 보상 (보너스/페널티 적용 전 원시 보상).</summary>
-    [SerializeField] private float episodeRewardBase = 0f;
     /// <summary>위험 레벨 + 정지 상태가 연속으로 유지된 시간(초). 임계값 초과 시 FailRiskStop.</summary>
     [SerializeField] private float dangerStoppedDuration = 0f;
     /// <summary>에피소드 내 위험 레벨(dangerLevelThreshold 이상)에 머문 총 누적 시간(초).</summary>
@@ -158,10 +128,9 @@ public class RLEpisodeEvaluator : MonoBehaviour
     {
         if (autoBeginOnStart)
         {
-            // When an ML-Agent exists, its OnEpisodeBegin should be the single owner
-            // of episode lifecycle to avoid startup double-begin.
-            AutoDriverRLAgent managedAgent = FindObjectOfType<AutoDriverRLAgent>();
-            if (managedAgent != null)
+            if (autoDriverRLAgent == null)
+                autoDriverRLAgent = GetComponent<AutoDriverRLAgent>() ?? GetComponentInParent<AutoDriverRLAgent>();
+            else
                 return;
 
             BeginEpisode();
@@ -212,14 +181,10 @@ public class RLEpisodeEvaluator : MonoBehaviour
         episodeActive = true;
         terminalReached = false;
         episodeSuccess = false;
-        isTrashEpisode = false;
         checkpointPassed = false;
         terminalType = TerminalType.None;
         terminalReason = "None";
-        trashReason = "None";
         elapsedSeconds = 0f;
-        episodeScore = 0f;
-        episodeRewardBase = 0f;
         dangerStoppedDuration = 0f;
         timeAtDangerLevel = 0f;
         collisionCount = 0;
@@ -239,7 +204,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
     /// <summary>
     /// 매 프레임 호출되어 위험 지표를 갱신한다.
-    /// TTC 최솟값, 위험 레벨 체류 시간, 위험 정지 지속 시간을 추적하며,
     /// 위험 정지가 dangerStopHoldSeconds를 초과하면 FailRiskStop으로 에피소드를 종료한다.
     /// </summary>
     void UpdateRiskMetrics(float dt)
@@ -367,9 +331,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
         if ((collisionFailLayers.value & otherLayerMask) == 0)
             return false;
 
-        if (relativeSpeed < collisionMinRelativeSpeed)
-            return false;
-
         collisionCount++;
         lastCollisionObjectName = otherCollider.name;
         lastCollisionRelativeSpeed = relativeSpeed;
@@ -424,9 +385,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
 
     /// <summary>
     /// 에피소드를 종료 처리하는 핵심 메서드.
-    /// 1) 종료 유형과 사유 기록  2) 누적 보상 + 보너스/페널티로 최종 점수 산출
-    /// 3) 쓰레기 학습 여부 라벨링  4) 차량 정지 및 자율주행 비활성화
-    /// 5) OnEpisodeTerminated 이벤트 발행
+    /// 1) 종료 유형과 사유 기록  2) 차량 정지
+    /// 3) OnEpisodeTerminated 이벤트 발행
     /// </summary>
     void SetTerminal(TerminalType type, string reason)
     {
@@ -438,56 +398,6 @@ public class RLEpisodeEvaluator : MonoBehaviour
         terminalType = type;
         episodeSuccess = type == TerminalType.Finish;
         terminalReason = string.IsNullOrEmpty(reason) ? type.ToString() : reason;
-
-        episodeRewardBase = progressRewardProvider != null ? progressRewardProvider.GetCumulativeReward() : 0f;
-        episodeScore = episodeRewardBase;
-
-        if (episodeSuccess)
-        {
-            episodeScore += finishBonus;
-            isTrashEpisode = false;
-            trashReason = "None";
-        }
-        else
-        {
-            episodeScore -= baseFailurePenalty;
-            switch (type)
-            {
-                case TerminalType.FailRiskStop:
-                    episodeScore -= riskStopExtraPenalty;
-                    break;
-                case TerminalType.FailCollision:
-                    episodeScore -= collisionExtraPenalty;
-                    break;
-                case TerminalType.FailTimeout:
-                    episodeScore -= timeoutExtraPenalty;
-                    break;
-                case TerminalType.FailStuck:
-                    episodeScore -= stuckExtraPenalty;
-                    break;
-                case TerminalType.FailWrongLane:
-                    episodeScore -= wrongLaneExtraPenalty;
-                    break;
-            }
-
-            float progressRatio = progressRewardProvider != null ? progressRewardProvider.GetPathProgressRatio() : 0f;
-            bool lowProgress = progressRatio < lowProgressTrashThreshold;
-            bool highRiskStop = type == TerminalType.FailRiskStop;
-            bool collisionFail = type == TerminalType.FailCollision;
-            bool stuckFail = type == TerminalType.FailStuck;
-
-            isTrashEpisode = highRiskStop || collisionFail || stuckFail || lowProgress;
-            if (collisionFail)
-                trashReason = "Trash: Collision termination";
-            else if (highRiskStop)
-                trashReason = "Trash: Danger level(5/6) stop termination";
-            else if (stuckFail)
-                trashReason = $"Trash: Stuck ({stuckDistanceAccum:F2}m in {stuckTimeWindow:F1}s)";
-            else if (lowProgress)
-                trashReason = $"Trash: Low progress ratio ({progressRatio:F2} < {lowProgressTrashThreshold:F2})";
-            else
-                trashReason = "None";
-        }
 
         if (stopVehicleOnTerminal && vehicleMotionController != null)
         {
@@ -502,12 +412,8 @@ public class RLEpisodeEvaluator : MonoBehaviour
     public bool IsEpisodeActive() => episodeActive;
     public bool IsTerminalReached() => terminalReached;
     public bool IsEpisodeSuccess() => episodeSuccess;
-    public bool IsTrash() => isTrashEpisode;
     public TerminalType GetTerminalType() => terminalType;
     public string GetTerminalReason() => terminalReason;
-    public string GetTrashReason() => trashReason;
-    public float GetEpisodeScore() => episodeScore;
-    public float GetEpisodeRewardBase() => episodeRewardBase;
     public float GetElapsedSeconds() => elapsedSeconds;
     public int GetEpisodeIndex() => episodeIndex;
     public int GetCollisionCount() => collisionCount;

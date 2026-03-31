@@ -1,5 +1,10 @@
 using UnityEngine;
+using Unity.Robotics.UrdfImporter;
+using Unity.Robotics.UrdfImporter.Control;
 
+// Run before most startup scripts so the visual URDF rig is disabled
+// before articulation physics can kick the robot upward on play enter.
+[DefaultExecutionOrder(-5000)]
 public class VehicleMotionController : MonoBehaviour
 {
     [Header("Steering Links (Auto-assigned)")]
@@ -22,10 +27,6 @@ public class VehicleMotionController : MonoBehaviour
     [Tooltip("조향 속도 (도/초). 핸들을 얼마나 빨리 꺾을 수 있는지")]
     public float steeringSpeed = 100f;
 
-    // ============================================
-    // 차량 물리 파라미터 (Vehicle Physics Parameters)
-    // ============================================
-
     [Header("Vehicle Specs")]
     [Tooltip("차량 질량 (kg)")]
     public float vehicleMass = 65f;
@@ -46,11 +47,11 @@ public class VehicleMotionController : MonoBehaviour
 
     [Header("Speed & Stability Limits (배달 AMR: 0.5~2.0 m/s)")]
     [Tooltip("최고 속도 제한 (m/s)")]
-    public float maxSpeed = 2.8f;
+    public float maxSpeed = 2.0f;
     [Tooltip("최대 가속도 제한 (m/s²) - 부드러운 주행: 0.3~0.5")]
-    public float maxAcceleration = 0.5f;
+    public float maxAcceleration = 0.8f;
     [Tooltip("최대 감속도 제한 (m/s²)")]
-    public float maxDeceleration = 1.0f;
+    public float maxDeceleration = 1.5f;
     [Tooltip("고속 조향 제한 활성화")]
     public bool enableSpeedBasedSteeringLimit = true;
     [Tooltip("조향 제한 없는 최대 속도 (m/s)")]
@@ -58,7 +59,7 @@ public class VehicleMotionController : MonoBehaviour
 
     [Header("Resistance Coefficients (실외)")]
     [Tooltip("구름저항 계수 - 실외 아스팔트: 0.015, 거친 노면: 0.03")]
-    public float rollingResistance = 0.025f;
+    public float rollingResistance = 0.02f;
     [Tooltip("공기저항 계수 (Cd) - 저속에서는 영향 미미")]
     public float dragCoefficient = 0.1f;
     [Tooltip("전면 투영 면적 (m²)")]
@@ -66,15 +67,62 @@ public class VehicleMotionController : MonoBehaviour
     [Tooltip("공기 밀도 (kg/m³)")]
     public float airDensity = 1.225f;
 
-    [Header("Tire Physics")]
-    [Tooltip("최대 마찰 계수")]
-    public float peakFriction = 0.8f;
-
     [Header("Brakes")]
     [Tooltip("최대 브레이크 힘 (N)")]
-    public float maxBrakeForce = 300f;
+    public float maxBrakeForce = 600f;
     [Tooltip("엔진 브레이크 힘 (N)")]
-    public float engineBrakeForce = 30f;
+    public float engineBrakeForce = 20f;
+    [Tooltip("브레이크 hold가 차를 완전히 붙잡기 시작하는 속도 임계값 (m/s)")]
+    public float standstillHoldSpeed = 0.15f;
+    [Tooltip("스로틀/브레이크 입력이 없을 때 정지로 스냅하는 속도 임계값 (m/s)")]
+    public float coastStopSpeed = 0.05f;
+
+    [Header("Hybrid Physics Backend")]
+    [Tooltip("true면 Rigidbody + WheelCollider 기반 root를 런타임에 생성한다.")]
+    public bool useHybridWheelColliderBackend = true;
+    [Tooltip("차체 단순 충돌체를 활성화한다. 초기 전환 단계에서는 false로 두고 WheelCollider 접지부터 안정화한다.")]
+    public bool enableHybridChassisCollider = false;
+    [Tooltip("비주얼 URDF rig의 일반 충돌체를 비활성화한다.")]
+    public bool disableVisualRigColliders = true;
+    [Tooltip("비주얼 URDF rig의 Articulation 물리를 비활성화한다.")]
+    public bool disableVisualRigArticulations = true;
+
+    [Header("WheelCollider Suspension")]
+    public float suspensionDistance = 0.08f;
+    public float suspensionSpring = 5000f;
+    public float suspensionDamper = 1200f;
+    [Range(0f, 1f)] public float suspensionTargetPosition = 0.5f;
+    public float wheelDampingRate = 1.2f;
+    public float hybridAngularDrag = 1.5f;
+
+    [Header("WheelCollider Friction")]
+    public float forwardExtremumSlip = 0.35f;
+    public float forwardExtremumValue = 1.2f;
+    public float forwardAsymptoteSlip = 0.8f;
+    public float forwardAsymptoteValue = 0.9f;
+    public float forwardStiffness = 1.4f;
+    public float sidewaysExtremumSlip = 0.22f;
+    public float sidewaysExtremumValue = 1.15f;
+    public float sidewaysAsymptoteSlip = 0.7f;
+    public float sidewaysAsymptoteValue = 0.85f;
+    public float frontSidewaysStiffness = 1.05f;
+    public float rearSidewaysStiffness = 0.95f;
+
+    [Header("Input Filtering")]
+    [Range(0f, 0.3f)] public float steeringDeadzone = 0.05f;
+    [Range(0f, 0.3f)] public float throttleDeadzone = 0.05f;
+    [Tooltip("스로틀 입력 상승 속도 (입력/초)")]
+    public float throttleRiseRate = 2.5f;
+    [Tooltip("스로틀 입력 하강 속도 (입력/초)")]
+    public float throttleFallRate = 4.0f;
+    [Tooltip("브레이크 입력 상승 속도 (입력/초)")]
+    public float brakeRiseRate = 5.0f;
+    [Tooltip("브레이크 입력 하강 속도 (입력/초)")]
+    public float brakeFallRate = 7.0f;
+
+    [Header("Drive Axle")]
+    public bool driveFrontAxle = true;
+    public bool driveRearAxle = true;
 
     [Header("Auto-Find Settings")]
     public bool autoFindReferences = true;
@@ -84,115 +132,174 @@ public class VehicleMotionController : MonoBehaviour
     public bool externalControlEnabled = false;
 
     [Header("Debug Info (Read Only)")]
-    [SerializeField] private float currentSpeed_ms;      // 실제 물리 속도 (m/s) — RL 에이전트 관찰값
-    [SerializeField] private float currentSpeed_kmh;     // 실제 물리 속도 (km/h)
-    [SerializeField] private float commandedSpeed_ms;    // 스크립트 명령 속도 (m/s) — 바퀴 targetVelocity 소스
-    [SerializeField] private float currentMotorRPM;      // 현재 모터 RPM
-    [SerializeField] private float currentAcceleration;  // 현재 가속도 (m/s²)
-    [SerializeField] private float currentDriveForce;    // 현재 구동력 (N)
-    [SerializeField] private float currentResistForce;   // 현재 총 저항력 (N)
-    [SerializeField] private float frontAxleLoad;        // 앞축 하중 (N)
-    [SerializeField] private float rearAxleLoad;         // 뒷축 하중 (N)
+    [SerializeField] private float currentSpeed_ms;
+    [SerializeField] private float currentSpeed_kmh;
+    [SerializeField] private float currentMotorRPM;
+    [SerializeField] private float currentAcceleration;
+    [SerializeField] private float currentSteeringAngle;
+    [SerializeField] private float appliedThrottleInput;
+    [SerializeField] private float appliedBrakeInput;
+    [SerializeField] private float currentAppliedDriveTorque;
+    [SerializeField] private float currentAppliedBrakeTorque;
 
-    // 내부 상태 변수
-    private float currentSteeringAngle = 0f;
-    private float throttleInput = 0f;
-    private float brakeInput = 0f;
-    private float steeringInput = 0f;
-    private const float GRAVITY = 9.81f;
-    private ArticulationBody rootBody;
+    private float rawThrottleInput;
+    private float rawBrakeInput;
+    private float steeringInput;
+    private float leftVisualSteerAngle;
+    private float rightVisualSteerAngle;
 
-    // 디퍼렌셜 속도 비율 (UpdateSteering에서 계산 → ApplyWheelVelocities에서 사용)
-    private float leftSpeedRatio = 1f;
-    private float rightSpeedRatio = 1f;
+    private WheelColliderVehicleDynamics hybridDynamics;
+    private Transform visualRigRoot;
+    private Transform steeringLeftTransform;
+    private Transform steeringRightTransform;
+    private Quaternion steeringLeftBaseRotation;
+    private Quaternion steeringRightBaseRotation;
+    private Vector3 visualRigOffsetPosition;
+    private Quaternion visualRigOffsetRotation;
+    private bool runtimePrepared;
+    private bool backendInitialized;
+
+    void Awake()
+    {
+        PrepareRuntime();
+    }
 
     void Start()
     {
+        PrepareRuntime();
+        InitializeBackendIfNeeded();
+        SyncVisualSteering();
+        SyncDebugState();
+    }
+
+    void PrepareRuntime()
+    {
+        if (runtimePrepared)
+            return;
+
+        runtimePrepared = true;
+
         if (autoFindReferences)
-        {
             FindReferences();
-        }
 
-        // 한 번의 탐색으로 루트 캐시 + 물리 파라미터 보정 수행
-        ArticulationBody[] allBodies = GetComponentsInChildren<ArticulationBody>(true);
-        CacheRootArticulationBody(allBodies);
-        CorrectPhysicsDamping(allBodies);
-
-        // 토크 커브 기본값 설정 (전기모터 특성: 저속에서 최대 토크)
         if (torqueCurve == null || torqueCurve.keys.Length == 0)
         {
             torqueCurve = new AnimationCurve();
-            torqueCurve.AddKey(0f, 1f);      // 0 RPM: 100% 토크
-            torqueCurve.AddKey(0.3f, 1f);    // 30% RPM: 100% 토크
-            torqueCurve.AddKey(0.7f, 0.9f);  // 70% RPM: 90% 토크
-            torqueCurve.AddKey(1f, 0.7f);    // 100% RPM: 70% 토크
+            torqueCurve.AddKey(0f, 1f);
+            torqueCurve.AddKey(0.3f, 1f);
+            torqueCurve.AddKey(0.7f, 0.9f);
+            torqueCurve.AddKey(1f, 0.7f);
         }
 
-        // 초기 하중 분배 (정지 시 균등 분배)
-        float totalWeight = vehicleMass * GRAVITY;
-        frontAxleLoad = totalWeight * 0.5f;
-        rearAxleLoad = totalWeight * 0.5f;
+        steeringLeftTransform = frontLeftSteering != null ? frontLeftSteering.transform : null;
+        steeringRightTransform = frontRightSteering != null ? frontRightSteering.transform : null;
+        steeringLeftBaseRotation = steeringLeftTransform != null ? steeringLeftTransform.localRotation : Quaternion.identity;
+        steeringRightBaseRotation = steeringRightTransform != null ? steeringRightTransform.localRotation : Quaternion.identity;
+
+        if (!useHybridWheelColliderBackend)
+            return;
+
+        visualRigRoot = ResolveVisualRigRoot();
+        if (visualRigRoot == null)
+        {
+            Debug.LogError("[VehicleMotionController] visualRigRoot를 찾지 못했습니다.");
+            return;
+        }
+
+        if (disableVisualRigColliders)
+            DisableVisualRigColliders();
+
+        if (disableVisualRigArticulations)
+            DisableVisualRigArticulations();
     }
 
-    // ============================================
-    // 물리 파라미터 보정
-    // URDF Importer가 joint damping을 body의 angularDamping으로 잘못 적용하는 문제 수정.
-    // 바퀴 angularDamping=1.0이면 20 rad/s(2 m/s)에서 20 Nm 저항 → 주행 불가.
-    // 조향 linearDamping=50이면 1 m/s에서 수백 N 저항 → 최고속도 1 m/s 한계.
-    // ============================================
-    void CorrectPhysicsDamping(ArticulationBody[] allBodies)
+    void InitializeBackendIfNeeded()
     {
-        foreach (ArticulationBody body in allBodies)
+        if (backendInitialized || !useHybridWheelColliderBackend)
+            return;
+
+        backendInitialized = true;
+        InitializeHybridBackend();
+    }
+
+    void Update()
+    {
+        if (!externalControlEnabled)
         {
-            // 바퀴 4개: body angularDamping을 joint용 값(1.0)에서 body 용(0.05)으로 수정
-            bool isWheel = body == frontLeftWheel || body == frontRightWheel
-                        || body == rearLeftWheel  || body == rearRightWheel;
-            if (isWheel)
+            steeringInput = ApplyDeadzone(Input.GetAxis("Horizontal"), steeringDeadzone);
+            float vertical = ApplyDeadzone(Input.GetAxis("Vertical"), throttleDeadzone);
+
+            if (vertical > 0f)
             {
-                body.angularDamping = 0.05f;  // 1.0 → 0.05 (URDF 오변환 수정)
-                body.linearDamping  = 0.05f;
+                rawThrottleInput = vertical;
+                rawBrakeInput = 0f;
+            }
+            else if (vertical < 0f)
+            {
+                if (currentSpeed_ms > 0.5f)
+                {
+                    rawThrottleInput = 0f;
+                    rawBrakeInput = -vertical;
+                }
+                else
+                {
+                    rawThrottleInput = vertical;
+                    rawBrakeInput = 0f;
+                }
+            }
+            else
+            {
+                rawThrottleInput = 0f;
+                rawBrakeInput = 0f;
             }
 
-            // 조향 2개: URDF damping=50이 linearDamping=50으로 잘못 적용됨
-            // → 1 m/s 이동 시 수백 N 저항 → physicsSpeed 상한 ~1 m/s
-            bool isSteering = body == frontLeftSteering || body == frontRightSteering;
-            if (isSteering)
+            if (Input.GetKey(KeyCode.Space))
             {
-                body.linearDamping  = 0.1f;  // 50 → 0.1 (URDF 오변환 수정)
-                body.angularDamping = 0.1f;
+                rawBrakeInput = 1f;
+                rawThrottleInput = 0f;
             }
-        }
-
-        // 차체(root): 낮은 기본값(0.05)을 AMR 특성에 맞게 상향
-        // → roll/pitch 공진 감쇠, 외란 흡수
-        if (rootBody != null)
-        {
-            rootBody.linearDamping  = 0.3f;  // 0.05 → 0.3
-            rootBody.angularDamping = 1.5f;  // 0.05 → 1.5
         }
     }
 
-    void CacheRootArticulationBody(ArticulationBody[] bodies)
+    float ApplyDeadzone(float value, float deadzone)
     {
-        // URDF 임포트 구조에서 isRoot == true인 ArticulationBody가 물리 계층의 루트
-        // (base_footprint 또는 base_link). velocity는 루트 바디에서 읽어야 정확하다.
-        foreach (ArticulationBody body in bodies)
+        return Mathf.Abs(value) < deadzone ? 0f : value;
+    }
+
+    void FixedUpdate()
+    {
+        UpdateLongitudinalInputs();
+        UpdateSteering(steeringInput);
+
+        if (hybridDynamics != null)
         {
-            if (body.isRoot)
-            {
-                rootBody = body;
-                break;
-            }
+            hybridDynamics.Step(leftVisualSteerAngle, rightVisualSteerAngle, appliedThrottleInput, appliedBrakeInput);
+            SyncVisualRigPose();
+            SyncVisualSteering();
+            SyncDebugState();
+        }
+    }
+
+    void UpdateLongitudinalInputs()
+    {
+        appliedThrottleInput = MoveInputTowards(appliedThrottleInput, rawThrottleInput, throttleRiseRate, throttleFallRate);
+        appliedBrakeInput = MoveInputTowards(appliedBrakeInput, rawBrakeInput, brakeRiseRate, brakeFallRate);
+    }
+
+    float MoveInputTowards(float current, float target, float riseRate, float fallRate)
+    {
+        float step;
+        if (Mathf.Abs(target) > Mathf.Abs(current))
+        {
+            bool sameDirection = Mathf.Sign(target) == Mathf.Sign(current == 0f ? target : current);
+            step = sameDirection ? riseRate : fallRate;
+        }
+        else
+        {
+            step = fallRate;
         }
 
-        if (rootBody == null)
-        {
-            rootBody = GetComponentInParent<ArticulationBody>();
-            Debug.LogWarning("[VehicleMotionController] isRoot ArticulationBody를 찾지 못해 부모 탐색으로 폴백합니다.");
-        }
-
-        if (rootBody == null)
-            Debug.LogError("[VehicleMotionController] ArticulationBody 루트를 찾지 못했습니다. Physics Velocity Feedback 비활성화.");
+        return Mathf.MoveTowards(current, target, Mathf.Max(step, 0.01f) * Time.fixedDeltaTime);
     }
 
     void FindReferences()
@@ -209,13 +316,8 @@ public class VehicleMotionController : MonoBehaviour
     {
         Transform found = FindChildRecursive(transform, name);
         if (found != null)
-        {
-            ArticulationBody ab = found.GetComponent<ArticulationBody>();
-            if (ab != null)
-            {
-                return ab;
-            }
-        }
+            return found.GetComponent<ArticulationBody>();
+
         Debug.LogWarning($"[VehicleMotionController] Not found: {name}");
         return null;
     }
@@ -234,356 +336,204 @@ public class VehicleMotionController : MonoBehaviour
         return null;
     }
 
-    void Update()
+    void InitializeHybridBackend()
     {
-        // 외부 제어 모드일 때는 키보드 입력 무시
-        if (!externalControlEnabled)
+        if (visualRigRoot == null)
         {
-            // 입력 처리 (Update에서 수행)
-            steeringInput = Input.GetAxis("Horizontal");
-            float vertical = Input.GetAxis("Vertical");
-
-            // 전진/후진과 브레이크 입력 분리
-            if (vertical > 0)
-            {
-                throttleInput = vertical;
-                brakeInput = 0f;
-            }
-            else if (vertical < 0)
-            {
-                // 전진 중 후진 입력 = 브레이크
-                if (currentSpeed_ms > 0.5f)
-                {
-                    throttleInput = 0f;
-                    brakeInput = -vertical;
-                }
-                // 정지 또는 저속 = 후진
-                else
-                {
-                    throttleInput = vertical;  // 음수값으로 후진
-                    brakeInput = 0f;
-                }
-            }
-            else
-            {
-                throttleInput = 0f;
-                brakeInput = 0f;
-            }
-
-            // 스페이스바 = 브레이크
-            if (Input.GetKey(KeyCode.Space))
-            {
-                brakeInput = 1f;
-                throttleInput = 0f;  // 브레이크 시 가속 해제
-            }
+            Debug.LogError("[VehicleMotionController] visualRigRoot를 찾지 못했습니다.");
+            return;
         }
 
-        // 입력값만 Update에서 수집. ArticulationBody xDrive 수정은 FixedUpdate에서 수행.
-    }
-
-    void FixedUpdate()
-    {
-        // 조향과 물리 연산을 모두 FixedUpdate에서 수행하여 PhysX와 완전 동기화.
-        // Update에서 xDrive를 수정하면 물리 스텝 사이에 비동기 충격이 발생한다.
-        UpdateSteering(steeringInput);
-        UpdateVehiclePhysics();
-    }
-
-    // ============================================
-    // 핵심 물리 연산
-    // ============================================
-
-    void UpdateVehiclePhysics()
-    {
-        float dt = Time.fixedDeltaTime;
-
-        // [방법 B] commandedSpeed_ms를 currentSpeed_ms에 복원 —
-        // 헬퍼 메서드들이 currentSpeed_ms를 참조하므로 키네마틱 계산 동안만 교체한다.
-        currentSpeed_ms = commandedSpeed_ms;
-
-        // 1. 무게 이동 계산
-        CalculateWeightTransfer();
-
-        // 2. 모터 RPM 계산 (commandedSpeed 기반)
-        CalculateMotorRPM();
-
-        // 3. 구동력 계산
-        float driveForce = CalculateDriveForce();
-
-        // 4. 저항력 계산
-        float dragForce = CalculateDragForce();
-        float rollingForce = CalculateRollingResistance();
-        float totalResistance = dragForce + rollingForce;
-
-        // 5. 브레이크력 계산
-        float brakeForce = CalculateBrakeForce();
-
-        // 6. 회생 제동 (스로틀 해제 시 자연 감속)
-        float regenBrake = 0f;
-        if (Mathf.Abs(throttleInput) < 0.1f && Mathf.Abs(currentSpeed_ms) > 0.1f)
-            regenBrake = engineBrakeForce * Mathf.Sign(currentSpeed_ms);
-
-        // 7. 타이어 그립 한계 계산
-        float maxTractionForce = CalculateMaxTractionForce();
-        float effectiveDriveForce = Mathf.Sign(driveForce) *
-            Mathf.Min(Mathf.Abs(driveForce), maxTractionForce);
-
-        // 8. 순 힘 계산
-        float netForce;
-        if (Mathf.Abs(currentSpeed_ms) < 0.05f && Mathf.Abs(throttleInput) < 0.1f && brakeInput < 0.1f)
+        Transform backendParent = visualRigRoot.parent != null ? visualRigRoot.parent : visualRigRoot;
+        string backendName = $"{visualRigRoot.name}_PhysicsRoot";
+        Transform existing = backendParent.Find(backendName);
+        Transform backendTransform = existing;
+        if (backendTransform == null)
         {
-            netForce = 0f;
-            currentSpeed_ms = 0f;
-        }
-        else
-        {
-            netForce = effectiveDriveForce - totalResistance - brakeForce - regenBrake;
-            if (brakeInput > 0.5f && Mathf.Abs(currentSpeed_ms) < 0.2f)
-                netForce = -currentSpeed_ms * 100f;
+            backendTransform = new GameObject(backendName).transform;
+            backendTransform.SetParent(backendParent, true);
         }
 
-        // 9-10. 가속도 계산 및 제한
-        currentAcceleration = Mathf.Clamp(netForce / vehicleMass, -maxDeceleration, maxAcceleration);
+        backendTransform.SetPositionAndRotation(transform.position, transform.rotation);
 
-        // 11. commandedSpeed 적분 및 클램프
-        currentSpeed_ms += currentAcceleration * dt;
-        currentSpeed_ms = Mathf.Clamp(currentSpeed_ms, -maxSpeed * 0.5f, maxSpeed);
+        hybridDynamics = backendTransform.GetComponent<WheelColliderVehicleDynamics>();
+        if (hybridDynamics == null)
+            hybridDynamics = backendTransform.gameObject.AddComponent<WheelColliderVehicleDynamics>();
 
-        // commandedSpeed-physicsSpeed 발산 방지:
-        // 갭이 클수록 drive가 forceLimit 포화 상태가 되어 진동 발생.
-        // maxGap=0.7: forceLimit 40Nm 자체가 진동 억제의 주 역할
-        if (rootBody != null)
+        Bounds chassisBounds = BuildChassisBounds();
+        Vector3 centerOfMassOffset = new Vector3(0f, -centerOfMassHeight * 0.5f, 0f);
+
+        Vector3 frontLeftPosition = frontLeftWheel != null ? frontLeftWheel.transform.position : transform.position + transform.TransformVector(new Vector3(-trackWidth * 0.5f, 0f, wheelBase * 0.5f));
+        Vector3 frontRightPosition = frontRightWheel != null ? frontRightWheel.transform.position : transform.position + transform.TransformVector(new Vector3(trackWidth * 0.5f, 0f, wheelBase * 0.5f));
+        Vector3 rearLeftPosition = rearLeftWheel != null ? rearLeftWheel.transform.position : transform.position + transform.TransformVector(new Vector3(-trackWidth * 0.5f, 0f, -wheelBase * 0.5f));
+        Vector3 rearRightPosition = rearRightWheel != null ? rearRightWheel.transform.position : transform.position + transform.TransformVector(new Vector3(trackWidth * 0.5f, 0f, -wheelBase * 0.5f));
+        Vector3 spawnPosition = ResolveHybridSpawnPosition(
+            transform.position,
+            transform.rotation,
+            frontLeftPosition,
+            frontRightPosition,
+            rearLeftPosition,
+            rearRightPosition);
+
+        Vector3 frontLeftLocalMount = Quaternion.Inverse(transform.rotation) * (frontLeftPosition - transform.position);
+        Vector3 frontRightLocalMount = Quaternion.Inverse(transform.rotation) * (frontRightPosition - transform.position);
+        Vector3 rearLeftLocalMount = Quaternion.Inverse(transform.rotation) * (rearLeftPosition - transform.position);
+        Vector3 rearRightLocalMount = Quaternion.Inverse(transform.rotation) * (rearRightPosition - transform.position);
+
+        hybridDynamics.Initialize(
+            this,
+            spawnPosition,
+            transform.rotation,
+            chassisBounds,
+            centerOfMassOffset,
+            frontLeftLocalMount,
+            frontRightLocalMount,
+            rearLeftLocalMount,
+            rearRightLocalMount);
+
+        CacheVisualRigOffset();
+
+        SyncVisualRigPose();
+    }
+
+    Transform ResolveVisualRigRoot()
+    {
+        UrdfRobot robot = GetComponentInParent<UrdfRobot>();
+        if (robot != null)
+            return robot.transform;
+
+        if (transform.parent != null && transform.parent.parent != null)
+            return transform.parent.parent;
+
+        return transform.root;
+    }
+
+    void CacheVisualRigOffset()
+    {
+        visualRigOffsetPosition = Quaternion.Inverse(transform.rotation) * (visualRigRoot.position - transform.position);
+        visualRigOffsetRotation = Quaternion.Inverse(transform.rotation) * visualRigRoot.rotation;
+    }
+
+    Vector3 ResolveHybridSpawnPosition(
+        Vector3 referencePosition,
+        Quaternion referenceRotation,
+        Vector3 frontLeftPosition,
+        Vector3 frontRightPosition,
+        Vector3 rearLeftPosition,
+        Vector3 rearRightPosition)
+    {
+        Vector3[] wheelPositions = { frontLeftPosition, frontRightPosition, rearLeftPosition, rearRightPosition };
+        float suspensionRestOffset = suspensionDistance * Mathf.Clamp01(1f - suspensionTargetPosition);
+        float resolvedY = 0f;
+        int hitCount = 0;
+
+        Physics.SyncTransforms();
+
+        for (int i = 0; i < wheelPositions.Length; i++)
         {
-            float physRef = Vector3.Dot(rootBody.velocity, rootBody.transform.forward);
-            currentSpeed_ms = Mathf.Clamp(currentSpeed_ms, physRef - 0.7f, physRef + 0.7f);
+            Vector3 wheelPosition = wheelPositions[i];
+            Vector3 rayOrigin = new Vector3(wheelPosition.x, Mathf.Max(referencePosition.y, wheelPosition.y) + 5f, wheelPosition.z);
+            if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 20f, ~0, QueryTriggerInteraction.Ignore))
+                continue;
+
+            Vector3 localWheelMount = Quaternion.Inverse(referenceRotation) * (wheelPosition - referencePosition);
+            float candidateRootY = hit.point.y + wheelRadius + suspensionRestOffset - localWheelMount.y;
+            resolvedY += candidateRootY;
+            hitCount++;
         }
 
-        commandedSpeed_ms = currentSpeed_ms;  // 다음 프레임을 위해 저장
-
-        // 13. 바퀴 속도 적용 (commandedSpeed 기반 — 충분한 속도 오차로 구동력 확보)
-        ApplyWheelVelocities();
-
-        // 12. physicsSpeed 읽기 → currentSpeed_ms 교체 (RL 에이전트 관찰값으로)
-        if (rootBody != null)
+        if (hitCount == 0)
         {
-            currentSpeed_ms = Vector3.Dot(rootBody.velocity, rootBody.transform.forward);
-        }
-        else
-        {
-            currentSpeed_ms = commandedSpeed_ms;
+            Debug.LogWarning($"[VehicleMotionController] Hybrid spawn fallback used. refY={referencePosition.y:F3}");
+            return referencePosition;
         }
 
-        currentSpeed_kmh = currentSpeed_ms * 3.6f;
-        currentDriveForce = effectiveDriveForce;
-        currentResistForce = totalResistance + brakeForce + regenBrake;
+        referencePosition.y = resolvedY / hitCount;
+        return referencePosition;
     }
 
-    // ============================================
-    // 무게 이동 계산
-    // ============================================
-
-    void CalculateWeightTransfer()
+    Bounds BuildChassisBounds()
     {
-        float totalWeight = vehicleMass * GRAVITY;
-
-        // 가속/감속에 의한 하중 이동
-        // ΔW = (m × a × h) / wheelBase
-        float weightTransfer = (vehicleMass * currentAcceleration * centerOfMassHeight) / wheelBase;
-
-        // 가속 시: 뒷바퀴 하중 증가, 앞바퀴 하중 감소
-        frontAxleLoad = totalWeight * 0.5f - weightTransfer;
-        rearAxleLoad  = totalWeight * 0.5f + weightTransfer;
-
-        // 하중이 음수가 되지 않도록 제한
-        frontAxleLoad = Mathf.Max(frontAxleLoad, totalWeight * 0.1f);
-        rearAxleLoad  = Mathf.Max(rearAxleLoad,  totalWeight * 0.1f);
+        Bounds bounds = new Bounds();
+        bounds.center = transform.position + transform.up * (wheelRadius + 0.16f);
+        bounds.size = new Vector3(
+            Mathf.Max(0.75f, trackWidth + 0.18f),
+            0.22f,
+            Mathf.Max(0.9f, wheelBase + 0.32f));
+        return bounds;
     }
 
-    // ============================================
-    // 모터 RPM 계산 (전기모터 - 단순 감속비)
-    // ============================================
-
-    void CalculateMotorRPM()
+    void DisableVisualRigColliders()
     {
-        // 바퀴 회전속도 (rad/s) = 차량속도 / 바퀴반지름
-        float wheelAngularVelocity = Mathf.Abs(currentSpeed_ms) / wheelRadius;
-
-        // 바퀴 RPM = (rad/s) × (60 / 2π)
-        float wheelRPM = wheelAngularVelocity * 60f / (2f * Mathf.PI);
-
-        // 모터 RPM = 바퀴 RPM × 감속비
-        currentMotorRPM = wheelRPM * reductionRatio;
-
-        // RPM 제한
-        currentMotorRPM = Mathf.Clamp(currentMotorRPM, 0f, maxMotorRPM);
-    }
-
-    // ============================================
-    // 구동력 계산 (전기모터 - 단순화)
-    // ============================================
-
-    float CalculateDriveForce()
-    {
-        if (Mathf.Abs(throttleInput) < 0.01f) return 0f;
-
-        // 토크 커브에서 현재 RPM의 토크 비율 가져오기
-        float rpmRatio = currentMotorRPM / maxMotorRPM;
-        float torqueMultiplier = torqueCurve.Evaluate(rpmRatio);
-
-        // 모터 토크 = 최대 토크 × 스로틀 × 토크커브
-        float motorTorque = maxMotorTorque * Mathf.Abs(throttleInput) * torqueMultiplier;
-
-        // 바퀴 토크 = 모터 토크 × 감속비
-        float wheelTorque = motorTorque * reductionRatio;
-
-        // 구동력 = 바퀴 토크 / 바퀴 반지름
-        float driveForce = wheelTorque / wheelRadius;
-
-        // 후진 시 음수
-        if (throttleInput < 0)
+        Collider[] colliders = visualRigRoot.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
         {
-            driveForce = -driveForce;
+            Collider collider = colliders[i];
+            if (collider == null)
+                continue;
+
+            collider.enabled = false;
+        }
+    }
+
+    void DisableVisualRigArticulations()
+    {
+        ArticulationBody[] bodies = visualRigRoot.GetComponentsInChildren<ArticulationBody>(true);
+        for (int i = 0; i < bodies.Length; i++)
+        {
+            ArticulationBody body = bodies[i];
+            if (body == null)
+                continue;
+
+            body.velocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.enabled = false;
         }
 
-        return driveForce;
+        FKRobot[] fkRobots = visualRigRoot.GetComponentsInChildren<FKRobot>(true);
+        for (int i = 0; i < fkRobots.Length; i++)
+        {
+            if (fkRobots[i] != null)
+                fkRobots[i].enabled = false;
+        }
     }
 
-    // ============================================
-    // 공기저항 계산 (Drag Force)
-    // ============================================
-
-    float CalculateDragForce()
+    void SyncVisualRigPose()
     {
-        // F_drag = 0.5 × ρ × Cd × A × v²
-        float speedSquared = currentSpeed_ms * currentSpeed_ms;
-        float drag = 0.5f * airDensity * dragCoefficient * frontalArea * speedSquared;
-        return drag * Mathf.Sign(currentSpeed_ms);
+        if (hybridDynamics == null || visualRigRoot == null)
+            return;
+
+        Transform physicsTransform = hybridDynamics.transform;
+        visualRigRoot.rotation = physicsTransform.rotation * visualRigOffsetRotation;
+        visualRigRoot.position = physicsTransform.position + physicsTransform.rotation * visualRigOffsetPosition;
     }
 
-    // ============================================
-    // 구름저항 계산 (Rolling Resistance)
-    // ============================================
-
-    float CalculateRollingResistance()
+    void SyncVisualSteering()
     {
-        // F_roll = Cr × m × g
-        float rollResist = rollingResistance * vehicleMass * GRAVITY;
-        return rollResist * Mathf.Sign(currentSpeed_ms);
+        if (steeringLeftTransform != null)
+            steeringLeftTransform.localRotation = steeringLeftBaseRotation * Quaternion.Euler(0f, leftVisualSteerAngle, 0f);
+
+        if (steeringRightTransform != null)
+            steeringRightTransform.localRotation = steeringRightBaseRotation * Quaternion.Euler(0f, rightVisualSteerAngle, 0f);
     }
-
-    // ============================================
-    // 브레이크력 계산
-    // ============================================
-
-    float CalculateBrakeForce()
-    {
-        if (brakeInput < 0.01f) return 0f;
-
-        float brake = brakeInput * maxBrakeForce;
-
-        // 속도 방향과 반대로 작용
-        return brake * Mathf.Sign(currentSpeed_ms);
-    }
-
-    // ============================================
-    // 최대 견인력 계산 (타이어 그립 한계)
-    // ============================================
-
-    float CalculateMaxTractionForce()
-    {
-        // 4WD이므로 모든 바퀴의 하중 사용
-        // 배달 AMR 저속에서는 항상 최대 그립 유지
-        return (frontAxleLoad + rearAxleLoad) * peakFriction;
-    }
-
-    // ============================================
-    // 바퀴 속도 적용 (4WD + 디퍼렌셜 시뮬레이션)
-    // 속도 비율은 UpdateSteering에서 미리 계산된 값 사용
-    // ============================================
-
-    void ApplyWheelVelocities()
-    {
-        // 기본 바퀴 회전속도 (deg/s)
-        float baseWheelDegPerSec = (currentSpeed_ms / wheelRadius) * Mathf.Rad2Deg;
-
-        // 4WD: 전륜/후륜 모두 구동 (좌/우 속도 차이 적용)
-        SetWheelVelocity(frontLeftWheel,  baseWheelDegPerSec * leftSpeedRatio);
-        SetWheelVelocity(frontRightWheel, baseWheelDegPerSec * rightSpeedRatio);
-        SetWheelVelocity(rearLeftWheel,   baseWheelDegPerSec * leftSpeedRatio);
-        SetWheelVelocity(rearRightWheel,  baseWheelDegPerSec * rightSpeedRatio);
-    }
-
-    void SetWheelVelocity(ArticulationBody wheel, float velocity)
-    {
-        if (wheel == null) return;
-
-        ArticulationDrive drive = wheel.xDrive;
-        drive.stiffness = 0f;
-        // damping: 소프트닝. 100 Nm 포화 구간을 축소하되 구동력 유지
-        // forceLimit: angularDamping=0.05 기준 최고속도 달성 + 진동 감소
-        //   2m/s 달성 검증: 저항(1Nm)+구름(0.4Nm)+가속(1.2Nm)=2.6Nm << 40Nm ✓
-        //   최대 가속도: (40/0.1×4)/65 = 24.6 m/s² >> 목표 0.5 m/s² ✓
-        drive.damping = 3f;
-        drive.targetVelocity = velocity;
-        drive.forceLimit = 40f;
-        wheel.xDrive = drive;
-    }
-
-    // ============================================
-    // 조향 (기존 로직 유지)
-    // ============================================
 
     void UpdateSteering(float input)
     {
-        // 속도 기반 조향 제한 (고속에서 롤오버 방지)
         float effectiveMaxSteeringAngle = maxSteeringAngle;
         if (enableSpeedBasedSteeringLimit)
         {
             float speed = Mathf.Abs(currentSpeed_ms);
             if (speed > fullSteeringSpeed)
             {
-                // 속도가 증가할수록 최대 조향각 감소
-                // fullSteeringSpeed에서 100%, maxSpeed에서 30%
-                float speedRatio = (speed - fullSteeringSpeed) / (maxSpeed - fullSteeringSpeed);
-                speedRatio = Mathf.Clamp01(speedRatio);
-                float steeringMultiplier = Mathf.Lerp(1f, 0.3f, speedRatio);
+                float speedRatio = (speed - fullSteeringSpeed) / Mathf.Max(0.01f, maxSpeed - fullSteeringSpeed);
+                float steeringMultiplier = Mathf.Lerp(1f, 0.35f, Mathf.Clamp01(speedRatio));
                 effectiveMaxSteeringAngle = maxSteeringAngle * steeringMultiplier;
             }
         }
 
-        float targetAngle = -input * effectiveMaxSteeringAngle;
+        float targetAngle = input * effectiveMaxSteeringAngle;
         currentSteeringAngle = Mathf.MoveTowards(currentSteeringAngle, targetAngle, steeringSpeed * Time.fixedDeltaTime);
-
-        CalculateAckermannAngles(currentSteeringAngle, out float leftAngle, out float rightAngle);
-
-        SetSteeringAngle(frontLeftSteering, leftAngle);
-        SetSteeringAngle(frontRightSteering, rightAngle);
-
-        // 디퍼렌셜 속도 비율 계산 (ApplyWheelVelocities에서 재사용)
-        // Ackermann 기하: 내륜/외륜 속도 비율 = 반경 비율
-        if (Mathf.Abs(currentSteeringAngle) > 0.5f && Mathf.Abs(currentSpeed_ms) > 0.1f)
-        {
-            float steerRad = currentSteeringAngle * Mathf.Deg2Rad;
-            float turnRadius = wheelBase / Mathf.Tan(Mathf.Abs(steerRad));
-            float innerRatio = (turnRadius - trackWidth * 0.5f) / turnRadius;
-            float outerRatio = (turnRadius + trackWidth * 0.5f) / turnRadius;
-
-            if (currentSteeringAngle > 0)  // 좌회전: 왼쪽이 내륜
-            {
-                leftSpeedRatio  = innerRatio;
-                rightSpeedRatio = outerRatio;
-            }
-            else  // 우회전: 오른쪽이 내륜
-            {
-                leftSpeedRatio  = outerRatio;
-                rightSpeedRatio = innerRatio;
-            }
-        }
-        else
-        {
-            leftSpeedRatio  = 1f;
-            rightSpeedRatio = 1f;
-        }
+        CalculateAckermannAngles(currentSteeringAngle, out leftVisualSteerAngle, out rightVisualSteerAngle);
     }
 
     void CalculateAckermannAngles(float steerAngle, out float leftAngle, out float rightAngle)
@@ -598,12 +548,12 @@ public class VehicleMotionController : MonoBehaviour
         float steerRad = steerAngle * Mathf.Deg2Rad;
         float turnRadius = wheelBase / Mathf.Tan(Mathf.Abs(steerRad));
 
-        float innerRadius = turnRadius - (trackWidth / 2f);
-        float outerRadius = turnRadius + (trackWidth / 2f);
+        float innerRadius = turnRadius - (trackWidth * 0.5f);
+        float outerRadius = turnRadius + (trackWidth * 0.5f);
         float innerAngle = Mathf.Atan(wheelBase / innerRadius) * Mathf.Rad2Deg;
         float outerAngle = Mathf.Atan(wheelBase / outerRadius) * Mathf.Rad2Deg;
 
-        if (steerAngle > 0)
+        if (steerAngle > 0f)
         {
             leftAngle = innerAngle;
             rightAngle = outerAngle;
@@ -615,83 +565,57 @@ public class VehicleMotionController : MonoBehaviour
         }
     }
 
-    void SetSteeringAngle(ArticulationBody steering, float angle)
+    void SyncDebugState()
     {
-        if (steering == null) return;
+        if (hybridDynamics == null)
+            return;
 
-        ArticulationDrive drive = steering.xDrive;
-        // stiffness: 과도하면 목표각 도달 시 반동 진동 발생. AMR 소형 서보 기준 현실값.
-        // forceLimit: AMR 조향 액추에이터 최대 토크 ≈ 10~15Nm
-        drive.stiffness = 1200f;
-        drive.damping = 120f;
-        drive.forceLimit = 12f;
-        drive.target = angle;
-        steering.xDrive = drive;
+        currentSpeed_ms = hybridDynamics.GetSignedPlanarSpeed();
+        currentSpeed_kmh = currentSpeed_ms * 3.6f;
+        currentMotorRPM = hybridDynamics.GetMotorRPM();
+        currentAcceleration = hybridDynamics.GetAcceleration();
+        currentAppliedDriveTorque = hybridDynamics.GetAppliedDriveTorque();
+        currentAppliedBrakeTorque = hybridDynamics.GetAppliedBrakeTorque();
     }
 
-    // ============================================
-    // 공개 API (외부 접근용)
-    // ============================================
+    public bool UsingHybridBackend() => hybridDynamics != null;
+    public GameObject GetCollisionSource() => hybridDynamics != null ? hybridDynamics.GetCollisionSource() : gameObject;
+    public Vector3 GetWorldVelocity() => hybridDynamics != null ? hybridDynamics.GetWorldVelocity() : Vector3.zero;
+    public Vector3 GetWorldAngularVelocity() => hybridDynamics != null ? hybridDynamics.GetWorldAngularVelocity() : Vector3.zero;
 
-    /// <summary>
-    /// 현재 속도 (m/s)
-    /// </summary>
+    public void ResetVehiclePose(Vector3 position, Quaternion rotation)
+    {
+        if (hybridDynamics == null)
+            return;
+
+        hybridDynamics.Teleport(position, rotation);
+        SyncVisualRigPose();
+        SyncVisualSteering();
+        Physics.SyncTransforms();
+        SyncDebugState();
+    }
+
     public float GetSpeedMS() => currentSpeed_ms;
-
-    /// <summary>
-    /// 현재 속도 (km/h)
-    /// </summary>
     public float GetSpeedKMH() => currentSpeed_kmh;
-
-    /// <summary>
-    /// 현재 모터 RPM
-    /// </summary>
     public float GetMotorRPM() => currentMotorRPM;
-
-    /// <summary>
-    /// 현재 가속도 (m/s²)
-    /// </summary>
     public float GetAcceleration() => currentAcceleration;
-
-    /// <summary>
-    /// 현재 조향 입력 [-1, 1]
-    /// </summary>
     public float GetSteeringInput() => steeringInput;
-
-    /// <summary>
-    /// 현재 스로틀 입력 [-1, 1]
-    /// </summary>
-    public float GetThrottleInput() => throttleInput;
-
-    /// <summary>
-    /// 현재 브레이크 입력 [0, 1]
-    /// </summary>
-    public float GetBrakeInput() => brakeInput;
-
-    /// <summary>
-    /// 현재 실제 조향각 (도)
-    /// </summary>
+    public float GetThrottleInput() => appliedThrottleInput;
+    public float GetBrakeInput() => appliedBrakeInput;
     public float GetSteeringAngle() => currentSteeringAngle;
+    public float GetAppliedDriveTorque() => currentAppliedDriveTorque;
+    public float GetAppliedBrakeTorque() => currentAppliedBrakeTorque;
 
-    /// <summary>
-    /// 외부에서 스로틀 입력 설정 (ROS 등)
-    /// </summary>
     public void SetThrottle(float value)
     {
-        throttleInput = Mathf.Clamp(value, -1f, 1f);
+        rawThrottleInput = Mathf.Clamp(value, -1f, 1f);
     }
 
-    /// <summary>
-    /// 외부에서 브레이크 입력 설정
-    /// </summary>
     public void SetBrake(float value)
     {
-        brakeInput = Mathf.Clamp01(value);
+        rawBrakeInput = Mathf.Clamp01(value);
     }
 
-    /// <summary>
-    /// 외부에서 조향 입력 설정
-    /// </summary>
     public void SetSteering(float value)
     {
         steeringInput = Mathf.Clamp(value, -1f, 1f);

@@ -22,6 +22,7 @@ public class OdometryPublisher : MonoBehaviour
 
     [Header("Vehicle Settings")]
     public ArticulationBody vehicleBody; // 차량의 물리 바디
+    public VehicleMotionController vehicleMotionController;
 
     [Header("Base Link Reference")]
     [Tooltip("base_link 게임오브젝트를 지정. 비워두면 이 오브젝트 자신을 사용.")]
@@ -53,11 +54,14 @@ public class OdometryPublisher : MonoBehaviour
             vehicleBody = baseLinkTransform.GetComponentInChildren<ArticulationBody>();
             if (vehicleBody == null)
                 vehicleBody = baseLinkTransform.GetComponentInParent<ArticulationBody>();
-            if (vehicleBody == null)
-            {
-                Debug.LogError("OdometryPublisher: ArticulationBody not found!");
-            }
         }
+
+        if (vehicleMotionController == null)
+            vehicleMotionController = baseLinkTransform.GetComponent<VehicleMotionController>()
+                ?? baseLinkTransform.GetComponentInParent<VehicleMotionController>();
+
+        if (vehicleBody == null && vehicleMotionController == null)
+            Debug.LogError("OdometryPublisher: Vehicle motion source not found!");
 
         // 초기 위치 저장
         initialPosition = baseLinkTransform.position;
@@ -78,7 +82,7 @@ public class OdometryPublisher : MonoBehaviour
 
     void PublishOdometryAndTF()
     {
-        if (vehicleBody == null) return;
+        if (vehicleBody == null && vehicleMotionController == null) return;
 
         // 1. 현재 시간
         var tfTime = ConvertToRosTime(Time.time);
@@ -92,8 +96,12 @@ public class OdometryPublisher : MonoBehaviour
         QuaternionMsg orientation = currentRot.To<FLU>();
 
         // 3. 차량의 속도 (Linear & Angular)
-        Vector3 linearVel = vehicleBody.velocity; 
-        Vector3 angularVel = vehicleBody.angularVelocity;
+        Vector3 linearVel = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+            ? vehicleMotionController.GetWorldVelocity()
+            : (vehicleBody != null ? vehicleBody.velocity : Vector3.zero);
+        Vector3 angularVel = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+            ? vehicleMotionController.GetWorldAngularVelocity()
+            : (vehicleBody != null ? vehicleBody.angularVelocity : Vector3.zero);
 
         // 월드 속도 -> 로컬 속도 변환
         Vector3 localLinearVel = baseLinkTransform.InverseTransformDirection(linearVel);
