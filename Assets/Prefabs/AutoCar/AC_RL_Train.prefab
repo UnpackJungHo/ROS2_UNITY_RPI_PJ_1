@@ -613,7 +613,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 342633533847563785}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e6bbe9738bbbd77ef9eac3bf4333f69f, type: 3}
   m_Name: 
@@ -1286,8 +1286,8 @@ MonoBehaviour:
   vehicleMass: 65
   wheelRadius: 0.1
   centerOfMassHeight: 0.25
-  maxMotorTorque: 5
-  maxMotorRPM: 400
+  maxMotorTorque: 45
+  maxMotorRPM: 600
   torqueCurve:
     serializedVersion: 2
     m_Curve: []
@@ -1297,27 +1297,47 @@ MonoBehaviour:
   reductionRatio: 3
   maxSpeed: 2.8
   maxAcceleration: 0.5
-  maxDeceleration: 1
+  maxDeceleration: 0.5
   enableSpeedBasedSteeringLimit: 1
   fullSteeringSpeed: 0.5
-  rollingResistance: 0.025
+  rollingResistance: 0.02
   dragCoefficient: 0.1
   frontalArea: 0.4
   airDensity: 1.225
-  peakFriction: 0.8
   maxBrakeForce: 300
-  engineBrakeForce: 30
+  engineBrakeForce: 20
+  standstillHoldSpeed: 0.15
+  ignoreVehicleSelfCollisions: 1
+  steeringDriveStiffness: 12000
+  steeringDriveDamping: 1200
+  steeringDriveForceLimit: 400
+  wheelDriveDamping: 35
+  wheelBrakeDamping: 120
+  wheelCoastDamping: 2
+  wheelJointFriction: 0.02
+  articulationLinearDamping: 0.05
+  articulationAngularDamping: 0.05
+  articulationCoastDeceleration: 1.5
+  invertSteeringDirection: 1
+  steeringDeadzone: 0.05
+  throttleDeadzone: 0.05
+  throttleRiseRate: 8
+  throttleFallRate: 4
+  brakeRiseRate: 1.2
+  brakeFallRate: 3
+  driveFrontAxle: 1
+  driveRearAxle: 1
   autoFindReferences: 1
   externalControlEnabled: 1
   currentSpeed_ms: 0
   currentSpeed_kmh: 0
-  commandedSpeed_ms: 0
   currentMotorRPM: 0
   currentAcceleration: 0
-  currentDriveForce: 0
-  currentResistForce: 0
-  frontAxleLoad: 0
-  rearAxleLoad: 0
+  currentSteeringAngle: 0
+  appliedThrottleInput: 0
+  appliedBrakeInput: 0
+  currentAppliedDriveTorque: 0
+  currentAppliedBrakeTorque: 0
 --- !u!114 &277120691020860436
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1331,7 +1351,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   episodeEvaluator: {fileID: 6826545173591977314}
-  vehicleMotionController: {fileID: 6187067975751547706}
   autoFindReferences: 1
   ignoreSelfColliders: 1
   attachedListenerCount: 0
@@ -10838,7 +10857,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8860509221648244575}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f644adf5b756ac9f2a91b2944eeafbb1, type: 3}
   m_Name: 
@@ -11018,7 +11037,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8867848687656805187}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e6bbe9738bbbd77ef9eac3bf4333f69f, type: 3}
   m_Name: 

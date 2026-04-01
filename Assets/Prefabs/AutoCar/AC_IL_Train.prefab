@@ -1131,7 +1131,7 @@ MonoBehaviour:
   wheelRadius: 0.1
   centerOfMassHeight: 0.25
   maxMotorTorque: 45
-  maxMotorRPM: 450
+  maxMotorRPM: 600
   torqueCurve:
     serializedVersion: 2
     m_Curve: []
@@ -1140,8 +1140,8 @@ MonoBehaviour:
     m_RotationOrder: 4
   reductionRatio: 3
   maxSpeed: 2.8
-  maxAcceleration: 1.5
-  maxDeceleration: 1.5
+  maxAcceleration: 0.5
+  maxDeceleration: 0.5
   enableSpeedBasedSteeringLimit: 1
   fullSteeringSpeed: 0.5
   rollingResistance: 0.02
@@ -1151,33 +1151,23 @@ MonoBehaviour:
   maxBrakeForce: 300
   engineBrakeForce: 20
   standstillHoldSpeed: 0.15
-  coastStopSpeed: 0.05
-  useHybridWheelColliderBackend: 1
-  enableHybridChassisCollider: 1
-  disableVisualRigColliders: 1
-  disableVisualRigArticulations: 1
-  suspensionDistance: 0.08
-  suspensionSpring: 5000
-  suspensionDamper: 1200
-  suspensionTargetPosition: 0.5
-  wheelDampingRate: 1.2
-  hybridAngularDrag: 1.5
-  forwardExtremumSlip: 0.35
-  forwardExtremumValue: 1.2
-  forwardAsymptoteSlip: 0.8
-  forwardAsymptoteValue: 0.9
-  forwardStiffness: 1.4
-  sidewaysExtremumSlip: 0.22
-  sidewaysExtremumValue: 1.15
-  sidewaysAsymptoteSlip: 0.7
-  sidewaysAsymptoteValue: 0.85
-  frontSidewaysStiffness: 1.05
-  rearSidewaysStiffness: 0.95
+  ignoreVehicleSelfCollisions: 1
+  steeringDriveStiffness: 12000
+  steeringDriveDamping: 1200
+  steeringDriveForceLimit: 400
+  wheelDriveDamping: 35
+  wheelBrakeDamping: 120
+  wheelCoastDamping: 2
+  wheelJointFriction: 0.02
+  articulationLinearDamping: 0.05
+  articulationAngularDamping: 0.05
+  articulationCoastDeceleration: 1.5
+  invertSteeringDirection: 1
   steeringDeadzone: 0.05
   throttleDeadzone: 0.05
   throttleRiseRate: 8
   throttleFallRate: 4
-  brakeRiseRate: 3
+  brakeRiseRate: 1.2
   brakeFallRate: 3
   driveFrontAxle: 1
   driveRearAxle: 1
@@ -2006,6 +1996,7 @@ MonoBehaviour:
   cameraPublisher: {fileID: 6469039219535524364}
   wheelController: {fileID: 6187067975751547706}
   aiController: {fileID: 4494735359675892481}
+  forceManualCollection: 1
   recordKey: 114
   saveKey: 116
   captureInterval: 0.05
@@ -2545,6 +2536,7 @@ Transform:
   - {fileID: 4332984516352287496}
   - {fileID: 8766363039812940070}
   - {fileID: 2465330746688028407}
+  - {fileID: 9189310106155314502}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: -0.92, z: 0}
 --- !u!114 &3384946636282722396
@@ -5082,6 +5074,89 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e9090ae501ff9cd459bec5271d40249c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!1 &3616253723831747878
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9189310106155314502}
+  - component: {fileID: 1060058428811469955}
+  m_Layer: 0
+  m_Name: Camera
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9189310106155314502
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3616253723831747878}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: 0.008032596, z: -0, w: 0.99996775}
+  m_LocalPosition: {x: 0.00062372687, y: 0.4349999, z: 0.03882098}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1505757904932837977}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!20 &1060058428811469955
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3616253723831747878}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_Iso: 200
+  m_ShutterSpeed: 0.005
+  m_Aperture: 16
+  m_FocusDistance: 10
+  m_FocalLength: 50
+  m_BladeCount: 5
+  m_Curvature: {x: 2, y: 11}
+  m_BarrelClipping: 0.25
+  m_Anamorphism: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.3
+  far clip plane: 1000
+  field of view: 60
+  orthographic: 0
+  orthographic size: 5
+  m_Depth: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 0
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
 --- !u!1 &3695829113939521401
 GameObject:
   m_ObjectHideFlags: 0
@@ -6358,7 +6433,7 @@ MonoBehaviour:
   imageHeight: 66
   cameraXRotation: 0
   cameraTransform: {fileID: 9213934331791372593}
-  frontViewCamera: {fileID: 0}
+  frontViewCamera: {fileID: 1060058428811469955}
   preferDedicatedRuntimeCamera: 1
   enableRenderStagger: 1
   renderRate: 5

@@ -55,6 +55,10 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     [Tooltip("회귀 자율주행 컨트롤러 (AI 모드 및 개입 상태 확인)")]
     public RegressionDrivingController aiController;
 
+    [Header("Manual Collection")]
+    [Tooltip("true면 AI 자율주행 상태여도 키보드 입력만 기준으로 수동 수집한다.")]
+    public bool forceManualCollection = false;
+
     // [Header("Image Settings")]
     // [Tooltip("JPEG 품질 (front_1, front_2에 적용)")]
     // [Range(0, 100)]
@@ -243,6 +247,9 @@ public class DrivingDataCollectorV2 : MonoBehaviour
     /// </summary>
     KeyAction GetCurrentKeyAction()
     {
+        if (forceManualCollection)
+            return GetKeyboardKeyAction();
+
         // 자율주행 모드 + 개입 아님 = AI가 제어 중
         if (aiController != null && aiController.isAutonomousMode && !aiController.IsInterventionActive())
         {
@@ -253,6 +260,11 @@ public class DrivingDataCollectorV2 : MonoBehaviour
         }
 
         // 수동 모드 또는 개입 중 - 키보드 입력 확인
+        return GetKeyboardKeyAction();
+    }
+
+    KeyAction GetKeyboardKeyAction()
+    {
         bool w = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
         bool a = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
         bool s = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);

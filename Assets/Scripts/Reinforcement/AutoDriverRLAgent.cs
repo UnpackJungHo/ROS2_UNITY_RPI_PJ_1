@@ -709,7 +709,7 @@ public class AutoDriverRLAgent : Agent
         ArticulationBody articulationRoot = ResolveArticulationRoot(resetTarget);
         if (hasStartPose)
         {
-            if (vehicleMotionController != null && vehicleMotionController.UsingHybridBackend())
+            if (vehicleMotionController != null)
                 vehicleMotionController.ResetVehiclePose(startPosition, startRotation);
             else if (articulationRoot != null)
                 // ArticulationBody가 있으면 물리 엔진의 TeleportRoot 사용
@@ -724,7 +724,7 @@ public class AutoDriverRLAgent : Agent
         }
 
         // 모든 ArticulationBody의 선속도/각속도를 0으로 초기화
-        if (resetRootArticulationVelocity && !(vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()))
+        if (resetRootArticulationVelocity && vehicleMotionController == null)
         {
             ArticulationBody velocityRoot = articulationRoot != null ? articulationRoot : rootArticulation;
             if (velocityRoot == null)

@@ -1,9 +1,4 @@
 using UnityEngine;
-using Unity.Robotics.UrdfImporter;
-using Unity.Robotics.UrdfImporter.Control;
-
-// Run before most startup scripts so the visual URDF rig is disabled
-// before articulation physics can kick the robot upward on play enter.
 [DefaultExecutionOrder(-5000)]
 public class VehicleMotionController : MonoBehaviour
 {
@@ -74,39 +69,32 @@ public class VehicleMotionController : MonoBehaviour
     public float engineBrakeForce = 20f;
     [Tooltip("브레이크 hold가 차를 완전히 붙잡기 시작하는 속도 임계값 (m/s)")]
     public float standstillHoldSpeed = 0.15f;
-    [Tooltip("스로틀/브레이크 입력이 없을 때 정지로 스냅하는 속도 임계값 (m/s)")]
-    public float coastStopSpeed = 0.05f;
 
-    [Header("Hybrid Physics Backend")]
-    [Tooltip("true면 Rigidbody + WheelCollider 기반 root를 런타임에 생성한다.")]
-    public bool useHybridWheelColliderBackend = true;
-    [Tooltip("차체 단순 충돌체를 활성화한다. 초기 전환 단계에서는 false로 두고 WheelCollider 접지부터 안정화한다.")]
-    public bool enableHybridChassisCollider = false;
-    [Tooltip("비주얼 URDF rig의 일반 충돌체를 비활성화한다.")]
-    public bool disableVisualRigColliders = true;
-    [Tooltip("비주얼 URDF rig의 Articulation 물리를 비활성화한다.")]
-    public bool disableVisualRigArticulations = true;
-
-    [Header("WheelCollider Suspension")]
-    public float suspensionDistance = 0.08f;
-    public float suspensionSpring = 5000f;
-    public float suspensionDamper = 1200f;
-    [Range(0f, 1f)] public float suspensionTargetPosition = 0.5f;
-    public float wheelDampingRate = 1.2f;
-    public float hybridAngularDrag = 1.5f;
-
-    [Header("WheelCollider Friction")]
-    public float forwardExtremumSlip = 0.35f;
-    public float forwardExtremumValue = 1.2f;
-    public float forwardAsymptoteSlip = 0.8f;
-    public float forwardAsymptoteValue = 0.9f;
-    public float forwardStiffness = 1.4f;
-    public float sidewaysExtremumSlip = 0.22f;
-    public float sidewaysExtremumValue = 1.15f;
-    public float sidewaysAsymptoteSlip = 0.7f;
-    public float sidewaysAsymptoteValue = 0.85f;
-    public float frontSidewaysStiffness = 1.05f;
-    public float rearSidewaysStiffness = 0.95f;
+    [Header("Articulation Backend")]
+    [Tooltip("차량 내부 collider끼리의 충돌을 런타임에 무시한다.")]
+    public bool ignoreVehicleSelfCollisions = true;
+    [Tooltip("조향 articulation의 stiffness")]
+    public float steeringDriveStiffness = 12000f;
+    [Tooltip("조향 articulation의 damping")]
+    public float steeringDriveDamping = 1200f;
+    [Tooltip("조향 articulation의 최대 힘")]
+    public float steeringDriveForceLimit = 400f;
+    [Tooltip("주행 중 휠 articulation damping")]
+    public float wheelDriveDamping = 35f;
+    [Tooltip("브레이크 중 휠 articulation damping")]
+    public float wheelBrakeDamping = 120f;
+    [Tooltip("coast 상태 휠 articulation damping")]
+    public float wheelCoastDamping = 2f;
+    [Tooltip("휠 joint friction")]
+    public float wheelJointFriction = 0.02f;
+    [Tooltip("base_link articulation linear damping")]
+    public float articulationLinearDamping = 0.05f;
+    [Tooltip("base_link articulation angular damping")]
+    public float articulationAngularDamping = 0.05f;
+    [Tooltip("스로틀 해제 시 목표 구동 속도를 줄이는 감속도 (m/s²)")]
+    public float articulationCoastDeceleration = 0.45f;
+    [Tooltip("조향 articulation target 부호 반전")]
+    public bool invertSteeringDirection = true;
 
     [Header("Input Filtering")]
     [Range(0f, 0.3f)] public float steeringDeadzone = 0.05f;
@@ -148,16 +136,15 @@ public class VehicleMotionController : MonoBehaviour
     private float leftVisualSteerAngle;
     private float rightVisualSteerAngle;
 
-    private WheelColliderVehicleDynamics hybridDynamics;
-    private Transform visualRigRoot;
-    private Transform steeringLeftTransform;
-    private Transform steeringRightTransform;
-    private Quaternion steeringLeftBaseRotation;
-    private Quaternion steeringRightBaseRotation;
-    private Vector3 visualRigOffsetPosition;
-    private Quaternion visualRigOffsetRotation;
+    private ArticulationBody baseLinkBody;
+    private ArticulationBody[] articulationBodies;
+    private Collider[] vehicleColliders;
     private bool runtimePrepared;
-    private bool backendInitialized;
+    private bool articulationBackendReady;
+    private bool articulationRuntimeControlsSuppressed;
+    private int articulationSuppressAttempts;
+    private float lastSignedSpeed;
+    private float commandedDriveSpeed_ms;
 
     void Awake()
     {
@@ -168,7 +155,6 @@ public class VehicleMotionController : MonoBehaviour
     {
         PrepareRuntime();
         InitializeBackendIfNeeded();
-        SyncVisualSteering();
         SyncDebugState();
     }
 
@@ -190,36 +176,14 @@ public class VehicleMotionController : MonoBehaviour
             torqueCurve.AddKey(0.7f, 0.9f);
             torqueCurve.AddKey(1f, 0.7f);
         }
-
-        steeringLeftTransform = frontLeftSteering != null ? frontLeftSteering.transform : null;
-        steeringRightTransform = frontRightSteering != null ? frontRightSteering.transform : null;
-        steeringLeftBaseRotation = steeringLeftTransform != null ? steeringLeftTransform.localRotation : Quaternion.identity;
-        steeringRightBaseRotation = steeringRightTransform != null ? steeringRightTransform.localRotation : Quaternion.identity;
-
-        if (!useHybridWheelColliderBackend)
-            return;
-
-        visualRigRoot = ResolveVisualRigRoot();
-        if (visualRigRoot == null)
-        {
-            Debug.LogError("[VehicleMotionController] visualRigRoot를 찾지 못했습니다.");
-            return;
-        }
-
-        if (disableVisualRigColliders)
-            DisableVisualRigColliders();
-
-        if (disableVisualRigArticulations)
-            DisableVisualRigArticulations();
     }
 
     void InitializeBackendIfNeeded()
     {
-        if (backendInitialized || !useHybridWheelColliderBackend)
+        if (articulationBackendReady)
             return;
 
-        backendInitialized = true;
-        InitializeHybridBackend();
+        InitializeArticulationBackend();
     }
 
     void Update()
@@ -227,37 +191,7 @@ public class VehicleMotionController : MonoBehaviour
         if (!externalControlEnabled)
         {
             steeringInput = ApplyDeadzone(Input.GetAxis("Horizontal"), steeringDeadzone);
-            float vertical = ApplyDeadzone(Input.GetAxis("Vertical"), throttleDeadzone);
-
-            if (vertical > 0f)
-            {
-                rawThrottleInput = vertical;
-                rawBrakeInput = 0f;
-            }
-            else if (vertical < 0f)
-            {
-                if (currentSpeed_ms > 0.5f)
-                {
-                    rawThrottleInput = 0f;
-                    rawBrakeInput = -vertical;
-                }
-                else
-                {
-                    rawThrottleInput = vertical;
-                    rawBrakeInput = 0f;
-                }
-            }
-            else
-            {
-                rawThrottleInput = 0f;
-                rawBrakeInput = 0f;
-            }
-
-            if (Input.GetKey(KeyCode.Space))
-            {
-                rawBrakeInput = 1f;
-                rawThrottleInput = 0f;
-            }
+            UpdateKeyboardLongitudinalInputs();
         }
     }
 
@@ -266,18 +200,60 @@ public class VehicleMotionController : MonoBehaviour
         return Mathf.Abs(value) < deadzone ? 0f : value;
     }
 
+    void UpdateKeyboardLongitudinalInputs()
+    {
+        float vertical = ApplyDeadzone(Input.GetAxis("Vertical"), throttleDeadzone);
+        bool hardBrakeRequested = Input.GetKey(KeyCode.Space);
+
+        rawThrottleInput = 0f;
+        rawBrakeInput = 0f;
+
+        if (hardBrakeRequested)
+        {
+            rawBrakeInput = 1f;
+            return;
+        }
+
+        if (Mathf.Abs(vertical) < 0.001f)
+            return;
+
+        float longitudinalSpeed = GetLongitudinalSpeedForDirectionChange();
+        if (ShouldBrakeForDirectionChange(vertical, longitudinalSpeed))
+        {
+            rawBrakeInput = Mathf.Abs(vertical);
+            return;
+        }
+
+        rawThrottleInput = vertical;
+    }
+
+    float GetLongitudinalSpeedForDirectionChange()
+    {
+        if (baseLinkBody == null)
+            return currentSpeed_ms;
+
+        Vector3 planarVelocity = baseLinkBody.velocity;
+        planarVelocity.y = 0f;
+        return Vector3.Dot(planarVelocity, transform.forward);
+    }
+
+    bool ShouldBrakeForDirectionChange(float desiredLongitudinalInput, float longitudinalSpeed)
+    {
+        if (Mathf.Abs(desiredLongitudinalInput) < 0.001f)
+            return false;
+
+        if (Mathf.Abs(longitudinalSpeed) <= standstillHoldSpeed)
+            return false;
+
+        return Mathf.Sign(desiredLongitudinalInput) != Mathf.Sign(longitudinalSpeed);
+    }
+
     void FixedUpdate()
     {
         UpdateLongitudinalInputs();
         UpdateSteering(steeringInput);
-
-        if (hybridDynamics != null)
-        {
-            hybridDynamics.Step(leftVisualSteerAngle, rightVisualSteerAngle, appliedThrottleInput, appliedBrakeInput);
-            SyncVisualRigPose();
-            SyncVisualSteering();
-            SyncDebugState();
-        }
+        StepArticulationBackend();
+        SyncDebugState();
     }
 
     void UpdateLongitudinalInputs()
@@ -336,185 +312,496 @@ public class VehicleMotionController : MonoBehaviour
         return null;
     }
 
-    void InitializeHybridBackend()
+    void InitializeArticulationBackend()
     {
-        if (visualRigRoot == null)
+        baseLinkBody = GetComponent<ArticulationBody>();
+        articulationBodies = transform.root.GetComponentsInChildren<ArticulationBody>(true);
+        vehicleColliders = transform.root.GetComponentsInChildren<Collider>(true);
+        articulationBackendReady = HasCompleteArticulationReferences();
+
+        if (!articulationBackendReady)
         {
-            Debug.LogError("[VehicleMotionController] visualRigRoot를 찾지 못했습니다.");
+            Debug.LogError("[VehicleMotionController] Articulation backend references are incomplete.");
             return;
         }
 
-        Transform backendParent = visualRigRoot.parent != null ? visualRigRoot.parent : visualRigRoot;
-        string backendName = $"{visualRigRoot.name}_PhysicsRoot";
-        Transform existing = backendParent.Find(backendName);
-        Transform backendTransform = existing;
-        if (backendTransform == null)
+        ConfigureBaseLinkBody();
+        ConfigureAllArticulationJoints();
+
+        if (ignoreVehicleSelfCollisions)
+            IgnoreVehicleSelfCollisions();
+
+        lastSignedSpeed = GetArticulationSignedPlanarSpeed();
+        ResetArticulationTelemetry();
+    }
+
+    bool HasCompleteArticulationReferences()
+    {
+        return
+            baseLinkBody != null &&
+            frontLeftSteering != null &&
+            frontRightSteering != null &&
+            frontLeftWheel != null &&
+            frontRightWheel != null &&
+            rearLeftWheel != null &&
+            rearRightWheel != null;
+    }
+
+    void ConfigureAllArticulationJoints()
+    {
+        ConfigureSteeringJoint(frontLeftSteering);
+        ConfigureSteeringJoint(frontRightSteering);
+        ConfigureWheelJoint(frontLeftWheel);
+        ConfigureWheelJoint(frontRightWheel);
+        ConfigureWheelJoint(rearLeftWheel);
+        ConfigureWheelJoint(rearRightWheel);
+    }
+
+    void ConfigureBaseLinkBody()
+    {
+        if (baseLinkBody == null)
+            return;
+
+        baseLinkBody.mass = vehicleMass;
+        Vector3 centerOfMass = baseLinkBody.centerOfMass;
+        centerOfMass.y = centerOfMassHeight;
+        baseLinkBody.centerOfMass = centerOfMass;
+        baseLinkBody.linearDamping = articulationLinearDamping;
+        baseLinkBody.angularDamping = articulationAngularDamping;
+        baseLinkBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+    }
+
+    void ConfigureSteeringJoint(ArticulationBody steeringBody)
+    {
+        if (steeringBody == null)
+            return;
+
+        steeringBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        steeringBody.angularDamping = Mathf.Min(steeringBody.angularDamping, 0.2f);
+        steeringBody.linearDamping = Mathf.Min(steeringBody.linearDamping, 0.2f);
+        steeringBody.jointFriction = Mathf.Min(steeringBody.jointFriction, wheelJointFriction);
+
+        ArticulationDrive drive = steeringBody.xDrive;
+        drive.stiffness = steeringDriveStiffness;
+        drive.damping = steeringDriveDamping;
+        drive.forceLimit = Mathf.Max(drive.forceLimit, steeringDriveForceLimit);
+        drive.target = 0f;
+        drive.targetVelocity = 0f;
+        steeringBody.xDrive = drive;
+    }
+
+    void ConfigureWheelJoint(ArticulationBody wheelBody)
+    {
+        if (wheelBody == null)
+            return;
+
+        wheelBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        wheelBody.angularDamping = Mathf.Min(wheelBody.angularDamping, 0.1f);
+        wheelBody.linearDamping = Mathf.Min(wheelBody.linearDamping, 0.1f);
+        wheelBody.jointFriction = Mathf.Min(wheelBody.jointFriction, wheelJointFriction);
+
+        ArticulationDrive drive = wheelBody.xDrive;
+        drive.stiffness = 0f;
+        drive.damping = wheelCoastDamping;
+        drive.forceLimit = 0f;
+        drive.target = 0f;
+        drive.targetVelocity = 0f;
+        wheelBody.xDrive = drive;
+    }
+
+    void IgnoreVehicleSelfCollisions()
+    {
+        if (vehicleColliders == null || vehicleColliders.Length == 0)
+            return;
+
+        for (int i = 0; i < vehicleColliders.Length; i++)
         {
-            backendTransform = new GameObject(backendName).transform;
-            backendTransform.SetParent(backendParent, true);
-        }
-
-        backendTransform.SetPositionAndRotation(transform.position, transform.rotation);
-
-        hybridDynamics = backendTransform.GetComponent<WheelColliderVehicleDynamics>();
-        if (hybridDynamics == null)
-            hybridDynamics = backendTransform.gameObject.AddComponent<WheelColliderVehicleDynamics>();
-
-        Bounds chassisBounds = BuildChassisBounds();
-        Vector3 centerOfMassOffset = new Vector3(0f, -centerOfMassHeight * 0.5f, 0f);
-
-        Vector3 frontLeftPosition = frontLeftWheel != null ? frontLeftWheel.transform.position : transform.position + transform.TransformVector(new Vector3(-trackWidth * 0.5f, 0f, wheelBase * 0.5f));
-        Vector3 frontRightPosition = frontRightWheel != null ? frontRightWheel.transform.position : transform.position + transform.TransformVector(new Vector3(trackWidth * 0.5f, 0f, wheelBase * 0.5f));
-        Vector3 rearLeftPosition = rearLeftWheel != null ? rearLeftWheel.transform.position : transform.position + transform.TransformVector(new Vector3(-trackWidth * 0.5f, 0f, -wheelBase * 0.5f));
-        Vector3 rearRightPosition = rearRightWheel != null ? rearRightWheel.transform.position : transform.position + transform.TransformVector(new Vector3(trackWidth * 0.5f, 0f, -wheelBase * 0.5f));
-        Vector3 spawnPosition = ResolveHybridSpawnPosition(
-            transform.position,
-            transform.rotation,
-            frontLeftPosition,
-            frontRightPosition,
-            rearLeftPosition,
-            rearRightPosition);
-
-        Vector3 frontLeftLocalMount = Quaternion.Inverse(transform.rotation) * (frontLeftPosition - transform.position);
-        Vector3 frontRightLocalMount = Quaternion.Inverse(transform.rotation) * (frontRightPosition - transform.position);
-        Vector3 rearLeftLocalMount = Quaternion.Inverse(transform.rotation) * (rearLeftPosition - transform.position);
-        Vector3 rearRightLocalMount = Quaternion.Inverse(transform.rotation) * (rearRightPosition - transform.position);
-
-        hybridDynamics.Initialize(
-            this,
-            spawnPosition,
-            transform.rotation,
-            chassisBounds,
-            centerOfMassOffset,
-            frontLeftLocalMount,
-            frontRightLocalMount,
-            rearLeftLocalMount,
-            rearRightLocalMount);
-
-        CacheVisualRigOffset();
-
-        SyncVisualRigPose();
-    }
-
-    Transform ResolveVisualRigRoot()
-    {
-        UrdfRobot robot = GetComponentInParent<UrdfRobot>();
-        if (robot != null)
-            return robot.transform;
-
-        if (transform.parent != null && transform.parent.parent != null)
-            return transform.parent.parent;
-
-        return transform.root;
-    }
-
-    void CacheVisualRigOffset()
-    {
-        visualRigOffsetPosition = Quaternion.Inverse(transform.rotation) * (visualRigRoot.position - transform.position);
-        visualRigOffsetRotation = Quaternion.Inverse(transform.rotation) * visualRigRoot.rotation;
-    }
-
-    Vector3 ResolveHybridSpawnPosition(
-        Vector3 referencePosition,
-        Quaternion referenceRotation,
-        Vector3 frontLeftPosition,
-        Vector3 frontRightPosition,
-        Vector3 rearLeftPosition,
-        Vector3 rearRightPosition)
-    {
-        Vector3[] wheelPositions = { frontLeftPosition, frontRightPosition, rearLeftPosition, rearRightPosition };
-        float suspensionRestOffset = suspensionDistance * Mathf.Clamp01(1f - suspensionTargetPosition);
-        float resolvedY = 0f;
-        int hitCount = 0;
-
-        Physics.SyncTransforms();
-
-        for (int i = 0; i < wheelPositions.Length; i++)
-        {
-            Vector3 wheelPosition = wheelPositions[i];
-            Vector3 rayOrigin = new Vector3(wheelPosition.x, Mathf.Max(referencePosition.y, wheelPosition.y) + 5f, wheelPosition.z);
-            if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 20f, ~0, QueryTriggerInteraction.Ignore))
+            Collider left = vehicleColliders[i];
+            if (left == null)
                 continue;
 
-            Vector3 localWheelMount = Quaternion.Inverse(referenceRotation) * (wheelPosition - referencePosition);
-            float candidateRootY = hit.point.y + wheelRadius + suspensionRestOffset - localWheelMount.y;
-            resolvedY += candidateRootY;
-            hitCount++;
-        }
+            for (int j = i + 1; j < vehicleColliders.Length; j++)
+            {
+                Collider right = vehicleColliders[j];
+                if (right == null)
+                    continue;
 
-        if (hitCount == 0)
-        {
-            Debug.LogWarning($"[VehicleMotionController] Hybrid spawn fallback used. refY={referencePosition.y:F3}");
-            return referencePosition;
+                Physics.IgnoreCollision(left, right, true);
+            }
         }
-
-        referencePosition.y = resolvedY / hitCount;
-        return referencePosition;
     }
 
-    Bounds BuildChassisBounds()
+    void EnsureArticulationControlOwnership()
     {
-        Bounds bounds = new Bounds();
-        bounds.center = transform.position + transform.up * (wheelRadius + 0.16f);
-        bounds.size = new Vector3(
-            Mathf.Max(0.75f, trackWidth + 0.18f),
-            0.22f,
-            Mathf.Max(0.9f, wheelBase + 0.32f));
-        return bounds;
-    }
+        if (articulationRuntimeControlsSuppressed)
+            return;
 
-    void DisableVisualRigColliders()
-    {
-        Collider[] colliders = visualRigRoot.GetComponentsInChildren<Collider>(true);
-        for (int i = 0; i < colliders.Length; i++)
+        articulationSuppressAttempts++;
+
+        bool foundRuntimeController = false;
+        MonoBehaviour[] behaviours = transform.root.GetComponentsInChildren<MonoBehaviour>(true);
+        for (int i = 0; i < behaviours.Length; i++)
         {
-            Collider collider = colliders[i];
-            if (collider == null)
+            MonoBehaviour behaviour = behaviours[i];
+            if (behaviour == null)
                 continue;
 
-            collider.enabled = false;
+            string typeName = behaviour.GetType().Name;
+            if (typeName != "JointControl" && typeName != "Controller")
+                continue;
+
+            foundRuntimeController = true;
+            behaviour.enabled = false;
         }
+
+        if (!foundRuntimeController && articulationSuppressAttempts < 8)
+            return;
+
+        articulationRuntimeControlsSuppressed = true;
+
+        ConfigureBaseLinkBody();
+        ConfigureAllArticulationJoints();
     }
 
-    void DisableVisualRigArticulations()
+    void StepArticulationBackend()
     {
-        ArticulationBody[] bodies = visualRigRoot.GetComponentsInChildren<ArticulationBody>(true);
-        for (int i = 0; i < bodies.Length; i++)
+        if (!articulationBackendReady || baseLinkBody == null)
+            return;
+
+        EnsureArticulationControlOwnership();
+
+        ApplySteeringTarget(frontLeftSteering, leftVisualSteerAngle);
+        ApplySteeringTarget(frontRightSteering, rightVisualSteerAngle);
+
+        float signedSpeed = GetArticulationSignedPlanarSpeed();
+        UpdateCommandedDriveSpeed(appliedThrottleInput, appliedBrakeInput);
+        float perWheelDriveTorque = CalculateArticulationPerWheelDriveTorque(appliedThrottleInput, appliedBrakeInput, signedSpeed);
+        float perWheelBrakeTorque = CalculatePerWheelBrakeTorque(appliedBrakeInput);
+        float targetWheelVelocityDeg = CalculateWheelTargetVelocityDeg(commandedDriveSpeed_ms);
+
+        ApplyWheelDriveToAxle(frontLeftWheel, frontRightWheel, driveFrontAxle, targetWheelVelocityDeg, perWheelDriveTorque, perWheelBrakeTorque);
+        ApplyWheelDriveToAxle(rearLeftWheel, rearRightWheel, driveRearAxle, targetWheelVelocityDeg, perWheelDriveTorque, perWheelBrakeTorque);
+
+        ApplyArticulationPassiveResistance(appliedThrottleInput, appliedBrakeInput);
+
+        if (ShouldHoldVehicleAtRest(appliedBrakeInput, signedSpeed))
         {
-            ArticulationBody body = bodies[i];
+            HoldArticulationAtRest();
+            signedSpeed = 0f;
+        }
+
+        currentMotorRPM = EstimateArticulationMotorRPM();
+        currentAcceleration = (signedSpeed - lastSignedSpeed) / Mathf.Max(Time.fixedDeltaTime, 1e-4f);
+        lastSignedSpeed = signedSpeed;
+    }
+
+    void ApplySteeringTarget(ArticulationBody steeringBody, float targetAngle)
+    {
+        if (steeringBody == null)
+            return;
+
+        ArticulationDrive drive = steeringBody.xDrive;
+        drive.target = invertSteeringDirection ? -targetAngle : targetAngle;
+        drive.targetVelocity = 0f;
+        steeringBody.xDrive = drive;
+    }
+
+    void ApplyWheelDrive(ArticulationBody wheelBody, float targetVelocityDeg, float driveForceLimit, float brakeTorque)
+    {
+        if (wheelBody == null)
+            return;
+
+        ArticulationDrive drive = wheelBody.xDrive;
+        drive.stiffness = 0f;
+        drive.target = 0f;
+
+        if (brakeTorque > 0.01f)
+        {
+            float brakeRatio = GetBrakeTorqueRatio(brakeTorque);
+            drive.targetVelocity = 0f;
+            drive.forceLimit = brakeTorque;
+            drive.damping = Mathf.Lerp(wheelCoastDamping, wheelBrakeDamping, brakeRatio);
+        }
+        else if (driveForceLimit > 0.01f && Mathf.Abs(targetVelocityDeg) > 0.01f)
+        {
+            drive.targetVelocity = targetVelocityDeg;
+            drive.forceLimit = driveForceLimit;
+            drive.damping = wheelDriveDamping;
+        }
+        else
+        {
+            drive.targetVelocity = 0f;
+            drive.forceLimit = 0f;
+            drive.damping = wheelCoastDamping;
+        }
+
+        wheelBody.xDrive = drive;
+    }
+
+    void ApplyWheelDriveToAxle(
+        ArticulationBody leftWheel,
+        ArticulationBody rightWheel,
+        bool axleEnabled,
+        float targetVelocityDeg,
+        float driveForceLimit,
+        float brakeTorque)
+    {
+        float axleTargetVelocity = axleEnabled ? targetVelocityDeg : 0f;
+        float axleDriveForceLimit = axleEnabled ? driveForceLimit : 0f;
+        ApplyWheelDrive(leftWheel, axleTargetVelocity, axleDriveForceLimit, brakeTorque);
+        ApplyWheelDrive(rightWheel, axleTargetVelocity, axleDriveForceLimit, brakeTorque);
+    }
+
+    float CalculateArticulationPerWheelDriveTorque(float throttleInput, float brakeInput, float signedSpeed)
+    {
+        int drivenWheelCount = GetDrivenWheelCount();
+        if (drivenWheelCount <= 0)
+        {
+            currentAppliedDriveTorque = 0f;
+            return 0f;
+        }
+
+        float clampedThrottle = Mathf.Clamp(throttleInput, -1f, 1f);
+        float clampedBrake = Mathf.Clamp01(brakeInput);
+        if (Mathf.Abs(clampedThrottle) < 0.001f || clampedBrake > 0.01f)
+        {
+            currentAppliedDriveTorque = MoveDriveTorqueTowards(0f);
+            return Mathf.Abs(currentAppliedDriveTorque) / drivenWheelCount;
+        }
+
+        float rpmRatio = Mathf.Clamp01(currentMotorRPM / Mathf.Max(maxMotorRPM, 1f));
+        float torqueMultiplier = torqueCurve != null && torqueCurve.keys.Length > 0
+            ? torqueCurve.Evaluate(rpmRatio)
+            : 1f;
+
+        float maxAvailableTotalTorque = maxMotorTorque * reductionRatio * torqueMultiplier;
+        float signedTargetTotalDriveTorque = Mathf.Sign(clampedThrottle) * Mathf.Abs(clampedThrottle) * maxAvailableTotalTorque;
+
+        bool pushingSameDirection = Mathf.Abs(signedSpeed) > 0.05f && Mathf.Sign(clampedThrottle) == Mathf.Sign(signedSpeed);
+        if (pushingSameDirection && Mathf.Abs(signedSpeed) >= maxSpeed)
+            signedTargetTotalDriveTorque = 0f;
+
+        currentAppliedDriveTorque = MoveDriveTorqueTowards(signedTargetTotalDriveTorque);
+        return Mathf.Abs(currentAppliedDriveTorque) / drivenWheelCount;
+    }
+
+    float MoveDriveTorqueTowards(float signedTargetTotalDriveTorque)
+    {
+        float sameDirectionIncreaseStep = vehicleMass * maxAcceleration * wheelRadius * Time.fixedDeltaTime;
+        float releaseStep = vehicleMass * maxDeceleration * wheelRadius * Time.fixedDeltaTime;
+
+        bool sameDirection = Mathf.Sign(signedTargetTotalDriveTorque) ==
+                             Mathf.Sign(currentAppliedDriveTorque == 0f ? signedTargetTotalDriveTorque : currentAppliedDriveTorque);
+        bool acceleratingMagnitude = Mathf.Abs(signedTargetTotalDriveTorque) > Mathf.Abs(currentAppliedDriveTorque);
+        float torqueStep = sameDirection && acceleratingMagnitude ? sameDirectionIncreaseStep : releaseStep;
+
+        return Mathf.MoveTowards(
+            currentAppliedDriveTorque,
+            signedTargetTotalDriveTorque,
+            Mathf.Max(torqueStep, 1e-4f));
+    }
+
+    float CalculatePerWheelBrakeTorque(float brakeInput)
+    {
+        float maxTotalBrakeTorque = GetMaxTotalBrakeTorque();
+        float requestedBrakeTorque = maxTotalBrakeTorque * Mathf.Clamp01(brakeInput);
+        float torqueStep = maxTotalBrakeTorque * Mathf.Max(
+            requestedBrakeTorque > currentAppliedBrakeTorque ? brakeRiseRate : brakeFallRate,
+            0.01f) * Time.fixedDeltaTime;
+
+        currentAppliedBrakeTorque = Mathf.MoveTowards(
+            currentAppliedBrakeTorque,
+            requestedBrakeTorque,
+            Mathf.Max(torqueStep, 1e-4f));
+
+        return currentAppliedBrakeTorque * 0.25f;
+    }
+
+    float GetMaxTotalBrakeTorque()
+    {
+        return maxBrakeForce * wheelRadius;
+    }
+
+    float GetBrakeTorqueRatio(float perWheelBrakeTorque)
+    {
+        float maxPerWheelBrakeTorque = GetMaxTotalBrakeTorque() * 0.25f;
+        return Mathf.Clamp01(perWheelBrakeTorque / Mathf.Max(maxPerWheelBrakeTorque, 1e-4f));
+    }
+
+    void UpdateCommandedDriveSpeed(float throttleInput, float brakeInput)
+    {
+        float requestedSpeed = Mathf.Clamp(throttleInput, -1f, 1f) * maxSpeed;
+
+        float step;
+        if (Mathf.Abs(throttleInput) > 0.01f)
+        {
+            bool sameDirection = Mathf.Sign(requestedSpeed) == Mathf.Sign(commandedDriveSpeed_ms == 0f ? requestedSpeed : commandedDriveSpeed_ms);
+            step = sameDirection ? maxAcceleration : maxDeceleration;
+        }
+        else if (brakeInput > 0.01f)
+        {
+            step = Mathf.Lerp(articulationCoastDeceleration, maxDeceleration, Mathf.Clamp01(brakeInput));
+        }
+        else
+        {
+            step = articulationCoastDeceleration;
+        }
+
+        commandedDriveSpeed_ms = Mathf.MoveTowards(
+            commandedDriveSpeed_ms,
+            requestedSpeed,
+            Mathf.Max(step, 0.01f) * Time.fixedDeltaTime);
+    }
+
+    float CalculateWheelTargetVelocityDeg(float targetLinearSpeed)
+    {
+        float wheelAngularSpeed = targetLinearSpeed / Mathf.Max(wheelRadius, 1e-3f);
+        float maxWheelAngularSpeed = maxMotorRPM * (2f * Mathf.PI / 60f) / Mathf.Max(reductionRatio, 1e-3f);
+        wheelAngularSpeed = Mathf.Clamp(wheelAngularSpeed, -maxWheelAngularSpeed, maxWheelAngularSpeed);
+        return wheelAngularSpeed * Mathf.Rad2Deg;
+    }
+
+    void ApplyArticulationPassiveResistance(float throttleInput, float brakeInput)
+    {
+        if (baseLinkBody == null)
+            return;
+
+        Vector3 planarVelocity = baseLinkBody.velocity;
+        planarVelocity.y = 0f;
+
+        float speed = planarVelocity.magnitude;
+        if (speed < 1e-4f)
+            return;
+
+        Vector3 direction = planarVelocity / speed;
+        float totalForce = EstimateArticulationPassiveResistanceForce(speed, Mathf.Abs(throttleInput), brakeInput);
+        baseLinkBody.AddForce(-direction * totalForce, ForceMode.Force);
+    }
+
+    float EstimateArticulationPassiveResistanceForce(float speed, float throttleMagnitude, float brakeInput)
+    {
+        float rollingForce = rollingResistance * vehicleMass * 9.81f;
+        float dragForce = 0.5f * airDensity * dragCoefficient * frontalArea * speed * speed;
+        float coastFactor = brakeInput > 0.01f ? 0f : 1f - Mathf.Clamp01(throttleMagnitude);
+        float regenForce = engineBrakeForce * coastFactor;
+        return rollingForce + dragForce + regenForce;
+    }
+
+    bool ShouldHoldVehicleAtRest(float brakeInput, float signedSpeed)
+    {
+        return brakeInput >= 0.1f && Mathf.Abs(signedSpeed) <= standstillHoldSpeed;
+    }
+
+    void HoldArticulationAtRest()
+    {
+        ResetArticulationVelocities();
+    }
+
+    void ResetArticulationVelocities()
+    {
+        if (articulationBodies == null || articulationBodies.Length == 0)
+            articulationBodies = transform.root.GetComponentsInChildren<ArticulationBody>(true);
+
+        for (int i = 0; i < articulationBodies.Length; i++)
+        {
+            ArticulationBody body = articulationBodies[i];
             if (body == null)
                 continue;
 
             body.velocity = Vector3.zero;
             body.angularVelocity = Vector3.zero;
-            body.enabled = false;
         }
 
-        FKRobot[] fkRobots = visualRigRoot.GetComponentsInChildren<FKRobot>(true);
-        for (int i = 0; i < fkRobots.Length; i++)
-        {
-            if (fkRobots[i] != null)
-                fkRobots[i].enabled = false;
-        }
+        ResetArticulationTelemetry();
+        ClearArticulationDriveTargets();
     }
 
-    void SyncVisualRigPose()
+    void ResetArticulationTelemetry()
     {
-        if (hybridDynamics == null || visualRigRoot == null)
+        currentAppliedDriveTorque = 0f;
+        currentAppliedBrakeTorque = 0f;
+        currentAcceleration = 0f;
+        currentMotorRPM = 0f;
+        lastSignedSpeed = 0f;
+        commandedDriveSpeed_ms = 0f;
+    }
+
+    void ClearArticulationDriveTargets()
+    {
+        SetWheelDriveIdle(frontLeftWheel);
+        SetWheelDriveIdle(frontRightWheel);
+        SetWheelDriveIdle(rearLeftWheel);
+        SetWheelDriveIdle(rearRightWheel);
+        SetSteeringTargets(0f, 0f);
+    }
+
+    void SetWheelDriveIdle(ArticulationBody wheelBody)
+    {
+        if (wheelBody == null)
             return;
 
-        Transform physicsTransform = hybridDynamics.transform;
-        visualRigRoot.rotation = physicsTransform.rotation * visualRigOffsetRotation;
-        visualRigRoot.position = physicsTransform.position + physicsTransform.rotation * visualRigOffsetPosition;
+        ArticulationDrive drive = wheelBody.xDrive;
+        drive.stiffness = 0f;
+        drive.damping = wheelCoastDamping;
+        drive.forceLimit = 0f;
+        drive.target = 0f;
+        drive.targetVelocity = 0f;
+        wheelBody.xDrive = drive;
     }
 
-    void SyncVisualSteering()
+    void SetSteeringTarget(ArticulationBody steeringBody, float targetAngle)
     {
-        if (steeringLeftTransform != null)
-            steeringLeftTransform.localRotation = steeringLeftBaseRotation * Quaternion.Euler(0f, leftVisualSteerAngle, 0f);
+        if (steeringBody == null)
+            return;
 
-        if (steeringRightTransform != null)
-            steeringRightTransform.localRotation = steeringRightBaseRotation * Quaternion.Euler(0f, rightVisualSteerAngle, 0f);
+        ArticulationDrive drive = steeringBody.xDrive;
+        drive.target = targetAngle;
+        drive.targetVelocity = 0f;
+        steeringBody.xDrive = drive;
+    }
+
+    void SetSteeringTargets(float leftTargetAngle, float rightTargetAngle)
+    {
+        SetSteeringTarget(frontLeftSteering, leftTargetAngle);
+        SetSteeringTarget(frontRightSteering, rightTargetAngle);
+    }
+
+    float EstimateArticulationMotorRPM()
+    {
+        float wheelRPM = Mathf.Abs(GetArticulationSignedPlanarSpeed()) / Mathf.Max(wheelRadius, 1e-3f) * Mathf.Rad2Deg / 6f;
+        return wheelRPM * reductionRatio;
+    }
+
+    float GetArticulationSignedPlanarSpeed()
+    {
+        Vector3 worldVelocity = GetWorldVelocity();
+        Vector3 planarVelocity = worldVelocity;
+        planarVelocity.y = 0f;
+
+        float magnitude = planarVelocity.magnitude;
+        if (magnitude < 1e-4f)
+            return 0f;
+
+        float forwardComponent = Vector3.Dot(planarVelocity, transform.forward);
+        if (Mathf.Abs(forwardComponent) < 1e-4f)
+        {
+            float sign = Mathf.Sign(appliedThrottleInput);
+            if (Mathf.Abs(sign) < 0.5f)
+                sign = 1f;
+            return magnitude * sign;
+        }
+
+        return magnitude * Mathf.Sign(forwardComponent);
+    }
+
+    int GetDrivenWheelCount()
+    {
+        int drivenWheelCount = 0;
+        if (driveFrontAxle)
+            drivenWheelCount += 2;
+        if (driveRearAxle)
+            drivenWheelCount += 2;
+        return drivenWheelCount;
     }
 
     void UpdateSteering(float input)
@@ -567,32 +854,37 @@ public class VehicleMotionController : MonoBehaviour
 
     void SyncDebugState()
     {
-        if (hybridDynamics == null)
+        if (articulationBackendReady && baseLinkBody != null)
+        {
+            currentSpeed_ms = GetArticulationSignedPlanarSpeed();
+            currentSpeed_kmh = currentSpeed_ms * 3.6f;
+            currentMotorRPM = EstimateArticulationMotorRPM();
             return;
+        }
 
-        currentSpeed_ms = hybridDynamics.GetSignedPlanarSpeed();
-        currentSpeed_kmh = currentSpeed_ms * 3.6f;
-        currentMotorRPM = hybridDynamics.GetMotorRPM();
-        currentAcceleration = hybridDynamics.GetAcceleration();
-        currentAppliedDriveTorque = hybridDynamics.GetAppliedDriveTorque();
-        currentAppliedBrakeTorque = hybridDynamics.GetAppliedBrakeTorque();
+        currentSpeed_ms = 0f;
+        currentSpeed_kmh = 0f;
+        currentMotorRPM = 0f;
+        currentAcceleration = 0f;
+        currentAppliedDriveTorque = 0f;
+        currentAppliedBrakeTorque = 0f;
     }
 
-    public bool UsingHybridBackend() => hybridDynamics != null;
-    public GameObject GetCollisionSource() => hybridDynamics != null ? hybridDynamics.GetCollisionSource() : gameObject;
-    public Vector3 GetWorldVelocity() => hybridDynamics != null ? hybridDynamics.GetWorldVelocity() : Vector3.zero;
-    public Vector3 GetWorldAngularVelocity() => hybridDynamics != null ? hybridDynamics.GetWorldAngularVelocity() : Vector3.zero;
+    public Vector3 GetWorldVelocity() => baseLinkBody != null ? baseLinkBody.velocity : Vector3.zero;
+    public Vector3 GetWorldAngularVelocity() => baseLinkBody != null ? baseLinkBody.angularVelocity : Vector3.zero;
 
     public void ResetVehiclePose(Vector3 position, Quaternion rotation)
     {
-        if (hybridDynamics == null)
+        if (baseLinkBody != null)
+        {
+            baseLinkBody.TeleportRoot(position, rotation);
+            ResetArticulationVelocities();
+            Physics.SyncTransforms();
+            SyncDebugState();
             return;
+        }
 
-        hybridDynamics.Teleport(position, rotation);
-        SyncVisualRigPose();
-        SyncVisualSteering();
-        Physics.SyncTransforms();
-        SyncDebugState();
+        transform.SetPositionAndRotation(position, rotation);
     }
 
     public float GetSpeedMS() => currentSpeed_ms;

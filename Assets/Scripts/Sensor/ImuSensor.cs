@@ -74,7 +74,7 @@ public class ImuSensor : MonoBehaviour
     {
         if (vehicleBody == null && vehicleMotionController == null) return;
 
-        Vector3 currentVelocity = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+        Vector3 currentVelocity = vehicleMotionController != null
             ? vehicleMotionController.GetWorldVelocity()
             : (vehicleBody != null ? vehicleBody.velocity : Vector3.zero);
 
@@ -108,7 +108,7 @@ public class ImuSensor : MonoBehaviour
         rawAcceleration -= Physics.gravity;
 
         // 각속도: 물리 엔진 직접 제공
-        Vector3 rawAngularVelocity = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+        Vector3 rawAngularVelocity = vehicleMotionController != null
             ? vehicleMotionController.GetWorldAngularVelocity()
             : (vehicleBody != null ? vehicleBody.angularVelocity : Vector3.zero);
 

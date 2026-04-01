@@ -96,10 +96,10 @@ public class OdometryPublisher : MonoBehaviour
         QuaternionMsg orientation = currentRot.To<FLU>();
 
         // 3. 차량의 속도 (Linear & Angular)
-        Vector3 linearVel = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+        Vector3 linearVel = vehicleMotionController != null
             ? vehicleMotionController.GetWorldVelocity()
             : (vehicleBody != null ? vehicleBody.velocity : Vector3.zero);
-        Vector3 angularVel = vehicleMotionController != null && vehicleMotionController.UsingHybridBackend()
+        Vector3 angularVel = vehicleMotionController != null
             ? vehicleMotionController.GetWorldAngularVelocity()
             : (vehicleBody != null ? vehicleBody.angularVelocity : Vector3.zero);
 
